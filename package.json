@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "lint": "node dev/lint.mjs",
     "test": "node --test test/*.test.mjs",
     "voice-server": "node dev/piper-server.mjs"
   }

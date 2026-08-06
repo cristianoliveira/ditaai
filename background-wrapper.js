@@ -1,4 +1,2 @@
-(async () => {
-  const src = (globalThis.browser ?? chrome).runtime.getURL('background/main.js');
-  await import(src);
-})();
+import "./background/guard.js";
+import "./background/main.js";

@@ -1,6 +1,6 @@
 # Speechify with local Piper voices
 
-Development copy of Speechify 14.3.1 with **Amy (Piper Local)** from `~/other/pi-speak/voices`.
+Development copy of Speechify 14.3.2 with **Amy (Piper Local)** from `~/other/pi-speak/voices`.
 
 ## Run
 
@@ -17,6 +17,10 @@ Development copy of Speechify 14.3.1 with **Amy (Piper Local)** from `~/other/pi
 6. Open Speechify voice picker and select **Amy (Piper Local)** under English voices.
 
 Keep voice companion running while using Amy. Existing voices do not need it.
+
+Amy emits word-boundary events so Speechify highlighting follows spoken text. Piper does not provide exact word timestamps, so boundaries are distributed across measured WAV duration and may drift slightly around long punctuation pauses.
+
+Local playback works without signing in. Speechify cloud and premium services still enforce their own authentication and subscription requirements.
 
 ## Verify
 

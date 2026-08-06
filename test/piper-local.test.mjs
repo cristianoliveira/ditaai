@@ -10,7 +10,7 @@ test("development manifest loads bridge before Speechify and has independent ide
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
   const mainContentScript = manifest.content_scripts.find((entry) => entry.js.includes("content-wrapper.js"));
 
-  assert.equal(manifest.version, "14.3.1");
+  assert.equal(manifest.version, "14.3.2");
   assert.deepEqual(mainContentScript.js.slice(0, 2), ["piper-local-voice.js", "content-wrapper.js"]);
   assert.equal("key" in manifest, false);
   assert.equal("update_url" in manifest, false);
@@ -79,6 +79,7 @@ test("browser bridge exposes Amy and routes only Amy through local server", asyn
   const source = await readFile(new URL("../piper-local-voice.js", import.meta.url), "utf8");
   const nativeVoice = { name: "Samantha", voiceURI: "Samantha", lang: "en-US" };
   const nativeSpoken = [];
+  const nativeBoundaries = [];
   const fetched = [];
   const played = [];
   let rejectLocalRequest = false;
@@ -92,14 +93,35 @@ test("browser bridge exposes Amy and routes only Amy through local server", asyn
     }
   }
   class Audio extends EventTarget {
-    constructor(url) { super(); this.url = url; }
-    async play() { played.push(this.url); this.dispatchEvent(new Event("ended")); }
+    constructor(url) {
+      super();
+      this.url = url;
+      this.currentTime = 0;
+      this.duration = 2;
+    }
+    async play() {
+      played.push(this.url);
+      this.dispatchEvent(new Event("loadedmetadata"));
+      this.currentTime = this.duration;
+      this.dispatchEvent(new Event("timeupdate"));
+      this.dispatchEvent(new Event("ended"));
+    }
     pause() {}
   }
 
   const speechSynthesis = {
     getVoices: () => [nativeVoice],
-    speak: (utterance) => nativeSpoken.push(utterance.text),
+    speak: (utterance) => {
+      nativeSpoken.push(utterance.text);
+      const boundary = new Event("boundary");
+      Object.defineProperties(boundary, {
+        charIndex: { value: 7 },
+        charLength: { value: 4 },
+        elapsedTime: { value: 0.5 },
+        name: { value: "word" }
+      });
+      utterance.dispatchEvent(boundary);
+    },
     cancel() {}, pause() {}, resume() {}
   };
   const context = vm.createContext({
@@ -126,12 +148,24 @@ test("browser bridge exposes Amy and routes only Amy through local server", asyn
   assert.ok(amy);
 
   const local = new context.SpeechSynthesisUtterance("Local text");
+  const boundaries = [];
   local.voice = amy;
+  local.addEventListener("boundary", (event) => boundaries.push({
+    charIndex: event.charIndex,
+    charLength: event.charLength,
+    name: event.name
+  }));
   context.speechSynthesis.speak(local);
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   const native = new context.SpeechSynthesisUtterance("Native text");
   native.voice = nativeVoice;
+  native.addEventListener("boundary", (event) => nativeBoundaries.push({
+    charIndex: event.charIndex,
+    charLength: event.charLength,
+    elapsedTime: event.elapsedTime,
+    name: event.name
+  }));
   context.speechSynthesis.speak(native);
 
   assert.deepEqual(fetched, [{
@@ -139,7 +173,14 @@ test("browser bridge exposes Amy and routes only Amy through local server", asyn
     body: { text: "Local text", rate: 1 }
   }]);
   assert.deepEqual(played, ["blob:amy"]);
+  assert.deepEqual(boundaries, [
+    { charIndex: 0, charLength: 5, name: "word" },
+    { charIndex: 6, charLength: 4, name: "word" }
+  ]);
   assert.deepEqual(nativeSpoken, ["Native text"]);
+  assert.deepEqual(nativeBoundaries, [
+    { charIndex: 7, charLength: 4, elapsedTime: 0.5, name: "word" }
+  ]);
 
   rejectLocalRequest = true;
   let localError = false;

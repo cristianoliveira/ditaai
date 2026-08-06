@@ -29,7 +29,41 @@
     }
   }
 
-  const dispatch = (utterance, type) => utterance.dispatchEvent(new Event(type));
+  const dispatch = (utterance, type, details = {}) => {
+    const event = new Event(type);
+    for (const [name, value] of Object.entries(details)) {
+      Object.defineProperty(event, name, { configurable: true, enumerable: true, value });
+    }
+    utterance.dispatchEvent(event);
+  };
+
+  const createBoundaryTracker = (utterance, audio) => {
+    const words = Array.from(utterance.text.matchAll(/\S+/gu), (match) => ({
+      charIndex: match.index,
+      charLength: match[0].length
+    }));
+    let nextWord = 0;
+
+    const emitUntil = (characterPosition) => {
+      while (nextWord < words.length && words[nextWord].charIndex <= characterPosition) {
+        const word = words[nextWord++];
+        dispatch(utterance, "boundary", {
+          ...word,
+          elapsedTime: audio.currentTime,
+          name: "word"
+        });
+      }
+    };
+    const update = () => {
+      if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      emitUntil((audio.currentTime / audio.duration) * utterance.text.length);
+    };
+    const finish = () => emitUntil(utterance.text.length);
+
+    audio.addEventListener("loadedmetadata", update);
+    audio.addEventListener("timeupdate", update);
+    return { finish };
+  };
 
   async function speakWithPiper(utterance) {
     localUtterance = utterance;
@@ -44,7 +78,9 @@
       const audio = new Audio(objectUrl);
       localAudio = audio;
       audio.volume = utterance.volume;
+      const boundaries = createBoundaryTracker(utterance, audio);
       audio.addEventListener("ended", () => {
+        boundaries.finish();
         URL.revokeObjectURL(objectUrl);
         localAudio = null;
         localUtterance = null;
@@ -74,7 +110,12 @@
     native.rate = utterance.rate;
     native.pitch = utterance.pitch;
     for (const type of ["start", "end", "error", "pause", "resume", "boundary", "mark"]) {
-      native.addEventListener(type, (event) => utterance.dispatchEvent(new Event(event.type)));
+      native.addEventListener(type, (event) => dispatch(utterance, event.type, {
+        charIndex: event.charIndex,
+        charLength: event.charLength,
+        elapsedTime: event.elapsedTime,
+        name: event.name
+      }));
     }
     return native;
   }
