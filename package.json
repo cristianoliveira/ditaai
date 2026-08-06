@@ -1,0 +1,9 @@
+{
+  "name": "speechify-piper-local",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "voice-server": "node dev/piper-server.mjs"
+  }
+}

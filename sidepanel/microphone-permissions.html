@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Speechify - Microphone Permission</title>
+    <link rel="stylesheet" href="../css/speechify.css" />
+    <link rel="stylesheet" href="../css/color-tokens-for-html-pages.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background-color: var(--color-background-secondary-bg-sec-0-110);
+        font-family: system-ui;
+      }
+
+      .container {
+        position: absolute;
+        text-align: left;
+        padding: 28px 77px 26px;
+        width: 100%;
+        max-width: 520px;
+        left: 440px;
+      }
+
+      .header {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+        margin-bottom: 19px;
+        margin-left: -32px;
+      }
+
+      .header span {
+        font-family: 'system-ui';
+        color: var(--color-icon-text-icn-txt-prim, #000);
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 32px;
+        letter-spacing: -0.36px;
+      }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+      }
+
+      .list-card {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: flex-start;
+        padding: 8px 24px 8px 8px;
+        gap: 20px;
+        border-radius: 20px;
+        background: var(--color-background-primary-bg-prim-w-110, #fff);
+        box-shadow: var(--dropshadow-positioning-none, 0) var(--dropshadow-positioning-1, 2px)
+          var(--dropshadow-blur-1, 4px) var(--dropshadow-spread-none, 0)
+          var(--dropshadow-soft, rgba(0, 0, 0, 0.08));
+      }
+
+      .list-card-image {
+        border-radius: 12px;
+        border: 1px solid var(--color-border-brdr-prim-10-100);
+      }
+
+      .list-card-image video {
+        width: 157px;
+      }
+
+      .list-card-content {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        padding-top: 16px;
+        max-width: 330px;
+        gap: 16px;
+      }
+
+      .list-card-content-title {
+        font-family: 'system-ui';
+        color: var(--color-icon-text-icn-txt-prim, #000);
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 28px;
+        letter-spacing: -0.2px;
+      }
+
+      .list-card-content-description {
+        font-family: 'system-ui';
+        color: var(--color-icon-text-icn-txt-prim, #000);
+        font-size: 16px;
+        font-weight: 400;
+        line-height: 24px;
+        letter-spacing: -0.08px;
+      }
+
+      .mic-icon {
+        display: inline-flex;
+        height: 20px;
+        width: 20px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: var(--color-background-tertiary-bg-tert-10-70, #e9eaf0);
+        vertical-align: middle;
+      }
+
+      .success-container {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .success-container h1 {
+        width: 320px;
+        text-align: center;
+        margin-top: -40px;
+      }
+
+      .success-container p {
+        width: 320px;
+        text-align: center;
+      }
+
+      .denied-container {
+        display: flex;
+        width: 420px;
+        flex-direction: column;
+        justify-content: center;
+        position: fixed;
+        left: 125px;
+        top: 95px;
+      }
+
+      .denied-container-content {
+        color: var(--color-icon-text-icn-txt-prim, #fff);
+        font-size: 16px;
+        line-height: 24px;
+        font-weight: 400;
+
+        svg {
+          display: inline-block;
+          vertical-align: middle;
+        }
+      }
+
+      .denied-container-separator {
+        width: 100%;
+        height: 1px;
+        background-color: var(--color-border-brdr-prim-10-100);
+        margin: 24px 0;
+      }
+
+      .denied-container-arrow {
+        position: absolute;
+        left: 0;
+        top: -80px;
+      }
+
+      .hide {
+        display: none !important;
+      }
+
+      h1 {
+        font-size: 36px;
+        font-weight: 500;
+        color: var(--color-icon-text-icn-txt-prim, #fff);
+      }
+
+      h2 {
+        font-size: 24px;
+        font-weight: 500;
+        color: var(--color-icon-text-icn-txt-prim, #fff);
+      }
+
+      p {
+        font-size: 16px;
+        color: var(--color-icon-text-icn-txt-prim, #fff);
+        line-height: 1.5;
+        margin: 0 0 4px 0;
+        position: relative;
+        z-index: 1;
+        font-weight: 400;
+      }
+
+      .hint {
+        color: var(--color-sf-act-electric-blue);
+        font-size: 14px;
+        line-height: 20px;
+
+        background-color: var(--hint-background);
+        padding: 12px;
+        margin-top: 12px;
+        width: 420px;
+        border-radius: 12px;
+
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .hint svg {
+        flex-shrink: 0;
+      }
+
+      .underline {
+        text-decoration: underline;
+      }
+
+      .nowrap {
+        white-space: nowrap;
+      }
+
+      .success {
+        color: #3ba55d;
+      }
+
+      .error {
+        color: #ed4245;
+      }
+
+      .permission-needed-dialog {
+        background-color: rgba(54, 55, 58, 0.8);
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .permission-needed-dialog-close-button {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        cursor: pointer;
+      }
+
+      .permission-needed-dialog-close-button:hover {
+        opacity: 0.75;
+      }
+
+      .permission-needed-dialog-close-button:active {
+        opacity: 0.5;
+      }
+
+      .permission-needed-dialog-content {
+        background-color: var(--color-background-secondary-bg-sec-0-110, #000);
+        padding: 40px 64px;
+        border-radius: 8px;
+        width: 414px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        position: relative;
+      }
+
+      .permission-needed-dialog-content h2 {
+        white-space: nowrap;
+      }
+
+      .permission-needed-dialog-button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 36px;
+        color: var(--color-icon-text-icn-txt-prim, #fff);
+        background-color: var(--color-border-brdr-prim-10-100, #1e1e1f);
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+        margin-top: 16px;
+      }
+
+      .permission-needed-dialog-button:hover {
+        opacity: 0.75;
+      }
+
+      .permission-needed-dialog-button:active {
+        opacity: 0.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container" class="container">
+      <div class="header">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="108"
+          height="115"
+          viewBox="0 0 108 115"
+          fill="none">
+          <g filter="url(#filter0_f_2112_4129)">
+            <path
+              fill-rule="evenodd"
+              clip-rule="evenodd"
+              d="M33.8208 45.8377C33.586 39.8275 33.4686 36.8223 35.5323 33.4092C37.5961 29.9961 39.7518 29.6058 44.0632 28.8252C46.2187 28.4349 48.7197 28.0811 51.5675 27.8266C54.4153 27.572 56.9394 27.4767 59.1299 27.4785C63.5115 27.4822 65.7022 27.484 68.3385 30.4771C70.9749 33.4701 71.3923 36.4484 72.227 42.4051C72.645 45.3878 73.0524 48.8185 73.3964 52.6676C73.7206 56.2945 73.9235 59.5658 74.0442 62.4493C74.3084 68.7577 74.4404 71.9119 72.379 75.3394C70.3175 78.7669 68.0217 79.1862 63.4301 80.0249C61.3252 80.4093 58.9429 80.7515 56.3188 80.986C53.6946 81.2206 51.2894 81.3063 49.1497 81.3012C44.4822 81.2901 42.1484 81.2846 39.5118 78.277C36.8752 75.2694 36.4458 72.1418 35.587 65.8865C35.1944 63.0273 34.8141 59.7719 34.4899 56.145C34.1459 52.2959 33.9384 48.8473 33.8208 45.8377Z"
+              fill="#929DFD" />
+          </g>
+          <path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M32.9818 51.6544C32.8505 45.3267 32.7849 42.1628 35.859 38.4944C38.9332 34.826 42.0359 34.3409 48.2413 33.3708C51.3437 32.8858 54.94 32.4275 59.0299 32.0619C63.1199 31.6964 66.7404 31.5097 69.8796 31.4368C76.1587 31.2911 79.2983 31.2182 82.9743 34.2833C86.6502 37.3485 87.1467 40.4738 88.1396 46.7246C88.6368 49.8546 89.1035 53.4571 89.4651 57.503C89.8058 61.3153 89.985 64.7568 90.0595 67.7923C90.2227 74.4333 90.3042 77.7539 87.2329 81.4373C84.1616 85.1208 80.8571 85.6413 74.2482 86.6821C71.2185 87.1592 67.7927 87.6013 64.024 87.9381C60.2553 88.275 56.8054 88.4474 53.7391 88.5151C47.0504 88.6628 43.706 88.7367 40.0301 85.6562C36.3543 82.5758 35.8457 79.2934 34.8285 72.7287C34.3636 69.7281 33.9296 66.3094 33.5888 62.4971C33.2272 58.4512 33.0476 54.823 32.9818 51.6544Z"
+            fill="#2F43FA" />
+          <path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M48.7222 55.4016C49.718 53.6268 50.6373 52.7111 52.1654 53.0375C53.0901 53.235 53.5621 54.3497 53.3215 55.8229C52.8985 58.4133 52.7781 59.8892 52.9328 61.6192C54.7893 56.631 58.4434 49.895 60.0823 47.5928C61.215 46.0015 63.045 46.0279 63.7571 46.2965C64.914 46.7331 65.0765 47.8895 64.793 49.0346C62.8318 56.9573 63.1067 61.0704 63.1381 65.0874C64.3886 60.5174 66.0178 56.1781 68.1725 53.0319C69.065 51.5355 70.8102 50.9348 71.9782 51.2905C73.1463 51.6462 73.5009 52.7155 73.3664 54.1072C73.0156 57.7364 72.8327 59.439 72.9563 60.8217C74.0967 59.7768 75.0007 58.8993 77.2128 58.5194C79.425 58.1395 84.1093 58.6141 84.1093 58.6141C84.1093 58.6141 81.4911 59.3032 80.1178 59.7728C77.3023 60.7355 76.3708 61.6503 74.7513 64.5437C74.2807 65.3845 73.426 66.0741 72.3949 66.0884C71.3637 66.1026 70.6184 65.5202 70.2402 64.6777C69.7146 63.5066 69.4288 61.7101 69.6207 57.75C67.3269 62.0232 66.4556 67.6271 64.9617 71.4252C64.5797 72.3964 63.8802 73.5266 62.8037 73.6229C61.7272 73.7191 60.294 73.4268 59.827 70.2473C58.6308 62.1028 59.5959 55.4502 59.5959 55.4502C57.0085 60.4957 56.2947 63.3656 55.3759 64.9111C54.4571 66.4565 53.5521 67.8046 52.3116 67.8843C51.0712 67.9639 50.2273 66.6457 49.9576 65.3956C49.6879 64.1454 49.4985 62.5349 49.6911 59.5321C48.6067 60.8284 47.6318 61.7277 45.8019 62.4C43.972 63.0722 41.7043 62.9513 39.0581 62.6428C41.656 62.4105 45.8878 60.4534 48.7222 55.4016Z"
+            fill="white" />
+          <defs>
+            <filter
+              id="filter0_f_2112_4129"
+              x="0.000286102"
+              y="-6.21749"
+              width="107.886"
+              height="121.215"
+              filterUnits="userSpaceOnUse"
+              color-interpolation-filters="sRGB">
+              <feFlood flood-opacity="0" result="BackgroundImageFix" />
+              <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+              <feGaussianBlur stdDeviation="16.848" result="effect1_foregroundBlur_2112_4129" />
+            </filter>
+          </defs>
+        </svg>
+        <span>Microphone Permissions Guide</span>
+      </div>
+      <div class="list">
+        <div class="list-card">
+          <div class="list-card-image">
+            <video
+              id="video-first-popup"
+              data-video-name="first-pop-up"
+              muted
+              style="border-radius: 12px" />
+          </div>
+          <div class="list-card-content">
+            <div class="list-card-content-title">If you see a pop-up</div>
+            <span class="list-card-content-description">
+              Click <span class="underline">“Allow while visiting the site”</span> to start using
+              Speechify instantly. Speak instead of typing.
+            </span>
+          </div>
+        </div>
+        <div class="list-card">
+          <div class="list-card-image">
+            <video
+              id="video-mic-click"
+              data-video-name="mic-click-pop-up"
+              muted
+              style="border-radius: 12px" >
+          </div>
+          <div class="list-card-content">
+            <div class="list-card-content-title">If you don’t see a pop-up</div>
+            <span class="list-card-content-description">
+              Click the microphone icon
+              <span class="mic-icon">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none">
+                  <mask
+                    id="mask0_2112_4150"
+                    style="mask-type: alpha"
+                    maskUnits="userSpaceOnUse"
+                    x="0"
+                    y="0"
+                    width="14"
+                    height="14">
+                    <rect width="14" height="14" fill="#D9D9D9" />
+                  </mask>
+                  <g mask="url(#mask0_2112_4150)">
+                    <path
+                      d="M10.3539 8.72084L9.50807 7.875C9.64419 7.65139 9.74627 7.41806 9.81432 7.175C9.88238 6.93195 9.91641 6.67917 9.91641 6.41667H11.0831C11.0831 6.84445 11.0199 7.25035 10.8935 7.63438C10.7671 8.01841 10.5872 8.38056 10.3539 8.72084ZM8.63307 6.97084L7.58307 5.92084V2.91667C7.58307 2.75139 7.52717 2.61285 7.41536 2.50105C7.30356 2.38924 7.16502 2.33334 6.99974 2.33334C6.83446 2.33334 6.69592 2.38924 6.58412 2.50105C6.47231 2.61285 6.41641 2.75139 6.41641 2.91667V4.75417L5.24974 3.58751V2.91667C5.24974 2.43056 5.41988 2.01737 5.76016 1.67709C6.10043 1.33681 6.51363 1.16667 6.99974 1.16667C7.48585 1.16667 7.89905 1.33681 8.23932 1.67709C8.5796 2.01737 8.74974 2.43056 8.74974 2.91667V6.41667C8.74974 6.52362 8.73759 6.62084 8.71328 6.70834C8.68898 6.79584 8.66224 6.88334 8.63307 6.97084ZM6.41641 12.25V10.4563C5.40529 10.3201 4.56918 9.86806 3.90807 9.10001C3.24696 8.33195 2.91641 7.4375 2.91641 6.41667H4.08307C4.08307 7.22362 4.36259 7.91146 4.92162 8.48021C5.48064 9.04896 6.17335 9.33334 6.99974 9.33334C7.3303 9.33334 7.64384 9.2823 7.94037 9.18021C8.23689 9.07813 8.50668 8.93473 8.74974 8.75L9.58099 9.58125C9.29905 9.80487 8.99037 9.99445 8.65495 10.15C8.31953 10.3056 7.96224 10.4076 7.58307 10.4563V12.25H6.41641ZM11.5497 13.1833L0.816406 2.45001L1.63307 1.63334L12.3664 12.3667L11.5497 13.1833Z"
+                      fill="var(--color-icon-text-icn-txt-prim)" />
+                  </g>
+                </svg>
+              </span>
+              and select <span class="underline">“Always allow”</span> and then click
+              <span class="underline">“Done”</span>.
+            </span>
+          </div>
+        </div>
+        <div class="list-card">
+          <div class="list-card-image">
+            <video
+              id="video-blocked-refresh"
+              data-video-name="blocked-refresh"
+              muted
+              style="border-radius: 12px" >
+          </div>
+          <div class="list-card-content">
+            <div class="list-card-content-title">If you don’t see the microphone icon</div>
+            <span class="list-card-content-description">
+              Refresh the page, then click the microphone icon
+              <span class="mic-icon">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none">
+                  <mask
+                    id="mask0_2112_4150"
+                    style="mask-type: alpha"
+                    maskUnits="userSpaceOnUse"
+                    x="0"
+                    y="0"
+                    width="14"
+                    height="14">
+                    <rect width="14" height="14" fill="#D9D9D9" />
+                  </mask>
+                  <g mask="url(#mask0_2112_4150)">
+                    <path
+                      d="M10.3539 8.72084L9.50807 7.875C9.64419 7.65139 9.74627 7.41806 9.81432 7.175C9.88238 6.93195 9.91641 6.67917 9.91641 6.41667H11.0831C11.0831 6.84445 11.0199 7.25035 10.8935 7.63438C10.7671 8.01841 10.5872 8.38056 10.3539 8.72084ZM8.63307 6.97084L7.58307 5.92084V2.91667C7.58307 2.75139 7.52717 2.61285 7.41536 2.50105C7.30356 2.38924 7.16502 2.33334 6.99974 2.33334C6.83446 2.33334 6.69592 2.38924 6.58412 2.50105C6.47231 2.61285 6.41641 2.75139 6.41641 2.91667V4.75417L5.24974 3.58751V2.91667C5.24974 2.43056 5.41988 2.01737 5.76016 1.67709C6.10043 1.33681 6.51363 1.16667 6.99974 1.16667C7.48585 1.16667 7.89905 1.33681 8.23932 1.67709C8.5796 2.01737 8.74974 2.43056 8.74974 2.91667V6.41667C8.74974 6.52362 8.73759 6.62084 8.71328 6.70834C8.68898 6.79584 8.66224 6.88334 8.63307 6.97084ZM6.41641 12.25V10.4563C5.40529 10.3201 4.56918 9.86806 3.90807 9.10001C3.24696 8.33195 2.91641 7.4375 2.91641 6.41667H4.08307C4.08307 7.22362 4.36259 7.91146 4.92162 8.48021C5.48064 9.04896 6.17335 9.33334 6.99974 9.33334C7.3303 9.33334 7.64384 9.2823 7.94037 9.18021C8.23689 9.07813 8.50668 8.93473 8.74974 8.75L9.58099 9.58125C9.29905 9.80487 8.99037 9.99445 8.65495 10.15C8.31953 10.3056 7.96224 10.4076 7.58307 10.4563V12.25H6.41641ZM11.5497 13.1833L0.816406 2.45001L1.63307 1.63334L12.3664 12.3667L11.5497 13.1833Z"
+                      fill="var(--color-icon-text-icn-txt-prim)" />
+                  </g>
+                </svg>
+              </span>
+              and select <span class="underline">“Always allow”</span> and then click
+              <span class="underline">“Done”</span>.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="success-container" class="success-container hide">
+      <svg
+        width="520"
+        height="459"
+        viewBox="0 0 520 459"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg">
+        <g filter="url(#filter0_f_654_5300)">
+          <path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M217.557 313.35C191.682 312.694 178.744 312.366 164.658 302.559C150.573 292.751 149.493 283.386 147.335 264.655C146.256 255.29 145.429 244.452 145.125 232.152C144.82 219.852 145.11 208.987 145.724 199.58C146.953 180.766 147.568 171.358 161.151 160.866C174.734 150.373 187.639 149.405 213.45 147.47C226.375 146.501 241.22 145.702 257.845 145.29C273.51 144.902 287.614 144.937 300.03 145.217C327.194 145.829 340.776 146.135 354.924 155.937C369.072 165.739 370.237 175.714 372.567 195.664C373.635 204.809 374.445 215.134 374.725 226.468C375.006 237.802 374.708 248.155 374.094 257.342C372.754 277.383 372.084 287.404 358.438 297.893C344.792 308.383 331.242 309.361 304.142 311.317C291.755 312.211 277.67 312.943 262.005 313.331C245.38 313.742 230.514 313.678 217.557 313.35Z"
+            fill="#2F43FA" />
+        </g>
+        <circle cx="215.418" cy="233.823" r="46.0283" fill="url(#paint0_linear_654_5300)" />
+        <path
+          d="M193.027 232.751L209.351 249.075L239.855 218.571"
+          stroke="white"
+          stroke-width="6"
+          stroke-linecap="round"
+          stroke-linejoin="round" />
+        <path
+          d="M280.154 256.25C286.973 263.513 298.082 262.191 306.861 268.408C311.551 271.729 316.155 275.492 319.253 279.974"
+          stroke="black"
+          stroke-width="4.24941" />
+        <rect x="297.773" y="249.677" width="4.81555" height="34.9127" fill="#2F43FA" />
+        <path
+          d="M315.447 273.276C320.733 273.276 323.639 278.114 325.057 281.652C325.46 282.658 325.661 283.161 325.542 283.739C325.447 284.197 325.095 284.717 324.706 284.976C324.213 285.302 323.598 285.303 322.368 285.303H278.077C276.847 285.303 276.231 285.302 275.739 284.976C275.349 284.717 274.997 284.197 274.902 283.739C274.782 283.161 274.983 282.658 275.386 281.652C276.804 278.114 279.71 273.277 284.997 273.276H315.447Z"
+          fill="url(#paint1_linear_654_5300)" />
+        <path
+          d="M286.944 236.857V212.367H280.618V230.805C280.618 238.387 280.618 242.177 282.074 245.082C283.4 247.728 285.547 249.875 288.193 251.202C291.098 252.658 294.888 252.658 302.47 252.658L302.569 247.318H297.405C293.743 247.318 291.913 247.318 290.514 246.605C289.284 245.978 288.284 244.978 287.657 243.748C286.944 242.35 286.944 240.519 286.944 236.857Z"
+          fill="url(#paint2_linear_654_5300)" />
+        <path
+          d="M334.615 183.328C345.947 179.564 358.185 185.7 361.949 197.032C365.712 208.364 359.577 220.602 348.244 224.366L290.535 243.532L276.906 202.494L334.615 183.328Z"
+          fill="url(#paint3_linear_654_5300)" />
+        <path
+          d="M322.411 232.946C319.327 233.971 305.097 238.697 290.733 243.467C287.181 232.772 278.95 207.987 277.104 202.429C293.895 196.853 302.729 193.919 308.782 191.909C314.834 189.898 322.792 197.455 326.556 208.788C330.32 220.12 328.464 230.936 322.411 232.946Z"
+          fill="#2F43FA" />
+        <path
+          d="M317.352 234.626C314.267 235.651 305.007 238.727 290.638 243.499C287.086 232.804 278.854 208.019 277.008 202.461C293.806 196.882 297.667 195.6 303.723 193.588C309.778 191.577 317.738 199.134 321.502 210.466C325.265 221.798 323.408 232.615 317.352 234.626Z"
+          fill="url(#paint4_linear_654_5300)" />
+        <ellipse
+          cx="284.389"
+          cy="222.791"
+          rx="21.621"
+          ry="11.7313"
+          transform="rotate(71.6278 284.389 222.791)"
+          fill="url(#paint5_linear_654_5300)" />
+        <ellipse
+          cx="284.39"
+          cy="222.791"
+          rx="5.82044"
+          ry="3.15809"
+          transform="rotate(71.6278 284.39 222.791)"
+          fill="black" />
+        <path
+          d="M282.696 223.895C269.436 236.664 274.374 250.617 280.6 256.694"
+          stroke="black"
+          stroke-width="4.24941" />
+        <path
+          d="M313.698 236.858V217.939C313.698 216.192 315.114 214.776 316.861 214.776C318.608 214.776 320.025 216.192 320.025 217.939V230.805C320.025 238.387 320.025 242.177 318.569 245.082C317.242 247.728 315.095 249.875 312.449 251.202C309.544 252.658 305.754 252.658 298.172 252.658L298.073 247.318H303.238C306.899 247.318 308.73 247.318 310.128 246.605C311.358 245.978 312.358 244.978 312.985 243.748C313.698 242.35 313.698 240.519 313.698 236.858Z"
+          fill="#2F43FA" />
+        <defs>
+          <filter
+            id="filter0_f_654_5300"
+            x="-0.000167847"
+            y="7.62939e-05"
+            width="519.834"
+            height="458.621"
+            filterUnits="userSpaceOnUse"
+            color-interpolation-filters="sRGB">
+            <feFlood flood-opacity="0" result="BackgroundImageFix" />
+            <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+            <feGaussianBlur stdDeviation="72.5013" result="effect1_foregroundBlur_654_5300" />
+          </filter>
+          <linearGradient
+            id="paint0_linear_654_5300"
+            x1="240.848"
+            y1="279.851"
+            x2="164.716"
+            y2="279.851"
+            gradientUnits="userSpaceOnUse">
+            <stop stop-color="#44E486" />
+            <stop offset="1" stop-color="#64FFA4" />
+          </linearGradient>
+          <linearGradient
+            id="paint1_linear_654_5300"
+            x1="329.455"
+            y1="276.494"
+            x2="285.338"
+            y2="239.158"
+            gradientUnits="userSpaceOnUse">
+            <stop stop-color="#2F43FA" />
+            <stop offset="1" stop-color="#24FF7F" />
+          </linearGradient>
+          <linearGradient
+            id="paint2_linear_654_5300"
+            x1="260.065"
+            y1="227.659"
+            x2="296.531"
+            y2="244.128"
+            gradientUnits="userSpaceOnUse">
+            <stop offset="0.0854426" stop-color="#4AE98C" />
+            <stop offset="1" stop-color="#2F43FA" />
+          </linearGradient>
+          <linearGradient
+            id="paint3_linear_654_5300"
+            x1="297.34"
+            y1="161.553"
+            x2="323.348"
+            y2="230.059"
+            gradientUnits="userSpaceOnUse">
+            <stop stop-color="#24FF7F" />
+            <stop offset="0.551489" />
+          </linearGradient>
+          <linearGradient
+            id="paint4_linear_654_5300"
+            x1="307.37"
+            y1="271.711"
+            x2="278.12"
+            y2="179.911"
+            gradientUnits="userSpaceOnUse">
+            <stop offset="0.352784" stop-color="#2234ED" />
+            <stop offset="0.897293" stop-color="#24FF7F" />
+          </linearGradient>
+          <linearGradient
+            id="paint5_linear_654_5300"
+            x1="183.879"
+            y1="226.528"
+            x2="324.039"
+            y2="221.218"
+            gradientUnits="userSpaceOnUse">
+            <stop offset="0.573004" stop-color="#24FF7F" />
+            <stop offset="1" stop-color="#3042F6" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <h1>Access Granted</h1>
+      <p>You can close this tab and use microphone for Voice Mode or Dictation</p>
+    </div>
+
+    <div id="denied-container" class="denied-container hide">
+      <svg
+        class="denied-container-arrow"
+        width="87"
+        height="97"
+        viewBox="0 0 87 97"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M8.02423 12.7165C5.87558 16.1106 3.72692 19.5048 1.36047 23.2432C-0.344806 21.1309 -0.268956 18.9472 0.613607 17.1918C3.23329 11.9807 5.92798 6.76976 9.10302 1.89121C10.9221 -0.90371 13.7491 -0.500665 15.2979 2.4401C17.8834 7.34881 20.2161 12.3904 22.6491 17.379C22.7913 17.6704 23.0245 18.0224 22.9639 18.2883C22.77 19.1401 22.4578 19.9646 22.1913 20.7997C21.4819 20.5556 20.4959 20.5245 20.1138 20.0285C18.8248 18.3558 17.7483 16.5194 16.5949 14.7429C15.9902 13.8115 15.3946 12.8742 13.9578 12.0409C13.8782 13.7254 13.7251 15.4101 13.7296 17.0946C13.8219 51.3349 35.8839 80.7257 68.8836 90.4404C73.1023 91.6824 77.4724 92.4027 81.7665 93.3909C83.2625 93.7351 84.7407 94.1583 86.227 94.5454C86.251 94.9103 86.275 95.2752 86.2991 95.6403C85.4028 96.053 84.5012 96.8284 83.6113 96.8127C80.5209 96.7582 77.3982 96.6591 74.3522 96.1692C43.5067 91.2084 18.1382 66.8476 11.2393 35.2761C9.92361 29.2554 9.71528 22.9935 9.03746 16.8384C8.898 15.5719 8.94373 14.2854 8.90396 13.0082C8.61072 12.9109 8.31755 12.8137 8.02423 12.7165Z"
+          fill="url(#paint0_linear_938_7785)" />
+        <defs>
+          <linearGradient
+            id="paint0_linear_938_7785"
+            x1="17.712"
+            y1="33.6692"
+            x2="30.5042"
+            y2="37.9926"
+            gradientUnits="userSpaceOnUse">
+            <stop stop-color="var(--color-icon-text-icn-txt-prim)" />
+            <stop offset="1" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <h1>Microphone Access Needed</h1>
+
+      <div class="denied-container-content">
+        Click the
+        <span class="mic-icon">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none">
+            <mask
+              id="mask0_2112_4150"
+              style="mask-type: alpha"
+              maskUnits="userSpaceOnUse"
+              x="0"
+              y="0"
+              width="14"
+              height="14">
+              <rect width="14" height="14" fill="#D9D9D9" />
+            </mask>
+            <g mask="url(#mask0_2112_4150)">
+              <path
+                d="M10.3539 8.72084L9.50807 7.875C9.64419 7.65139 9.74627 7.41806 9.81432 7.175C9.88238 6.93195 9.91641 6.67917 9.91641 6.41667H11.0831C11.0831 6.84445 11.0199 7.25035 10.8935 7.63438C10.7671 8.01841 10.5872 8.38056 10.3539 8.72084ZM8.63307 6.97084L7.58307 5.92084V2.91667C7.58307 2.75139 7.52717 2.61285 7.41536 2.50105C7.30356 2.38924 7.16502 2.33334 6.99974 2.33334C6.83446 2.33334 6.69592 2.38924 6.58412 2.50105C6.47231 2.61285 6.41641 2.75139 6.41641 2.91667V4.75417L5.24974 3.58751V2.91667C5.24974 2.43056 5.41988 2.01737 5.76016 1.67709C6.10043 1.33681 6.51363 1.16667 6.99974 1.16667C7.48585 1.16667 7.89905 1.33681 8.23932 1.67709C8.5796 2.01737 8.74974 2.43056 8.74974 2.91667V6.41667C8.74974 6.52362 8.73759 6.62084 8.71328 6.70834C8.68898 6.79584 8.66224 6.88334 8.63307 6.97084ZM6.41641 12.25V10.4563C5.40529 10.3201 4.56918 9.86806 3.90807 9.10001C3.24696 8.33195 2.91641 7.4375 2.91641 6.41667H4.08307C4.08307 7.22362 4.36259 7.91146 4.92162 8.48021C5.48064 9.04896 6.17335 9.33334 6.99974 9.33334C7.3303 9.33334 7.64384 9.2823 7.94037 9.18021C8.23689 9.07813 8.50668 8.93473 8.74974 8.75L9.58099 9.58125C9.29905 9.80487 8.99037 9.99445 8.65495 10.15C8.31953 10.3056 7.96224 10.4076 7.58307 10.4563V12.25H6.41641ZM11.5497 13.1833L0.816406 2.45001L1.63307 1.63334L12.3664 12.3667L11.5497 13.1833Z"
+                fill="var(--color-icon-text-icn-txt-prim)" />
+            </g>
+          </svg>
+        </span>
+
+        icon and select <b class="underline">“Always allow”</b> and then click
+        <b class="underline">“Done”</b>.
+      </div>
+
+      <div class="denied-container-separator"></div>
+
+      <div class="denied-container-content">
+        If you don’t see the icon, click
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg">
+          <mask
+            id="mask0_940_7883"
+            style="mask-type: alpha"
+            maskUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width="20"
+            height="20">
+            <rect width="20" height="20" fill="var(--color-icon-text-icn-txt-prim)" />
+          </mask>
+          <g mask="url(#mask0_940_7883)">
+            <path
+              d="M10.0002 16.6667C8.13905 16.6667 6.56266 16.0209 5.271 14.7292C3.97933 13.4375 3.3335 11.8612 3.3335 10C3.3335 8.13893 3.97933 6.56254 5.271 5.27087C6.56266 3.97921 8.13905 3.33337 10.0002 3.33337C10.9585 3.33337 11.8752 3.53129 12.7502 3.92712C13.6252 4.32296 14.3752 4.88893 15.0002 5.62504V3.33337H16.6668V9.16671H10.8335V7.50004H14.3335C13.8891 6.72226 13.2814 6.11115 12.5106 5.66671C11.7397 5.22226 10.9029 5.00004 10.0002 5.00004C8.61127 5.00004 7.43072 5.48615 6.4585 6.45837C5.48627 7.4306 5.00016 8.61115 5.00016 10C5.00016 11.3889 5.48627 12.5695 6.4585 13.5417C7.43072 14.5139 8.61127 15 10.0002 15C11.0696 15 12.0349 14.6945 12.896 14.0834C13.7571 13.4723 14.3613 12.6667 14.7085 11.6667H16.4585C16.0696 13.1389 15.2779 14.3403 14.0835 15.2709C12.8891 16.2014 11.5279 16.6667 10.0002 16.6667Z"
+              fill="var(--color-icon-text-icn-txt-prim)" />
+          </g>
+        </svg>
+        to refresh the page, then try again.
+      </div>
+
+      <div class="hint">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg">
+          <path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M8 5.01807C8 2.80893 9.79086 1.01807 12 1.01807C14.2091 1.01807 16 2.80893 16 5.01807V11.0181C16 13.2272 14.2091 15.0181 12 15.0181C9.79086 15.0181 8 13.2272 8 11.0181V5.01807ZM12 3.01807C13.1046 3.01807 14 3.9135 14 5.01807V11.0181C14 12.1226 13.1046 13.0181 12 13.0181C10.8954 13.0181 10 12.1226 10 11.0181V5.01807C10 3.9135 10.8954 3.01807 12 3.01807Z"
+            fill="#8894FE" />
+          <path
+            d="M6 8.01807C6 7.46578 5.55228 7.01807 5 7.01807C4.44772 7.01807 4 7.46578 4 8.01807V11.0181C4 15.0983 7.05466 18.4651 11.0019 18.9564C11.0006 18.9768 11 18.9974 11 19.0181V21.0241L8.99398 21.0361C8.4417 21.0395 7.99669 21.4899 8.00002 22.0422C8.00334 22.5944 8.45375 23.0394 9.00602 23.0361L12 23.0181C12.0026 23.0181 12.0052 23.0181 12.0078 23.018L15.006 23C15.5583 22.9967 16.0033 22.5463 16 21.994C15.9967 21.4417 15.5463 20.9967 14.994 21L13 21.012V19.0181C13 18.9974 12.9994 18.9768 12.9981 18.9564C16.9453 18.4651 20 15.0983 20 11.0181V8.01807C20 7.46578 19.5523 7.01807 19 7.01807C18.4477 7.01807 18 7.46578 18 8.01807V11.0181C18 14.3318 15.3137 17.0181 12 17.0181C8.68629 17.0181 6 14.3318 6 11.0181V8.01807Z"
+            fill="#8894FE" />
+        </svg>
+        <div>
+          Speechify only accesses your microphone when you click the talk button—never in the
+          background.
+        </div>
+      </div>
+    </div>
+
+    <div class="permission-needed-dialog hide">
+      <div class="permission-needed-dialog-content">
+        <svg
+          class="permission-needed-dialog-close-button"
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg">
+          <path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M4.87361 3.45952C4.48309 3.06899 3.84992 3.06899 3.4594 3.45952C3.06887 3.85004 3.06887 4.48321 3.4594 4.87373L8.58562 9.99996L3.4594 15.1262C3.06887 15.5167 3.06887 16.1499 3.4594 16.5404C3.84992 16.9309 4.48309 16.9309 4.87361 16.5404L9.99984 11.4142L15.1261 16.5404C15.5166 16.9309 16.1498 16.9309 16.5403 16.5404C16.9308 16.1499 16.9308 15.5167 16.5403 15.1262L11.4141 9.99996L16.5403 4.87373C16.9308 4.48321 16.9308 3.85004 16.5403 3.45952C16.1498 3.06899 15.5166 3.06899 15.1261 3.45952L9.99984 8.58575L4.87361 3.45952Z"
+            fill="var(--color-icon-text-icn-txt-prim)" />
+        </svg>
+        <h2 class="nowrap">Microphone Access Needed</h2>
+        <p>Please allow Speechify to access your microphone so you can start talking.</p>
+        <button class="permission-needed-dialog-button">Got It</button>
+      </div>
+    </div>
+
+    <script src="./microphone-permissions.js"></script>
+  </body>
+</html>

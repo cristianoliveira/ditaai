@@ -1,0 +1,3 @@
+(function(){try{var g=typeof window!=="undefined"?window:typeof global!=="undefined"?global:typeof self!=="undefined"?self:{};g["__faroBundleId_Speechify Chrome Extension"]="14.3.0"}catch(l){}})();
+import{g as t,n as r}from"./chunk-CAO5DZGK.js";r();t();r();t();var m=["chrome:","chrome-extension:","browser:","about:","edge:"],l=(n,o)=>`${n}/${o.split("/")[1]}`,c=n=>{let o=n??(typeof window<"u"?window.location.href:null);if(!o)return null;try{let i=new URL(o);if(m.includes(i.protocol))return null;let e=i.hostname.replace(/^www\./,""),s=i.pathname;return e==="docs.google.com"&&s&&(e=l(e,s)),e}catch{return null}};var d=(n,o)=>new URL(n,o).href,D=n=>c(n);export{l as a,c as b,d as c,D as d};
+//# sourceMappingURL=chunk-Y6YYRFL5.js.map

@@ -1,0 +1,3 @@
+(function(){try{var g=typeof window!=="undefined"?window:typeof global!=="undefined"?global:typeof self!=="undefined"?self:{};g["__faroBundleId_Speechify Chrome Extension"]="14.3.0"}catch(l){}})();
+import{$g as n,ah as p,dd as r}from"./chunk-324T2OUF.js";import{ba as t}from"./chunk-KJ3NFIHV.js";import{g as e,i as o,n as i}from"./chunk-CAO5DZGK.js";i();e();var a=()=>o(r,{width:240,onClose:()=>n("rate-limit")},o(t,{font:"body-5"},"You have been rate limited for seeking too much.",o("br",null),"Please wait up to a minute before reading new content")),c=async()=>{await p({id:"rate-limit",priority:151,showOnMobile:!1,timeSensitive:!1,redesigned:!0,render:a})};export{c as a};
+//# sourceMappingURL=chunk-SP7JKGLV.js.map

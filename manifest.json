@@ -1,0 +1,93 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "images/icon-light-square-128.png",
+         "16": "images/icon-light-square-16.png",
+         "32": "images/icon-light-square-32.png",
+         "48": "images/icon-light-square-48.png"
+      }
+   },
+   "author": "Speechify Inc",
+   "background": {
+      "service_worker": "background/main.js",
+      "type": "module"
+   },
+   "commands": {
+      "open-screenshot-mode": {
+         "description": "Open Screenshot Mode",
+         "suggested_key": {
+            "chromeos": "Alt+R",
+            "linux": "Alt+R",
+            "mac": "MacCtrl+Command+R",
+            "windows": "Alt+R"
+         }
+      },
+      "play-pause-new": {
+         "description": "Play/Pause (new shortcut)",
+         "suggested_key": {
+            "chromeos": "Alt+A",
+            "linux": "Alt+A",
+            "mac": "Alt+A",
+            "windows": "Alt+A"
+         }
+      },
+      "save-to-library": {
+         "description": "Save To Library",
+         "suggested_key": {
+            "chromeos": "Alt+L",
+            "linux": "Alt+L",
+            "mac": "Alt+L",
+            "windows": "Alt+L"
+         }
+      },
+      "voice-typing": {
+         "description": "Voice Typing",
+         "suggested_key": {
+            "chromeos": "Alt+S",
+            "linux": "Alt+S",
+            "mac": "Alt+S",
+            "windows": "Alt+S"
+         }
+      }
+   },
+   "content_scripts": [ {
+      "js": [ "content-idle-notifier.js" ],
+      "matches": [ "\u003Call_urls>" ],
+      "run_at": "document_idle"
+   }, {
+      "css": [ "css/speechify.css" ],
+      "js": [ "piper-local-voice.js", "content-wrapper.js" ],
+      "matches": [ "\u003Call_urls>" ],
+      "run_at": "document_start"
+   } ],
+   "content_security_policy": {
+      "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
+      "sandbox": "sandbox allow-scripts; default-src *; media-src data:; style-src 'nonce-nVxWUtkqVd';"
+   },
+   "default_locale": "en",
+   "description": "__MSG_appDesc__",
+   "externally_connectable": {
+      "matches": [ "*://localhost/*", "*://*.getspeechify.com/*", "*://*.speechify.com/*", "*://speechify.com/*", "*://speechify.website/*", "*://*.speechify.website/*", "*://speechify.dev/*", "*://*.speechify.dev/*" ]
+   },
+   "host_permissions": [ "\u003Call_urls>", "https://*/", "http://*/", "file://*/" ],
+   "icons": {
+      "128": "images/icon-light-square-128.png",
+      "16": "images/icon-light-square-16.png",
+      "32": "images/icon-light-square-32.png",
+      "48": "images/icon-light-square-48.png"
+   },
+   "manifest_version": 3,
+   "minimum_chrome_version": "109",
+   "name": "__MSG_appName__",
+   "permissions": [ "offscreen", "tabs", "tabCapture", "contextMenus", "storage", "alarms", "scripting", "unlimitedStorage", "system.cpu", "system.memory", "sidePanel" ],
+   "side_panel": {
+      "default_path": "sidepanel/sidepanel.html"
+   },
+   "version": "14.3.1",
+   "web_accessible_resources": [ {
+      "extension_ids": [  ],
+      "matches": [ "\u003Call_urls>" ],
+      "resources": [ "features.json", "fonts/*", "images/*", "audio/*", "houdini.js", "content/*", "offscreen/*", "sidepanel/*", "popup/*", "pdf-viewer/*" ],
+      "use_dynamic_url": false
+   } ]
+}

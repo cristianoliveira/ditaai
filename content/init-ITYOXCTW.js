@@ -1,0 +1,3 @@
+(function(){try{var g=typeof window!=="undefined"?window:typeof global!=="undefined"?global:typeof self!=="undefined"?self:{};g["__faroBundleId_Speechify Chrome Extension"]="14.3.0"}catch(l){}})();
+import{a as n}from"./chunk-KND3LZ4C.js";import{Lc as r}from"./chunk-324T2OUF.js";import"./chunk-JJ7NA4NT.js";import"./chunk-KJ3NFIHV.js";import"./chunk-H3LCZSHS.js";import"./chunk-FLMM6JC5.js";import"./chunk-Y6YYRFL5.js";import"./chunk-664ANS6R.js";import"./chunk-NUSU6NTI.js";import{g as i,n as o}from"./chunk-CAO5DZGK.js";o();i();async function a(){let t=!1;r.registerHook("BEFORE_PLAY",async()=>{t||(await n(),t=!0)})}export{a as default};
+//# sourceMappingURL=init-ITYOXCTW.js.map

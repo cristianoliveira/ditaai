@@ -1,0 +1,3 @@
+(function(){try{var g=typeof window!=="undefined"?window:typeof global!=="undefined"?global:typeof self!=="undefined"?self:{};g["__faroBundleId_Speechify Chrome Extension"]="14.3.0"}catch(l){}})();
+import{$g as p,ah as e,dd as n}from"./chunk-324T2OUF.js";import{ba as r}from"./chunk-KJ3NFIHV.js";import{g as i,i as o,n as t}from"./chunk-CAO5DZGK.js";t();i();var a=()=>o(n,{width:240,onClose:()=>p("http-highlight-unsupported")},o(r,{font:"body-5"},"Highlighting isn't supported on http sites.",o("br",null),"We are working on adding it.")),H=async()=>{await e({id:"http-highlight-unsupported",priority:151,showOnMobile:!1,timeSensitive:!1,redesigned:!0,render:a})};export{H as a};
+//# sourceMappingURL=chunk-KND3LZ4C.js.map
