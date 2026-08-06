@@ -146,6 +146,15 @@ test("browser bridge exposes Amy and routes only Amy through local server", asyn
 
   const amy = context.speechSynthesis.getVoices().find((voice) => voice.name === "Amy (Piper Local)");
   assert.ok(amy);
+  // Speechify's speechSynth pipeline assumes name === voiceURI: the picker stores
+  // identity as { name: voiceURI } and playback resolves voices.find(v => v.name === stored.name).
+  // Regression: "No voice found" when playing Amy (Piper Local).
+  assert.equal(amy.name, amy.voiceURI, "Amy must satisfy Speechify name identity contract");
+  const storedByPicker = { name: amy.voiceURI };
+  const resolvedByPlay = context.speechSynthesis
+    .getVoices()
+    .find((voice) => voice.name === storedByPicker.name);
+  assert.equal(resolvedByPlay, amy, "playback lookup must resolve Amy");
 
   const local = new context.SpeechSynthesisUtterance("Local text");
   const boundaries = [];

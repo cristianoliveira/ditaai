@@ -11,8 +11,11 @@
     default: false,
     lang: "en-US",
     localService: true,
+    // Speechify's speechSynth pipeline requires name === voiceURI: the voice picker
+    // stores identity as { name: voiceURI } and playback resolves voices by name.
+    // Mismatched values caused "No voice found" (and broke selection highlighting).
     name: VOICE_NAME,
-    voiceURI: "piper-local:en_US-amy-medium"
+    voiceURI: VOICE_NAME
   });
   let localAudio = null;
   let localUtterance = null;
