@@ -62,3 +62,14 @@ dev-firefox:
 # Create zip for store submission
 zip:
   pnpm wxt zip
+
+# === Versioning ===
+
+# Bump dev version (vN.N.N-<githash>-<timestamp>)
+# Optional: pass a base version, e.g. just bump 1.0.0
+bump base_version="":
+  node scripts/bump-version.mjs {{base_version}}
+
+# Install git hooks (run once after clone)
+setup-hooks:
+  git config core.hooksPath .githooks

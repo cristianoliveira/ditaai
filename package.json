@@ -1,6 +1,6 @@
 {
   "name": "dita",
-  "version": "0.3.0-64bd5f3-1786179129",
+  "version": "0.3.0-379942f-1786179288",
   "private": true,
   "description": "Chrome extension with local Piper TTS",
   "type": "module",
@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/ e2e/",
     "format": "biome check --write src/ e2e/",
-    "ci": "biome check src/ e2e/ && tsc --noEmit && vitest run"
+    "ci": "biome check src/ e2e/ && tsc --noEmit && vitest run",
+    "bump:version": "node scripts/bump-version.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

@@ -27,6 +27,8 @@
           shellHook = ''
             echo "dita dev shell ready"
             echo "playwright browsers: ''${PLAYWRIGHT_BROWSERS_PATH}"
+            # Auto-install git hooks on shell entry
+            git config core.hooksPath .githooks
             echo "run: just --list"
           '';
         };

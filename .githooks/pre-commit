@@ -1,0 +1,4 @@
+#!/bin/sh
+# Pre-commit: bump dev version (vN.N.N-<githash>-<timestamp>) and stage it.
+node scripts/bump-version.mjs
+git add package.json wxt.config.ts
