@@ -1,6 +1,6 @@
 {
   "name": "dita",
-  "version": "0.3.0-4b8f5c8-1786181397",
+  "version": "0.3.0-4c3e517-1786181958",
   "private": true,
   "description": "Chrome extension with local Piper TTS",
   "type": "module",
@@ -37,5 +37,8 @@
       "esbuild",
       "spawn-sync"
     ]
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.27.0"
   }
 }

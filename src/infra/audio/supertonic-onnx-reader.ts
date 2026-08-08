@@ -1,42 +1,45 @@
 /**
- * TextReader adapter for Supertonic TTS via local HTTP server.
+ * In-browser Supertonic TTS reader. No external server needed.
  *
- * Requires supertonic serve running locally:
- *   pip install 'supertonic[serve]'
- *   supertonic serve --cors 'chrome-extension://*'
+ * Downloads ONNX models + voice style from Cache Storage (populated by
+ * the voice installer) and runs inference via onnxruntime-web.
  *
- * POSTs text to /v1/tts, plays the returned WAV via AudioContext,
- * and computes approximate word-level boundary events.
+ * Word boundaries are computed proportionally from text + audio duration.
  */
 
 import type { BoundaryEvent, SpeakOptions, TextReader } from '../../domain/audio/text-reader';
+import { loadTextToSpeech, loadVoiceStyle, writeWav } from './supertonic-helper';
+import type { TextToSpeech } from './supertonic-helper';
 
-export interface SupertonicConfig {
-  baseUrl?: string;
-  voice?: string;
-  lang?: string;
+export interface SupertonicOnnxConfig {
+  /** Base URL for ONNX model files (cache:// or https://). */
+  assetsPath?: string;
+  /** URL for the voice style JSON. */
+  voiceStylePath?: string;
+  language?: string;
   speed?: number;
   totalSteps?: number;
-  /** Injected factory — for testing. Defaults to new AudioContext(). */
+  /** Injected AudioContext factory for testing. */
   audioContextFactory?: () => AudioContext;
 }
 
-export class SupertonicReader implements TextReader {
-  private readonly baseUrl: string;
-  private readonly voice: string;
-  private readonly lang: string;
+export class SupertonicOnnxReader implements TextReader {
+  private readonly assetsPath: string;
+  private readonly voiceStylePath: string;
+  private readonly language: string;
   private readonly speed: number;
   private readonly totalSteps: number;
   private readonly audioContextFactory: () => AudioContext;
 
+  private tts: TextToSpeech | null = null;
   private audioContext: AudioContext | null = null;
   private sourceNode: AudioBufferSourceNode | null = null;
   private abortController: AbortController | null = null;
 
-  constructor(config: SupertonicConfig = {}) {
-    this.baseUrl = config.baseUrl ?? 'http://127.0.0.1:7788';
-    this.voice = config.voice ?? 'M1';
-    this.lang = config.lang ?? 'en';
+  constructor(config: SupertonicOnnxConfig = {}) {
+    this.assetsPath = config.assetsPath ?? 'assets/supertonic';
+    this.voiceStylePath = config.voiceStylePath ?? `${this.assetsPath}/voice_styles/M1.json`;
+    this.language = config.language ?? 'en';
     this.speed = config.speed ?? 1.05;
     this.totalSteps = config.totalSteps ?? 8;
     this.audioContextFactory =
@@ -45,35 +48,26 @@ export class SupertonicReader implements TextReader {
 
   async speak(text: string, options?: SpeakOptions): Promise<void> {
     this.abortController = new AbortController();
-
-    // If resumeFromChar is set, only speak the remaining portion.
-    // Boundary events will be offset back to absolute positions.
     const offset = options?.resumeFromChar ?? 0;
     const textToSpeak = offset > 0 ? text.slice(offset) : text;
     if (!textToSpeak.trim()) return;
 
-    // Request TTS from local server
-    const response = await fetch(`${this.baseUrl}/v1/tts`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        text: textToSpeak,
-        voice: this.voice,
-        lang: this.lang,
-        speed: this.speed,
-        total_steps: this.totalSteps,
-      }),
-      signal: this.abortController.signal,
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      const message = err?.error?.message ?? `Supertonic server error: ${response.status}`;
-      throw new Error(message);
+    // Ensure models are loaded (lazy first-use load)
+    if (!this.tts) {
+      this.tts = (await loadTextToSpeech(this.assetsPath)).tts;
     }
 
-    const audioData = await response.arrayBuffer();
-    await this.playAudioWithBoundaries(audioData, textToSpeak, offset, options);
+    const style = await loadVoiceStyle([this.voiceStylePath]);
+    const { wav } = await this.tts.infer(
+      [textToSpeak],
+      [this.language],
+      style,
+      this.totalSteps,
+      this.speed,
+    );
+
+    const wavBuffer = writeWav(new Float32Array(wav), this.tts.sampleRate);
+    await this.playAudioWithBoundaries(wavBuffer, textToSpeak, offset, options);
   }
 
   stop(): void {
@@ -102,16 +96,15 @@ export class SupertonicReader implements TextReader {
   }
 
   private async playAudioWithBoundaries(
-    audioData: ArrayBuffer,
+    wavBuffer: ArrayBuffer,
     text: string,
     offset: number,
     options?: SpeakOptions,
   ): Promise<void> {
     const ctx = this.getAudioContext();
-    const audioBuffer = await ctx.decodeAudioData(audioData.slice(0));
-    const duration = audioBuffer.duration;
+    const audioBuffer = await ctx.decodeAudioData(wavBuffer);
+    const audioDuration = audioBuffer.duration;
 
-    // Pre-compute word positions — map char positions to time offsets
     const words = computeWords(text, offset);
     const totalChars = text.length;
     const lastCharPos = offset + totalChars;
@@ -122,8 +115,7 @@ export class SupertonicReader implements TextReader {
     source.connect(ctx.destination);
     this.sourceNode = source;
 
-    // Fire boundary events at proportional time positions
-    const boundaryInterval = 50; // ms between checks
+    const tickMs = 50;
     let boundaryIndex = 0;
 
     const tick = setInterval(() => {
@@ -132,36 +124,33 @@ export class SupertonicReader implements TextReader {
         return;
       }
       const elapsed = ctx.currentTime - startTime;
-      // Map elapsed time to char position proportionally
-      const progress = Math.min(elapsed / duration, 1);
+      const progress = Math.min(elapsed / audioDuration, 1);
       const currentCharPos = offset + Math.floor(progress * totalChars);
 
       while (boundaryIndex < words.length) {
         const word = words[boundaryIndex];
-        if (!word) break;
-        if (word.charIndex > currentCharPos) break;
+        if (!word || word.charIndex > currentCharPos) break;
         options?.onBoundary?.(word);
         boundaryIndex++;
       }
 
-      // All words spoken and audio finished
-      if (boundaryIndex >= words.length && elapsed >= duration) {
+      if (boundaryIndex >= words.length && elapsed >= audioDuration) {
         clearInterval(tick);
       }
-    }, boundaryInterval);
+    }, tickMs);
 
     let startTime = 0;
 
     return new Promise<void>((resolve) => {
       source.addEventListener('ended', () => {
         clearInterval(tick);
-        // Fire any remaining boundary events
         while (boundaryIndex < words.length) {
           const word = words[boundaryIndex];
-          if (!word) break;
-          if (word.charIndex <= lastCharPos) {
-            options?.onBoundary?.(word);
+          if (!word || word.charIndex > lastCharPos) {
+            boundaryIndex++;
+            continue;
           }
+          options?.onBoundary?.(word);
           boundaryIndex++;
         }
         this.sourceNode = null;
@@ -181,7 +170,6 @@ export class SupertonicReader implements TextReader {
   }
 }
 
-/** Extract word positions from text. Offset is added to charIndex for absolute positions. */
 function computeWords(text: string, offset: number): BoundaryEvent[] {
   const words: BoundaryEvent[] = [];
   for (const match of text.matchAll(/\S+/g)) {
