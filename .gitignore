@@ -26,4 +26,4 @@ playwright-report/
 blob-report/
 
 # Downloaded voice models (large, not tracked)
-voices/
+/voices/

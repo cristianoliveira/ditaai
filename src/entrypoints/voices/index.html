@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dita — Voices</title>
+</head>
+<body>
+  <main id="app">
+    <header>
+      <h1>🎙️ Dita Voices</h1>
+      <p>Download Supertonic voices for high-quality offline TTS.</p>
+    </header>
+
+    <section id="status-bar"></section>
+
+    <section id="engine-section">
+      <h2>Engine Assets</h2>
+      <div id="engine-status">Checking…</div>
+    </section>
+
+    <section id="voices-section">
+      <h2>Voices</h2>
+      <div id="voices-grid"></div>
+    </section>
+  </main>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #0f0f1a;
+      color: #e0e0f0;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    header {
+      margin-bottom: 32px;
+    }
+    header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    header p {
+      color: #8b8ba7;
+      font-size: 14px;
+    }
+    h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #6c5ce7;
+      margin-bottom: 12px;
+    }
+    section {
+      margin-bottom: 32px;
+    }
+
+    .status-bar {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .status-bar.ok { background: #1a3a2a; color: #6fcf97; }
+    .status-bar.warn { background: #3a3520; color: #f2c94c; }
+
+    #engine-status {
+      padding: 12px 16px;
+      border-radius: 8px;
+      background: #1a1a2e;
+      font-size: 13px;
+      color: #8b8ba7;
+    }
+    #engine-status.ready { color: #6fcf97; }
+
+    #voices-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .voice-card {
+      background: #1a1a2e;
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: box-shadow 0.15s;
+    }
+    .voice-card:hover {
+      box-shadow: 0 4px 16px rgba(108, 92, 231, 0.15);
+    }
+    .voice-card .name {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .voice-card .meta {
+      font-size: 12px;
+      color: #8b8ba7;
+    }
+    .voice-card .size {
+      font-size: 11px;
+      color: #5a5a7a;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-download {
+      background: #6c5ce7;
+      color: #fff;
+    }
+    .btn-download:hover:not(:disabled) { background: #7d6ff0; }
+    .btn-download.loading { background: #4a3a8a; }
+
+    .btn-installed {
+      background: #1a3a2a;
+      color: #6fcf97;
+      cursor: default;
+    }
+
+    .btn-download-all {
+      background: #6c5ce7;
+      color: #fff;
+      width: 100%;
+      padding: 12px;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    .btn-download-all:hover:not(:disabled) { background: #7d6ff0; }
+
+    .progress-bar {
+      height: 4px;
+      background: #2a2a4a;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .progress-bar .fill {
+      height: 100%;
+      background: #6c5ce7;
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+  </style>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
