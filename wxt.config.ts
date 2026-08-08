@@ -6,8 +6,11 @@ export default defineConfig({
   manifest: {
     name: 'Dita',
     version: '0.1.0',
-    description: 'Chrome extension with local Piper TTS',
+    description: 'Dita aí — read any page aloud',
     permissions: ['storage', 'tabs', 'offscreen'],
     host_permissions: ['<all_urls>'],
+    action: {
+      default_title: 'Dita — Read aloud',
+    },
   },
 });

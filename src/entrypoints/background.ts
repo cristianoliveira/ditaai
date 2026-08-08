@@ -14,5 +14,19 @@ export default defineBackground(() => {
   const router = createMessageRouter(controller, { fetchTabText, resolveActiveTab });
   attachRuntimeListener(router);
 
+  // Action button: click the icon → toggle the widget on the active tab
+  chrome.action.onClicked.addListener(async (tab) => {
+    if (!tab.id) return;
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        dest: 'contentScript',
+        method: 'toggleWidget',
+        args: [],
+      });
+    } catch {
+      // content script not loaded (chrome:// pages, etc.) — ignore
+    }
+  });
+
   console.log('[dita] background ready');
 });
