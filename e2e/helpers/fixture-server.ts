@@ -19,6 +19,14 @@ export async function startFixtureServer(): Promise<FixtureServer> {
     const server = http.createServer(async (req, res) => {
       try {
         const url = new URL(req.url ?? '/', 'http://localhost');
+
+        // Chrome auto-requests favicon — return 204 to avoid 404 console noise.
+        if (url.pathname === '/favicon.ico') {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+
         const filePath = path.join(fixturesDir, url.pathname);
         // Prevent path traversal.
         if (!filePath.startsWith(fixturesDir)) {

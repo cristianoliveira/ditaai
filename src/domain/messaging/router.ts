@@ -1,5 +1,6 @@
 // Routes runtime messages to handlers. Pure domain — no Chrome API.
-// The background entrypoint wires this to chrome.runtime.onMessage.
+// The background entrypoint wires this to chrome.runtime.onMessage and
+// provides the tabTextFetcher and activeTabResolver implementations.
 
 import type { PlaybackController } from '../playback/playback-controller';
 
@@ -11,10 +12,24 @@ export interface RuntimeMessage {
 
 export type MessageHandler = (msg: RuntimeMessage) => unknown | Promise<unknown>;
 
-export function createMessageRouter(controller: PlaybackController): MessageHandler {
-  const handlers: Record<string, (args: unknown[]) => unknown> = {
-    playTab: ([tabId]) => {
-      controller.play(tabId as number | undefined);
+/** Port: fetches readable text from a tab's content script. */
+export type TabTextFetcher = (tabId: number) => Promise<string[]>;
+
+/** Port: resolves the currently active tab id. */
+export type ActiveTabResolver = () => Promise<number>;
+
+export function createMessageRouter(
+  controller: PlaybackController,
+  deps: { fetchTabText: TabTextFetcher; resolveActiveTab: ActiveTabResolver },
+): MessageHandler {
+  const handlers: Record<string, (args: unknown[]) => unknown | Promise<unknown>> = {
+    playTab: async ([tabId]) => {
+      const id = (tabId as number | undefined) ?? (await deps.resolveActiveTab());
+      const texts = await deps.fetchTabText(id);
+      if (texts.length === 0) {
+        return { ok: false, error: 'No readable text found' };
+      }
+      controller.play(id);
       return { ok: true };
     },
     playText: ([text, options]) => {
