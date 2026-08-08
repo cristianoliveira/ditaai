@@ -59,6 +59,11 @@ dev:
 dev-firefox:
   pnpm wxt -b firefox
 
+# Install Supertonic voices from HuggingFace
+# Usage: just install-voices [M1 F3 ...] or just install-voices --engine
+install-voices +voices='':
+  node scripts/install-voices.mjs {{voices}}
+
 # Create zip for store submission
 zip:
   pnpm wxt zip
