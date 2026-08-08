@@ -1,0 +1,35 @@
+{
+  "name": "dita",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension with local Piper TTS",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src/",
+    "format": "biome check --write src/",
+    "ci": "biome check src/ && tsc --noEmit && vitest run"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/chrome": "0.2.5",
+    "typescript": "5.7.3",
+    "vitest": "4.1.10",
+    "wxt": "0.21.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "esbuild",
+      "spawn-sync"
+    ]
+  }
+}
