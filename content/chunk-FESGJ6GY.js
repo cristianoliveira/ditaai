@@ -1,3 +1,0 @@
-(function(){try{var g=typeof window!=="undefined"?window:typeof global!=="undefined"?global:typeof self!=="undefined"?self:{};g["__faroBundleId_Speechify Chrome Extension"]="14.3.0"}catch(l){}})();
-import{N as c,Q as u}from"./chunk-324T2OUF.js";import{g as f}from"./chunk-H3LCZSHS.js";import{M as a}from"./chunk-FLMM6JC5.js";import{d,g as t,n as i}from"./chunk-CAO5DZGK.js";i();t();var n=d(f());var g=r=>async(...e)=>{let o=await u();c(o)?r?.(...e):a("toggle-force-login")};function T(r){let e=(0,n.useRef)(r);return e.current=r,(0,n.useCallback)((...s)=>g(e.current)(...s),[])}export{g as a,T as b};
-//# sourceMappingURL=chunk-FESGJ6GY.js.map

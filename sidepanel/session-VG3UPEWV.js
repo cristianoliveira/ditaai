@@ -1,3 +1,0 @@
-(function(){try{var g=typeof window!=="undefined"?window:typeof global!=="undefined"?global:typeof self!=="undefined"?self:{};g["__faroBundleId_Speechify Chrome Extension"]="14.3.0"}catch(l){}})();
-import{f as a,g as b,h as c,i as d,j as e,k as f,l as g,m as h,n as i,o as j,p as k,q as l}from"./chunk-SUAAOZL7.js";import"./chunk-37VRLQDC.js";import"./chunk-YP5CIT26.js";import"./chunk-3TJIL3LD.js";l();export{c as addMessageToSession,g as clearAllSessionsAction,j as clearCurrentSessionChat,f as deleteSessionAction,e as getAllSessionsAction,b as loadSession,k as setExitedVoiceMode,i as setSessionQuestionRecommendations,a as startSession,d as updateMessageInSession,h as updateSessionTitle};
-//# sourceMappingURL=session-VG3UPEWV.js.map
