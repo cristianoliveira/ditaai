@@ -16,6 +16,25 @@ function makeFakeReader(): TextReader & { calls: string[] } {
   };
 }
 
+/** Reader where speak resolves after a delay, so we can pause mid-segment. */
+function makeDelayedReader(): TextReader & { calls: string[]; resolveSpeak: () => void } {
+  const calls: string[] = [];
+  let resolveFn: (() => void) | null = null;
+  return {
+    calls,
+    resolveSpeak: () => resolveFn?.(),
+    speak: vi.fn((text: string) => {
+      calls.push(text);
+      return new Promise<void>((resolve) => {
+        resolveFn = resolve;
+      });
+    }),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    stop: vi.fn(() => resolveFn?.()),
+  };
+}
+
 describe('SegmentSequencer', () => {
   it('speaks all segments in order', async () => {
     const reader = makeFakeReader();
@@ -42,22 +61,13 @@ describe('SegmentSequencer', () => {
   });
 
   it('stop halts playback', async () => {
-    const reader = makeFakeReader();
-    const spoken: string[] = [];
-    reader.speak = vi.fn(() => {
-      return new Promise<void>((resolve) => {
-        setTimeout(() => {
-          spoken.push('spoken');
-          resolve();
-        }, 50);
-      });
-    });
-
+    const reader = makeDelayedReader();
     const seq = new SegmentSequencer(reader);
     seq.load(['a', 'b', 'c', 'd']);
 
     const promise = seq.play();
     seq.stop();
+    reader.resolveSpeak(); // resolve any pending speak
     await promise;
 
     expect(reader.stop).toHaveBeenCalled();
@@ -65,17 +75,73 @@ describe('SegmentSequencer', () => {
     expect(seq.getState().current).toBe(0);
   });
 
-  it('pause and resume delegate to reader', () => {
+  it('pause then resume re-speaks the current segment', async () => {
+    const reader = makeDelayedReader();
+    const seq = new SegmentSequencer(reader);
+    seq.load(['first', 'second', 'third']);
+
+    const promise = seq.play();
+
+    // let segment 0 ("first") start
+    await vi.waitFor(() => expect(reader.calls).toEqual(['first']));
+
+    // pause — cancels current, resolves speak via reader.stop()
+    seq.pause();
+    expect(reader.stop).toHaveBeenCalled();
+    expect(seq.getState().playing).toBe(false);
+
+    // reader.stop() resolves the pending speak
+    reader.resolveSpeak();
+
+    // wait a tick so the loop hits the pause gate
+    await Promise.resolve();
+
+    // resume — should re-speak "first" (index still 0)
+    seq.resume();
+
+    // wait for re-speak of "first", then resolve it
+    await vi.waitFor(() => expect(reader.calls).toEqual(['first', 'first']));
+    reader.resolveSpeak();
+
+    // resolve segment 1
+    await vi.waitFor(() => expect(reader.calls).toEqual(['first', 'first', 'second']));
+    reader.resolveSpeak();
+
+    // resolve segment 2
+    await vi.waitFor(() => expect(reader.calls).toEqual(['first', 'first', 'second', 'third']));
+    reader.resolveSpeak();
+
+    await promise;
+
+    expect(reader.calls).toEqual(['first', 'first', 'second', 'third']);
+  });
+
+  it('stop while paused unblocks the resume promise', async () => {
+    const reader = makeDelayedReader();
+    const seq = new SegmentSequencer(reader);
+    seq.load(['a', 'b']);
+
+    const promise = seq.play();
+    await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+
+    seq.pause();
+    reader.resolveSpeak();
+    await Promise.resolve();
+
+    // stop while paused
+    seq.stop();
+    await promise;
+
+    expect(seq.getState().current).toBe(0);
+    expect(seq.getState().playing).toBe(false);
+  });
+
+  it('pause and resume delegate noop when already in that state', () => {
     const reader = makeFakeReader();
     const seq = new SegmentSequencer(reader);
 
-    seq.pause();
-    expect(reader.pause).toHaveBeenCalled();
-    expect(seq.getState().playing).toBe(false);
-
-    seq.resume();
-    expect(reader.resume).toHaveBeenCalled();
-    expect(seq.getState().playing).toBe(true);
+    seq.pause(); // not playing — noop
+    expect(reader.stop).not.toHaveBeenCalled();
   });
 
   it('empty segments does nothing', async () => {
