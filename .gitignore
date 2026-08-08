@@ -19,3 +19,8 @@ result
 
 # Reports (agent workspace)
 .tmp/
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/

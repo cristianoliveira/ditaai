@@ -1,21 +1,19 @@
 {
   "compilerOptions": {
     "target": "ESNext",
+    "lib": ["ESNext"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "noPropertyAccessFromIndexSignature": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "outDir": "dist",
-    "declaration": false,
-    "sourceMap": true,
+    "noEmit": true,
+    "types": ["node", "chrome"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", ".wxt/wxt.d.ts"],
-  "exclude": ["dist", "node_modules"]
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
 }

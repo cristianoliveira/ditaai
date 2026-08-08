@@ -15,15 +15,16 @@ check:
 
 # Format + lint
 lint:
-  pnpm biome check src/
+  pnpm biome check src/ e2e/
 
 # Auto-fix formatting
 format:
-  pnpm biome check --write src/
+  pnpm biome check --write src/ e2e/
 
-# TypeScript type checking
+# TypeScript type checking (src + e2e)
 typecheck:
   pnpm tsc --noEmit
+  pnpm tsc --noEmit -p e2e/tsconfig.json
 
 # Run all tests
 test:
@@ -32,6 +33,14 @@ test:
 # Run tests in watch mode
 test-watch:
   pnpm vitest
+
+# End-to-end tests (real extension in Chromium, fake TTS)
+test-e2e:
+  pnpm test:e2e
+
+# End-to-end tests in interactive UI mode
+test-e2e-ui:
+  pnpm test:e2e:ui
 
 # === Build ===
 
