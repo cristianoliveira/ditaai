@@ -1,9 +1,8 @@
 // Speaks text segments in sequence through a TextReader.
 // Pause/resume works by cancelling the current utterance and re-speaking
-// the same segment on resume — reliable across browsers where
-// speechSynthesis.pause()/resume() is buggy.
+// from the exact word position (tracked via boundary events).
 
-import type { SpeakOptions, TextReader } from './text-reader';
+import type { BoundaryEvent, SpeakOptions, TextReader } from './text-reader';
 
 export interface SequencerState {
   current: number;
@@ -18,6 +17,8 @@ export class SegmentSequencer {
   private stopped = false;
   private paused = false;
   private resolveResume: (() => void) | null = null;
+  private lastCharIndex = 0;
+  private resumeCharIndex = 0;
 
   /** Called when the active segment changes. */
   onSegmentChange?: (index: number) => void;
@@ -30,6 +31,8 @@ export class SegmentSequencer {
     this.playing = false;
     this.stopped = false;
     this.paused = false;
+    this.lastCharIndex = 0;
+    this.resumeCharIndex = 0;
   }
 
   getState(): SequencerState {
@@ -50,17 +53,32 @@ export class SegmentSequencer {
       if (!segment) break;
 
       this.onSegmentChange?.(this.index);
-      await this.reader.speak(segment, options);
+
+      // Wrap onBoundary to track word position for precise resume
+      const speakOptions: SpeakOptions = {
+        ...options,
+        resumeFromChar: this.resumeCharIndex,
+        onBoundary: (event: BoundaryEvent) => {
+          this.lastCharIndex = event.charIndex + event.charLength;
+          options?.onBoundary?.(event);
+        },
+      };
+
+      await this.reader.speak(segment, speakOptions);
 
       if (this.stopped) break;
 
-      // If paused mid-segment: wait for resume, then re-speak this segment
+      // Paused mid-segment: save exact word position, wait for resume
       if (this.paused) {
+        this.resumeCharIndex = this.lastCharIndex;
         await this.waitWhilePaused();
         if (this.stopped) break;
-        continue; // re-speak current segment, don't advance
+        continue; // re-speak from resumeCharIndex
       }
 
+      // Segment completed — reset and advance
+      this.resumeCharIndex = 0;
+      this.lastCharIndex = 0;
       this.index++;
     }
 
@@ -89,6 +107,8 @@ export class SegmentSequencer {
     this.resolveResume?.();
     this.resolveResume = null;
     this.index = 0;
+    this.resumeCharIndex = 0;
+    this.lastCharIndex = 0;
     this.playing = false;
   }
 

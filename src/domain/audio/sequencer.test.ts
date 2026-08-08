@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SegmentSequencer } from './sequencer';
-import type { TextReader } from './text-reader';
+import type { SpeakOptions, TextReader } from './text-reader';
 
 function makeFakeReader(): TextReader & { calls: string[] } {
   const calls: string[] = [];
@@ -142,6 +142,49 @@ describe('SegmentSequencer', () => {
 
     seq.pause(); // not playing — noop
     expect(reader.stop).not.toHaveBeenCalled();
+  });
+
+  it('resume continues from the last boundary word position', async () => {
+    const spokenOptions: SpeakOptions[] = [];
+    let resolveFn: (() => void) | null = null;
+    const resolve = () => {
+      resolveFn?.();
+    };
+    const boundaryReader: TextReader = {
+      speak: vi.fn((_text: string, options?: SpeakOptions) => {
+        spokenOptions.push(options ?? {});
+        // simulate two boundary events at char 0-5 and 6-11
+        options?.onBoundary?.({ charIndex: 0, charLength: 5 });
+        options?.onBoundary?.({ charIndex: 6, charLength: 5 });
+        return new Promise<void>((resolve) => {
+          resolveFn = resolve;
+        });
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(() => resolve()),
+    };
+
+    const seq = new SegmentSequencer(boundaryReader);
+    seq.load(['hello world foo']);
+
+    const promise = seq.play();
+    await vi.waitFor(() => expect(spokenOptions).toHaveLength(1));
+
+    // pause after boundaries fired (lastCharIndex = 6 + 5 = 11)
+    seq.pause();
+    resolve();
+    await Promise.resolve();
+
+    // resume — should re-speak with resumeFromChar = 11
+    seq.resume();
+    await vi.waitFor(() => expect(spokenOptions).toHaveLength(2));
+    expect(spokenOptions[1]?.resumeFromChar).toBe(11);
+
+    // clean up
+    resolve();
+    seq.stop();
+    await promise;
   });
 
   it('empty segments does nothing', async () => {

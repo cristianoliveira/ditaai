@@ -8,14 +8,17 @@ export class SpeechSynthesisReader implements TextReader {
 
   speak(text: string, options?: SpeakOptions): Promise<void> {
     return new Promise((resolve) => {
-      const utterance = new SpeechSynthesisUtterance(text);
+      const offset = options?.resumeFromChar ?? 0;
+      const speakText = offset > 0 ? text.slice(offset) : text;
+      const utterance = new SpeechSynthesisUtterance(speakText);
       if (options?.rate) utterance.rate = options.rate;
       if (options?.pitch) utterance.pitch = options.pitch;
 
       // Native boundary events give precise word-level charIndex/charLength.
+      // Offset back to absolute position when resuming mid-segment.
       utterance.onboundary = (e: SpeechSynthesisEvent) => {
         if (e.name === 'word') {
-          options?.onBoundary?.({ charIndex: e.charIndex, charLength: e.charLength });
+          options?.onBoundary?.({ charIndex: e.charIndex + offset, charLength: e.charLength });
         }
       };
 

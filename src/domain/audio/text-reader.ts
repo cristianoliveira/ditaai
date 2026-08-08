@@ -12,6 +12,8 @@ export interface SpeakOptions {
   voiceUri?: string;
   /** Fired for each word boundary (charIndex/charLength within the text). */
   onBoundary?: (event: BoundaryEvent) => void;
+  /** If set, speak text.substring(charOffset) and offset boundaries to absolute. */
+  resumeFromChar?: number;
 }
 
 export interface TextReader {
