@@ -293,23 +293,24 @@ export class TextToSpeech {
 
 // ── Loaders ──────────────────────────────────────────────────────────
 
-export async function loadVoiceStyle(urls: string[]): Promise<Style> {
-  const firstResponse = await fetch(urls[0]!);
-  const firstStyle = await firstResponse.json();
-  const ttlDims: number[] = firstStyle.style_ttl.dims;
-  const dpDims: number[] = firstStyle.style_dp.dims;
+export async function loadVoiceStyle(
+  urlsOrBuffers: string[] | ArrayBuffer[],
+): Promise<Style> {
+  const bsz = urlsOrBuffers.length;
+
+  const firstData = await loadStyleData(urlsOrBuffers[0]!);
+  const ttlDims: number[] = firstData.style_ttl.dims;
+  const dpDims: number[] = firstData.style_dp.dims;
   const ttlDim1 = ttlDims[1]!;
   const ttlDim2 = ttlDims[2]!;
   const dpDim1 = dpDims[1]!;
   const dpDim2 = dpDims[2]!;
 
-  const bsz = urls.length;
   const ttlFlat = new Float32Array(bsz * ttlDim1 * ttlDim2);
   const dpFlat = new Float32Array(bsz * dpDim1 * dpDim2);
 
   for (let i = 0; i < bsz; i++) {
-    const response = await fetch(urls[i]!);
-    const voiceStyle = await response.json();
+    const voiceStyle = await loadStyleData(urlsOrBuffers[i]!);
     ttlFlat.set(voiceStyle.style_ttl.data.flat(Infinity) as number[], i * ttlDim1 * ttlDim2);
     dpFlat.set(voiceStyle.style_dp.data.flat(Infinity) as number[], i * dpDim1 * dpDim2);
   }
@@ -320,9 +321,25 @@ export async function loadVoiceStyle(urls: string[]): Promise<Style> {
   );
 }
 
-export async function loadTextToSpeech(onnxDir: string): Promise<{ tts: TextToSpeech }> {
-  const cfgs = await fetch(`${onnxDir}/tts.json`).then((r) => r.json()) as TtsConfig;
-  const indexer = await fetch(`${onnxDir}/unicode_indexer.json`).then((r) => r.json()) as number[];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadStyleData(source: string | ArrayBuffer): Promise<any> {
+  if (typeof source === 'string') {
+    return fetch(source).then((r) => r.json());
+  }
+  const text = new TextDecoder().decode(source);
+  return JSON.parse(text);
+}
+
+export async function loadTextToSpeech(
+  onnxDirOrAssets: string | Record<string, ArrayBuffer>,
+): Promise<{ tts: TextToSpeech }> {
+  const loader =
+    typeof onnxDirOrAssets === 'string'
+      ? createUrlLoader(onnxDirOrAssets)
+      : createBufferLoader(onnxDirOrAssets);
+
+  const cfgs = await loader.json('tts.json') as TtsConfig;
+  const indexer = await loader.json('unicode_indexer.json') as number[];
 
   const modelFiles = [
     'duration_predictor.onnx',
@@ -332,7 +349,10 @@ export async function loadTextToSpeech(onnxDir: string): Promise<{ tts: TextToSp
   ];
 
   const sessions = await Promise.all(
-    modelFiles.map((f) => ort.InferenceSession.create(`${onnxDir}/${f}`)),
+    modelFiles.map(async (f) => {
+      const buf = await loader.arrayBuffer(f);
+      return ort.InferenceSession.create(buf);
+    }),
   );
 
   const tts = new TextToSpeech(
@@ -341,6 +361,36 @@ export async function loadTextToSpeech(onnxDir: string): Promise<{ tts: TextToSp
     sessions[0]!, sessions[1]!, sessions[2]!, sessions[3]!,
   );
   return { tts };
+}
+
+// ── Asset loaders (URL vs Cache Storage) ────────────────────────────
+
+interface AssetLoader {
+  json(key: string): Promise<unknown>;
+  arrayBuffer(key: string): Promise<ArrayBuffer>;
+}
+
+function createUrlLoader(base: string): AssetLoader {
+  return {
+    json: async (key) => fetch(`${base}/${key}`).then((r) => r.json()),
+    arrayBuffer: async (key) => fetch(`${base}/${key}`).then((r) => r.arrayBuffer()),
+  };
+}
+
+function createBufferLoader(assets: Record<string, ArrayBuffer>): AssetLoader {
+  return {
+    json: async (key) => {
+      const buf = assets[key];
+      if (!buf) throw new Error(`Missing asset: ${key}`);
+      const text = new TextDecoder().decode(buf);
+      return JSON.parse(text);
+    },
+    arrayBuffer: async (key) => {
+      const buf = assets[key];
+      if (!buf) throw new Error(`Missing asset: ${key}`);
+      return buf;
+    },
+  };
 }
 
 export function writeWav(audioData: Float32Array, sampleRate: number): ArrayBuffer {

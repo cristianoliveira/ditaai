@@ -9,6 +9,7 @@ export interface WidgetCallbacks {
   onResume(): void;
   onStop(): void;
   onClose(): void;
+  onSettings?(): void;
 }
 
 const STYLES = `
@@ -72,6 +73,14 @@ const STYLES = `
   }
   .dita-btn-close:hover { background: #2a2a4a; color: #fff; }
 
+  .dita-btn-settings {
+    width: 28px; height: 28px;
+    background: transparent;
+    font-size: 14px;
+    color: #8b8ba7;
+  }
+  .dita-btn-settings:hover { background: #2a2a4a; color: #fff; }
+
   .dita-progress {
     font-size: 11px;
     color: #8b8ba7;
@@ -128,7 +137,12 @@ export class DitaWidget {
     closeBtn.textContent = '✕';
     closeBtn.addEventListener('click', callbacks.onClose);
 
-    widget.append(label, this.playBtn, this.progressEl, stopBtn, closeBtn);
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'dita-btn dita-btn-settings';
+    settingsBtn.textContent = '⚙';
+    settingsBtn.addEventListener('click', () => callbacks.onSettings?.());
+
+    widget.append(label, this.playBtn, this.progressEl, stopBtn, settingsBtn, closeBtn);
     this.shadow.append(style, widget);
   }
 

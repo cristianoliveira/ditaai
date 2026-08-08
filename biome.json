@@ -6,6 +6,18 @@
   "files": {
     "ignore": ["src/infra/audio/supertonic-helper.ts"]
   },
+  "overrides": [
+    {
+      "include": ["src/entrypoints/voices/main.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    }
+  ],
   "linter": {
     "enabled": true,
     "rules": {

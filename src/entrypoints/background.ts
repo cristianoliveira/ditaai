@@ -28,5 +28,14 @@ export default defineBackground(() => {
     }
   });
 
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg?.dest === 'background' && msg.method === 'openVoicesPage') {
+      const url = chrome.runtime.getURL('voices.html');
+      chrome.tabs.create({ url }).then(() => sendResponse({ ok: true }));
+      return true;
+    }
+    return false;
+  });
+
   console.log('[dita] background ready');
 });
