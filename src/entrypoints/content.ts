@@ -1,6 +1,7 @@
 // Content script entry — runs at document_idle.
-// Page-level composition root: widget UI + text extraction + playback.
+// Page-level composition root: widget UI + text extraction + playback + highlighting.
 
+import { clearHighlight, highlightWord } from '../content/highlighter';
 import { DitaWidget } from '../content/widget';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextSegment } from '../domain/document/text-processor';
@@ -10,16 +11,20 @@ import { SpeechSynthesisReader } from '../infra/audio/speech-synthesis-reader';
 const READABLE_SELECTORS = 'article, p, h1, h2, h3, h4, h5, h6, li, blockquote';
 const IGNORE_SELECTORS = 'script, style, nav, footer, header, aside, noscript';
 
-function extractText(doc: Document): string[] {
+interface ExtractedSegment extends TextSegment {
+  element: Element;
+}
+
+function extractSegments(doc: Document): ExtractedSegment[] {
   const elements = doc.querySelectorAll(READABLE_SELECTORS);
   const ignored = new Set(doc.querySelectorAll(IGNORE_SELECTORS));
 
-  const segments: TextSegment[] = [];
+  const segments: ExtractedSegment[] = [];
   for (const el of elements) {
     if (ignored.has(el) || el.closest(IGNORE_SELECTORS)) continue;
-    segments.push({ text: el.textContent ?? '', tag: el.tagName.toLowerCase() });
+    segments.push({ text: el.textContent ?? '', tag: el.tagName.toLowerCase(), element: el });
   }
-  return prepareSegments(segments);
+  return segments;
 }
 
 export default defineContentScript({
@@ -30,24 +35,52 @@ export default defineContentScript({
     const sequencer = new SegmentSequencer(reader);
 
     let widget: DitaWidget | null = null;
+    let segments: ExtractedSegment[] = [];
+    let activeElement: Element | null = null;
+
+    function clearAllHighlights(): void {
+      if (activeElement) {
+        clearHighlight(activeElement);
+        activeElement = null;
+      }
+    }
 
     function toggleWidget(): void {
       if (widget?.isMounted()) {
         widget.unmount();
         reader.stop();
+        clearAllHighlights();
         widget = null;
         return;
       }
 
       widget = new DitaWidget({
         onPlay: () => {
-          const texts = extractText(document);
+          segments = extractSegments(document);
+          const texts = prepareSegments(segments);
           if (texts.length === 0) return;
+
           sequencer.load(texts);
+
+          // Highlight the active segment's element as each word is spoken
+          sequencer.onSegmentChange = (index) => {
+            clearAllHighlights();
+            activeElement = segments[index]?.element ?? null;
+          };
+
           widget?.setState('playing');
-          void sequencer.play().then(() => {
-            widget?.setState('idle');
-          });
+          void sequencer
+            .play({
+              onBoundary: (event) => {
+                if (activeElement) {
+                  highlightWord(activeElement, event.charIndex, event.charLength);
+                }
+              },
+            })
+            .then(() => {
+              clearAllHighlights();
+              widget?.setState('idle');
+            });
         },
         onPause: () => {
           sequencer.pause();
@@ -59,10 +92,12 @@ export default defineContentScript({
         },
         onStop: () => {
           sequencer.stop();
+          clearAllHighlights();
           widget?.setState('idle');
         },
         onClose: () => {
           sequencer.stop();
+          clearAllHighlights();
           widget?.unmount();
           widget = null;
         },
@@ -70,11 +105,11 @@ export default defineContentScript({
       widget.mount();
     }
 
-    // Background sends toggleWidget when user clicks the extension icon
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg?.dest !== 'contentScript') return false;
       if (msg.method === 'getText') {
-        sendResponse({ texts: extractText(document) });
+        const segs = extractSegments(document);
+        sendResponse({ texts: prepareSegments(segs) });
         return false;
       }
       if (msg.method === 'toggleWidget') {

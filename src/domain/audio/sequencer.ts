@@ -15,6 +15,9 @@ export class SegmentSequencer {
   private playing = false;
   private stopped = false;
 
+  /** Called when the active segment changes. */
+  onSegmentChange?: (index: number) => void;
+
   constructor(private reader: TextReader) {}
 
   load(segments: string[]): void {
@@ -39,6 +42,7 @@ export class SegmentSequencer {
     while (this.index < this.segments.length && !this.stopped) {
       const segment = this.segments[this.index];
       if (!segment) break;
+      this.onSegmentChange?.(this.index);
       await this.reader.speak(segment, options);
       if (this.stopped) break;
       this.index++;

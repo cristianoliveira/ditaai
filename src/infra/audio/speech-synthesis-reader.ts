@@ -12,6 +12,13 @@ export class SpeechSynthesisReader implements TextReader {
       if (options?.rate) utterance.rate = options.rate;
       if (options?.pitch) utterance.pitch = options.pitch;
 
+      // Native boundary events give precise word-level charIndex/charLength.
+      utterance.onboundary = (e: SpeechSynthesisEvent) => {
+        if (e.name === 'word') {
+          options?.onBoundary?.({ charIndex: e.charIndex, charLength: e.charLength });
+        }
+      };
+
       utterance.onend = () => resolve();
       utterance.onerror = () => resolve();
 

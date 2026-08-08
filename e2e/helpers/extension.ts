@@ -15,7 +15,7 @@ const EXTENSION_BUILD_DIR = path.resolve(process.cwd(), 'dist', 'chrome-mv3');
 
 /** Inert extension page for runtime/storage access from tests. */
 export const testHarnessUrl = (extensionId: string) =>
-  `chrome-extension://${extensionId}/popup.html`;
+  `chrome-extension://${extensionId}/harness.html`;
 
 export interface ExtensionHarness {
   context: BrowserContext;
