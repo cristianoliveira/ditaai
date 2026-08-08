@@ -7,6 +7,7 @@
 
 import { SUPERTONIC_ENGINE_ASSETS, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
 import { sourceUrl } from '../../domain/voices/voice';
+import { downloadToCache } from '../../infra/voices/download-to-cache';
 
 const CACHE_NAME = 'dita-voices';
 
@@ -25,51 +26,6 @@ async function openCache(): Promise<Cache> {
 async function isInCache(url: string): Promise<boolean> {
   const cache = await openCache();
   return (await cache.match(url)) !== undefined;
-}
-
-async function downloadToCache(url: string, onProgress?: (pct: number) => void): Promise<void> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Download failed: ${response.status} ${url}`);
-
-  const contentLength = Number(response.headers.get('content-length') ?? '0');
-  const reader = response.body?.getReader();
-  if (!reader || !contentLength) {
-    // Stream not available — fall back to simple put
-    const cache = await openCache();
-    await cache.put(url, response);
-    onProgress?.(100);
-    return;
-  }
-
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      chunks.push(value);
-      received += value.length;
-      onProgress?.(Math.round((received / contentLength) * 100));
-    }
-  }
-
-  const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
-  const buffer = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    buffer.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  const cachedResponse = new Response(buffer, {
-    status: 200,
-    headers: { 'content-type': response.headers.get('content-type') ?? 'application/octet-stream' },
-  });
-
-  const cache = await openCache();
-  await cache.put(url, cachedResponse);
-  onProgress?.(100);
 }
 
 // ── State ────────────────────────────────────────────────────────────

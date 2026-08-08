@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: 'Dita',
     version: '0.3.0',
-    version_name: '0.3.0-8288bad-1786185797',
+    version_name: '0.3.0-8837efd-1786186197',
     description: 'Dita aí — read any page aloud',
     permissions: ['storage', 'tabs', 'offscreen'],
     host_permissions: ['<all_urls>'],
