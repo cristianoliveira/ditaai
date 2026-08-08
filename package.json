@@ -1,6 +1,6 @@
 {
   "name": "dita",
-  "version": "0.3.0-3c23dbb-1786185067",
+  "version": "0.3.0-8288bad-1786185797",
   "private": true,
   "description": "Chrome extension with local Piper TTS",
   "type": "module",
@@ -24,19 +24,12 @@
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
-    "@playwright/test": "^1.52.0",
+    "@playwright/test": "^1.55.1",
     "@types/chrome": "0.2.5",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.1.2",
     "typescript": "5.7.3",
     "vitest": "4.1.10",
     "wxt": "0.21.3"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@biomejs/biome",
-      "esbuild",
-      "spawn-sync"
-    ]
   },
   "dependencies": {
     "onnxruntime-web": "^1.27.0"
