@@ -19,6 +19,7 @@ export class SegmentSequencer {
   private resolveResume: (() => void) | null = null;
   private lastCharIndex = 0;
   private resumeCharIndex = 0;
+  private rate: number | undefined;
 
   /** Called when the active segment changes. */
   onSegmentChange?: (index: number) => void;
@@ -33,6 +34,7 @@ export class SegmentSequencer {
     this.paused = false;
     this.lastCharIndex = 0;
     this.resumeCharIndex = 0;
+    this.rate = undefined;
   }
 
   getState(): SequencerState {
@@ -47,6 +49,7 @@ export class SegmentSequencer {
     this.stopped = false;
     this.paused = false;
     this.playing = true;
+    this.rate = options?.rate;
 
     while (this.index < this.segments.length && !this.stopped) {
       const segment = this.segments[this.index];
@@ -57,6 +60,7 @@ export class SegmentSequencer {
       // Wrap onBoundary to track word position for precise resume
       const speakOptions: SpeakOptions = {
         ...options,
+        rate: this.rate,
         resumeFromChar: this.resumeCharIndex,
         onBoundary: (event: BoundaryEvent) => {
           this.lastCharIndex = event.charIndex + event.charLength;
@@ -109,7 +113,13 @@ export class SegmentSequencer {
     this.index = 0;
     this.resumeCharIndex = 0;
     this.lastCharIndex = 0;
+    this.rate = undefined;
     this.playing = false;
+  }
+
+  /** Update the speaking rate; takes effect on the next segment. */
+  setRate(rate: number): void {
+    this.rate = rate;
   }
 
   private waitWhilePaused(): Promise<void> {

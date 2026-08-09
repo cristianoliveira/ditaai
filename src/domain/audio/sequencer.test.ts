@@ -196,4 +196,34 @@ describe('SegmentSequencer', () => {
 
     expect(reader.speak).not.toHaveBeenCalled();
   });
+
+  it('applies setRate to the next segment while playing', async () => {
+    const rates: (number | undefined)[] = [];
+    let resolveFn: (() => void) | null = null;
+    const reader: TextReader = {
+      speak: vi.fn((_text: string, options?: SpeakOptions) => {
+        rates.push(options?.rate);
+        return new Promise<void>((resolve) => {
+          resolveFn = resolve;
+        });
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(() => resolveFn?.()),
+    };
+
+    const seq = new SegmentSequencer(reader);
+    seq.load(['one', 'two']);
+
+    const promise = seq.play({ rate: 1 });
+    await vi.waitFor(() => expect(rates).toEqual([1]));
+
+    seq.setRate(1.5);
+    resolveFn?.(); // finish 'one'; the loop rebuilds speakOptions with the new rate
+
+    await vi.waitFor(() => expect(rates).toEqual([1, 1.5]));
+
+    resolveFn?.(); // finish 'two'
+    await promise;
+  });
 });
