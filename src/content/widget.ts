@@ -11,6 +11,7 @@ export interface WidgetCallbacks {
   onClose(): void;
   onSettings?(): void;
   onToggleHighlight?(enabled: boolean): void;
+  onSelect?(): void;
 }
 
 const STYLES = `
@@ -73,6 +74,14 @@ const STYLES = `
     color: #8b8ba7;
   }
   .dita-btn-close:hover { background: #2a2a4a; color: #fff; }
+
+  .dita-btn-select {
+    width: 28px; height: 28px;
+    background: transparent;
+    font-size: 12px;
+    color: #8b8ba7;
+  }
+  .dita-btn-select:hover { background: #2a2a4a; color: #fff; }
 
   .dita-btn-settings {
     width: 28px; height: 28px;
@@ -149,6 +158,12 @@ export class DitaWidget {
     stopBtn.textContent = '■';
     stopBtn.addEventListener('click', callbacks.onStop);
 
+    const selectBtn = document.createElement('button');
+    selectBtn.className = 'dita-btn dita-btn-select';
+    selectBtn.textContent = '🔍';
+    selectBtn.setAttribute('aria-label', 'Select what to read');
+    selectBtn.addEventListener('click', () => callbacks.onSelect?.());
+
     const closeBtn = document.createElement('button');
     closeBtn.className = 'dita-btn dita-btn-close';
     closeBtn.textContent = '✕';
@@ -176,6 +191,7 @@ export class DitaWidget {
       this.playBtn,
       this.progressEl,
       stopBtn,
+      selectBtn,
       this.highlightBtn,
       settingsBtn,
       closeBtn,

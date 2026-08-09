@@ -10,10 +10,12 @@ import {
   highlightWord,
 } from '../content/highlighter';
 import { type ParagraphSegment, extractParagraphs } from '../content/paragraph-extractor';
+import { Picker } from '../content/picker/picker';
 import { DitaWidget } from '../content/widget';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
 import { collapseWhitespace, splitText } from '../domain/document/text-processor';
+import { filterParagraphs } from '../domain/selection/selection';
 import { InstalledVoiceReader } from '../infra/audio/installed-voice-reader';
 import { SpeechSynthesisReader } from '../infra/audio/speech-synthesis-reader';
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
@@ -72,6 +74,7 @@ export default defineContentScript({
     let activeElement: Element | null = null;
     let currentIndex = 0;
     let highlightWordsEnabled = true;
+    let activeSelector: string | null = null;
     void loadHighlightEnabled().then((value) => {
       highlightWordsEnabled = value;
     });
@@ -84,62 +87,99 @@ export default defineContentScript({
       }
     }
 
-    function toggleWidget(): void {
-      if (widget?.isMounted()) {
-        widget.unmount();
-        reader.stop();
-        clearAllHighlights();
-        widget = null;
-        return;
+    function buildChunksFiltered(doc: Document): Chunk[] {
+      const allChunks = buildChunks(doc);
+      if (!activeSelector) return allChunks;
+
+      // First try: filter paragraphs that match the selector.
+      const paragraphs: ParagraphSegment[] = extractParagraphs(doc);
+      const filtered = filterParagraphs(paragraphs, activeSelector);
+      const elementSet = new Set(filtered.map((p) => p.element));
+      const matched = allChunks.filter((chunk) => elementSet.has(chunk.element));
+
+      if (matched.length > 0) return matched;
+
+      // Fallback: extract text directly from elements matching the selector.
+      try {
+        const elements = doc.querySelectorAll(activeSelector);
+        const chunks: Chunk[] = [];
+        for (const el of elements) {
+          const rawText = el.textContent ?? '';
+          const cleaned = collapseWhitespace(rawText).trim();
+          if (!cleaned) continue;
+          let searchFrom = 0;
+          for (const text of splitText(cleaned)) {
+            const found = cleaned.indexOf(text, searchFrom);
+            const base = found === -1 ? searchFrom : found;
+            chunks.push({ text, element: el, base });
+            searchFrom = base + text.length;
+          }
+        }
+        console.info(
+          `[dita] fallback extraction ${JSON.stringify({
+            selector: activeSelector,
+            elements: elements.length,
+            chunks: chunks.length,
+          })}`,
+        );
+        return chunks;
+      } catch {
+        console.warn(`[dita] invalid selector for fallback: ${activeSelector}`);
+        return [];
       }
+    }
 
-      widget = new DitaWidget(
-        {
-          onPlay: () => {
-            chunks = buildChunks(document);
-            const texts = chunks.map((chunk) => chunk.text);
-            if (texts.length === 0) return;
+    function playAction(): void {
+      chunks = buildChunksFiltered(document);
+      const texts = chunks.map((chunk) => chunk.text);
+      if (texts.length === 0) return;
 
+      console.info(
+        `[dita] segments ${JSON.stringify({
+          count: texts.length,
+          totalChars: texts.reduce((n, t) => n + t.length, 0),
+          first: texts[0]?.slice(0, 80),
+        })}`,
+      );
+
+      sequencer.load(texts);
+
+      sequencer.onSegmentChange = (index) => {
+        currentIndex = index;
+        clearAllHighlights();
+        activeElement = chunks[index]?.element ?? null;
+        if (activeElement) highlightParagraph(activeElement);
+        console.info(
+          `[dita] segment ${JSON.stringify({ index, chars: texts[index]?.length ?? 0 })}`,
+        );
+      };
+
+      widget?.setState('playing');
+      void sequencer
+        .play({
+          onBoundary: (event) => {
+            const chunk = chunks[currentIndex];
             console.info(
-              `[dita] segments ${JSON.stringify({
-                count: texts.length,
-                totalChars: texts.reduce((n, t) => n + t.length, 0),
-                first: texts[0]?.slice(0, 80),
-              })}`,
+              `[dita] boundary ${JSON.stringify(
+                describeBoundary(chunk?.text ?? '', currentIndex, event),
+              )}`,
             );
-
-            sequencer.load(texts);
-
-            sequencer.onSegmentChange = (index) => {
-              currentIndex = index;
-              clearAllHighlights();
-              activeElement = chunks[index]?.element ?? null;
-              if (activeElement) highlightParagraph(activeElement);
-              console.info(
-                `[dita] segment ${JSON.stringify({ index, chars: texts[index]?.length ?? 0 })}`,
-              );
-            };
-
-            widget?.setState('playing');
-            void sequencer
-              .play({
-                onBoundary: (event) => {
-                  const chunk = chunks[currentIndex];
-                  console.info(
-                    `[dita] boundary ${JSON.stringify(
-                      describeBoundary(chunk?.text ?? '', currentIndex, event),
-                    )}`,
-                  );
-                  if (highlightWordsEnabled && activeElement && chunk) {
-                    highlightWord(activeElement, event.charIndex + chunk.base, event.charLength);
-                  }
-                },
-              })
-              .then(() => {
-                clearAllHighlights();
-                widget?.setState('idle');
-              });
+            if (highlightWordsEnabled && activeElement && chunk) {
+              highlightWord(activeElement, event.charIndex + chunk.base, event.charLength);
+            }
           },
+        })
+        .then(() => {
+          clearAllHighlights();
+          widget?.setState('idle');
+        });
+    }
+
+    /** Build a widget wired to the current-closure callbacks. */
+    function buildWidget(): DitaWidget {
+      return new DitaWidget(
+        {
+          onPlay: playAction,
           onPause: () => {
             sequencer.pause();
             widget?.setState('paused');
@@ -156,6 +196,7 @@ export default defineContentScript({
           onClose: () => {
             sequencer.stop();
             clearAllHighlights();
+            activeSelector = null;
             widget?.unmount();
             widget = null;
           },
@@ -166,6 +207,17 @@ export default defineContentScript({
               args: [],
             });
           },
+          onSelect: async () => {
+            if (!widget) return;
+            widget.unmount();
+            const picker = new Picker();
+            const selector = await picker.enter();
+            if (selector) {
+              activeSelector = selector;
+            }
+            widget = buildWidget();
+            widget.mount();
+          },
           onToggleHighlight: (enabled) => {
             highlightWordsEnabled = enabled;
             void saveHighlightEnabled(enabled);
@@ -174,13 +226,26 @@ export default defineContentScript({
         },
         { highlightEnabled: highlightWordsEnabled },
       );
+    }
+
+    function toggleWidget(): void {
+      if (widget?.isMounted()) {
+        widget.unmount();
+        reader.stop();
+        clearAllHighlights();
+        activeSelector = null;
+        widget = null;
+        return;
+      }
+
+      widget = buildWidget();
       widget.mount();
     }
 
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg?.dest !== 'contentScript') return false;
       if (msg.method === 'getText') {
-        const built = buildChunks(document);
+        const built = buildChunksFiltered(document);
         sendResponse({ texts: built.map((chunk) => chunk.text) });
         return false;
       }

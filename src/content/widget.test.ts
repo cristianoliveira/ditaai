@@ -60,3 +60,32 @@ describe('DitaWidget highlight toggle', () => {
     expect(onToggle).not.toHaveBeenCalled();
   });
 });
+
+describe('DitaWidget Select button', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function selectButton(): HTMLButtonElement | null {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    return root?.querySelector<HTMLButtonElement>('.dita-btn-select') ?? null;
+  }
+
+  it('renders a Select button', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+
+    const btn = selectButton();
+    expect(btn).not.toBeNull();
+    expect(btn?.getAttribute('aria-label')).toBe('Select what to read');
+  });
+
+  it('fires onSelect callback when clicked', () => {
+    const onSelect = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onSelect });
+    widget.mount();
+
+    selectButton()?.click();
+    expect(onSelect).toHaveBeenCalled();
+  });
+});
