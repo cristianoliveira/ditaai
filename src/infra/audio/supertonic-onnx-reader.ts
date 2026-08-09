@@ -10,6 +10,7 @@
 import type { BoundaryEvent, SpeakOptions, TextReader } from '../../domain/audio/text-reader';
 import { loadTextToSpeech, loadVoiceStyle, writeWav } from './supertonic-helper';
 import type { TextToSpeech } from './supertonic-helper';
+import { computeWordTimings } from './word-timing';
 
 export interface SupertonicOnnxConfig {
   /** URL prefix for fetching model files (https://) or record of cached ArrayBuffers. */
@@ -130,7 +131,7 @@ export class SupertonicOnnxReader implements TextReader {
     const audioBuffer = await ctx.decodeAudioData(wavBuffer);
     const audioDuration = audioBuffer.duration;
 
-    const words = computeWords(text, offset);
+    const words = computeWordTimings(text, offset);
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.playbackRate.value = options?.rate ?? 1;
@@ -149,11 +150,10 @@ export class SupertonicOnnxReader implements TextReader {
       }
       const elapsed = ctx.currentTime - startTime;
       const progress = Math.min(elapsed / audioDuration, 1);
-      const currentCharPos = offset + Math.floor(progress * text.length);
 
       while (boundaryIndex < words.length) {
         const word = words[boundaryIndex];
-        if (!word || word.charIndex > currentCharPos) break;
+        if (!word || word.startFraction > progress) break;
         this.onBoundary?.(word);
         boundaryIndex++;
       }
@@ -168,11 +168,7 @@ export class SupertonicOnnxReader implements TextReader {
         clearInterval(tick);
         while (boundaryIndex < words.length) {
           const word = words[boundaryIndex];
-          if (!word || word.charIndex > offset + text.length) {
-            boundaryIndex++;
-            continue;
-          }
-          this.onBoundary?.(word);
+          if (word) this.onBoundary?.(word);
           boundaryIndex++;
         }
         this.sourceNode = null;
@@ -190,15 +186,4 @@ export class SupertonicOnnxReader implements TextReader {
     }
     return this.audioContext;
   }
-}
-
-function computeWords(text: string, offset: number): BoundaryEvent[] {
-  const words: BoundaryEvent[] = [];
-  for (const match of text.matchAll(/\S+/g)) {
-    words.push({
-      charIndex: offset + match.index,
-      charLength: match[0].length,
-    });
-  }
-  return words;
 }
