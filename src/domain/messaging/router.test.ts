@@ -18,6 +18,7 @@ function makeRouter(texts: string[] = ['hello world']) {
   const resolver: ActiveTabResolver = vi.fn().mockResolvedValue(99);
   const installedReader: AvailableTextReader = {
     isAvailable: vi.fn().mockResolvedValue(true),
+    prepare: vi.fn().mockResolvedValue(undefined),
     speak: vi.fn().mockResolvedValue(undefined),
     pause: vi.fn(),
     resume: vi.fn(),
@@ -99,11 +100,15 @@ describe('createMessageRouter', () => {
       ok: true,
       available: true,
     });
+    await expect(router(msg('prepareInstalledVoice', ['hello', { rate: 1.2 }]))).resolves.toEqual({
+      ok: true,
+    });
     await expect(router(msg('speakWithInstalledVoice', ['hello', { rate: 1.2 }]))).resolves.toEqual(
       {
         ok: true,
       },
     );
+    expect(installedReader.prepare).toHaveBeenCalledWith('hello', { rate: 1.2 });
     expect(installedReader.speak).toHaveBeenCalledWith('hello', { rate: 1.2 });
   });
 

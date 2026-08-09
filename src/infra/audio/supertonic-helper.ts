@@ -7,6 +7,8 @@
 
 import * as ort from 'onnxruntime-web';
 
+const yieldToEventLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 // ── Types ────────────────────────────────────────────────────────────
 
 export interface TtsConfig {
@@ -224,6 +226,7 @@ export class TextToSpeech {
     const duration = Array.from(
       (dpOut['duration'] as ort.Tensor).data as Float32Array,
     );
+    await yieldToEventLoop();
     for (let i = 0; i < duration.length; i++) {
       const val = duration[i];
       if (val !== undefined) duration[i] = val / speed;
@@ -236,6 +239,7 @@ export class TextToSpeech {
       text_mask: toTensor('float32', new Float32Array(textMask.flat(2)), [bsz, 1, textMask[0]?.[0]?.length ?? 0]),
     });
     const textEmb = teOut['text_emb'] as ort.Tensor;
+    await yieldToEventLoop();
 
     // Noisy latent
     const { xt: initialXt, latentMask } = sampleNoisyLatent(
@@ -279,6 +283,9 @@ export class TextToSpeech {
         next.push(batch);
       }
       xt = next;
+      // ONNX promises resume through microtasks. Yield explicitly so playback
+      // boundary timers remain responsive while next paragraph is prepared.
+      await yieldToEventLoop();
     }
 
     // Vocoder

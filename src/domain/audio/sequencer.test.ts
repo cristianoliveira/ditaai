@@ -48,6 +48,49 @@ describe('SegmentSequencer', () => {
     expect(seq.getState().playing).toBe(false);
   });
 
+  it('prepares next segment while current segment is playing', async () => {
+    const events: string[] = [];
+    const pending: Array<() => void> = [];
+    const reader: TextReader = {
+      prepare: vi.fn(async (text: string) => {
+        events.push(`prepare:${text}`);
+      }),
+      speak: vi.fn((text: string) => {
+        events.push(`speak:${text}`);
+        return new Promise<void>((resolve) => pending.push(resolve));
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(),
+    };
+    const seq = new SegmentSequencer(reader);
+    seq.load(['first', 'second']);
+
+    const playback = seq.play({ rate: 1.2 });
+
+    await vi.waitFor(() =>
+      expect(events).toEqual(['prepare:first', 'speak:first', 'prepare:second']),
+    );
+    expect(reader.prepare).toHaveBeenCalledWith('second', expect.objectContaining({ rate: 1.2 }));
+    expect(reader.speak).toHaveBeenCalledTimes(1);
+
+    pending.shift()?.();
+    await vi.waitFor(() => expect(reader.speak).toHaveBeenCalledTimes(2));
+    pending.shift()?.();
+    await playback;
+  });
+
+  it('continues playback when preparation fails', async () => {
+    const reader = makeFakeReader();
+    reader.prepare = vi.fn().mockRejectedValue(new Error('preparation failed'));
+    const seq = new SegmentSequencer(reader);
+    seq.load(['first', 'second']);
+
+    await seq.play();
+
+    expect(reader.calls).toEqual(['first', 'second']);
+  });
+
   it('tracks current index', async () => {
     const reader = makeFakeReader();
     const seq = new SegmentSequencer(reader);

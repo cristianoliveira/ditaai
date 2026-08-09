@@ -24,21 +24,16 @@ test.describe('widget playback and highlighting', () => {
     try {
       const { context, extensionId, errors } = harness;
 
-      // Enable test mode BEFORE the content script loads. The data attr is
-      // visible to the content script's isolated world because the DOM is shared.
-      await context.addInitScript(`
-        document.documentElement.setAttribute('data-dita-test-reader', 'fake');
-      `);
-
+      // The fixture declares fake-reader mode before any content script runs.
       const page = await context.newPage();
-      await page.goto(`${server.base}/article.html`);
+      await page.goto(`${server.base}/fake-tts-article.html`);
 
       // Inject the widget via runtime message.
       const ext = await context.newPage();
       await ext.goto(testHarnessUrl(extensionId));
       await ext.evaluate(async () => {
         const tabs = await chrome.tabs.query({});
-        const tab = tabs.find((t) => t.url?.includes('127.0.0.1'));
+        const tab = tabs.find((t) => t.url?.includes('fake-tts-article.html'));
         if (!tab?.id) throw new Error('no article tab found');
         await chrome.tabs.sendMessage(tab.id, {
           dest: 'contentScript',

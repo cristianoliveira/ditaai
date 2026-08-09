@@ -1,6 +1,7 @@
 import type {
   AvailableTextReader,
   BoundaryEvent,
+  BoundarySchedule,
   SpeakOptions,
   TextReader,
 } from '../../domain/audio/text-reader';
@@ -9,6 +10,8 @@ import type {
 export class InstalledVoiceReader implements TextReader {
   private activeReader: TextReader;
   private boundaryCallback?: (event: BoundaryEvent) => void;
+  private readonly preparedInstalledSpeech = new Set<string>();
+  private readonly boundaryTimers = new Set<ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly installedReader: AvailableTextReader,
@@ -20,25 +23,41 @@ export class InstalledVoiceReader implements TextReader {
     // onBoundary callbacks can't cross chrome.runtime.sendMessage, so the
     // offscreen doc relays them as separate messages.
     chrome.runtime.onMessage.addListener((msg) => {
-      if (msg?.dest === 'contentScript' && msg.method === 'installedVoiceBoundary') {
+      if (msg?.dest !== 'contentScript') return;
+      if (msg.method === 'installedVoiceBoundary') {
         const event = msg.args?.[0] as BoundaryEvent | undefined;
         if (event) this.boundaryCallback?.(event);
+      }
+      if (msg.method === 'installedVoiceBoundarySchedule') {
+        const schedule = msg.args?.[0] as BoundarySchedule | undefined;
+        if (schedule) this.scheduleBoundaries(schedule);
       }
     });
   }
 
+  async prepare(text: string, options?: SpeakOptions): Promise<void> {
+    if (!this.installedReader.prepare || !(await this.installedReader.isAvailable())) return;
+
+    await this.installedReader.prepare(text, this.serializableOptions(options));
+    this.preparedInstalledSpeech.add(this.preparationKey(text, options));
+    while (this.preparedInstalledSpeech.size > 2) {
+      const oldestKey = this.preparedInstalledSpeech.values().next().value;
+      if (oldestKey === undefined) break;
+      this.preparedInstalledSpeech.delete(oldestKey);
+    }
+  }
+
   async speak(text: string, options?: SpeakOptions): Promise<void> {
+    this.clearBoundarySchedule();
     this.boundaryCallback = options?.onBoundary;
 
     try {
-      if (await this.installedReader.isAvailable()) {
+      const prepared = this.preparedInstalledSpeech.delete(this.preparationKey(text, options));
+      if (prepared || (await this.installedReader.isAvailable())) {
         this.activeReader = this.installedReader;
         // Strip onBoundary — it can't cross chrome.runtime.sendMessage.
         // The installed reader will use the boundary listener above instead.
-        const serializable: SpeakOptions | undefined = options
-          ? { rate: options.rate, pitch: options.pitch, resumeFromChar: options.resumeFromChar }
-          : undefined;
-        await this.installedReader.speak(text, serializable);
+        await this.installedReader.speak(text, this.serializableOptions(options));
         this.boundaryCallback = undefined;
         return;
       }
@@ -51,6 +70,39 @@ export class InstalledVoiceReader implements TextReader {
     await this.fallbackReader.speak(text, options);
   }
 
+  private scheduleBoundaries(schedule: BoundarySchedule): void {
+    this.clearBoundarySchedule();
+    for (const boundary of schedule.boundaries) {
+      const timer = setTimeout(() => {
+        this.boundaryTimers.delete(timer);
+        this.boundaryCallback?.({
+          charIndex: boundary.charIndex,
+          charLength: boundary.charLength,
+        });
+      }, schedule.durationMs * boundary.startFraction);
+      this.boundaryTimers.add(timer);
+    }
+  }
+
+  private clearBoundarySchedule(): void {
+    for (const timer of this.boundaryTimers) clearTimeout(timer);
+    this.boundaryTimers.clear();
+  }
+
+  private preparationKey(text: string, options?: SpeakOptions): string {
+    return JSON.stringify([
+      text,
+      options?.rate ?? null,
+      options?.pitch ?? null,
+      options?.resumeFromChar ?? 0,
+    ]);
+  }
+
+  private serializableOptions(options?: SpeakOptions): SpeakOptions | undefined {
+    if (!options) return undefined;
+    return { rate: options.rate, pitch: options.pitch, resumeFromChar: options.resumeFromChar };
+  }
+
   pause(): void {
     this.activeReader.pause();
   }
@@ -60,6 +112,7 @@ export class InstalledVoiceReader implements TextReader {
   }
 
   stop(): void {
+    this.clearBoundarySchedule();
     this.boundaryCallback = undefined;
     this.activeReader.stop();
   }

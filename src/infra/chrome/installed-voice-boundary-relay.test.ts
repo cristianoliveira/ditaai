@@ -12,6 +12,19 @@ describe('InstalledVoiceBoundaryRelay', () => {
     expect(forward).toHaveBeenCalledWith(42, { charIndex: 6, charLength: 5 });
   });
 
+  it('forwards a boundary schedule to the tab that started the speak', () => {
+    const forwardBoundary = vi.fn();
+    const forwardSchedule = vi.fn();
+    const relay = new InstalledVoiceBoundaryRelay(forwardBoundary, forwardSchedule);
+    const schedule = { durationMs: 1_000, boundaries: [] };
+
+    relay.rememberOrigin(42);
+    relay.deliverSchedule(schedule);
+
+    expect(forwardSchedule).toHaveBeenCalledWith(42, schedule);
+    expect(forwardBoundary).not.toHaveBeenCalled();
+  });
+
   it('drops boundaries until a tab has started speaking (no throw)', () => {
     const forward = vi.fn();
     const relay = new InstalledVoiceBoundaryRelay(forward);

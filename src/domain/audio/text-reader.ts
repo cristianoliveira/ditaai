@@ -6,6 +6,15 @@ export interface BoundaryEvent {
   charLength: number;
 }
 
+export interface ScheduledBoundary extends BoundaryEvent {
+  startFraction: number;
+}
+
+export interface BoundarySchedule {
+  durationMs: number;
+  boundaries: ScheduledBoundary[];
+}
+
 export interface SpeakOptions {
   rate?: number;
   pitch?: number;
@@ -17,6 +26,8 @@ export interface SpeakOptions {
 }
 
 export interface TextReader {
+  /** Prepare speech audio before it is needed. Implementations may treat this as a no-op. */
+  prepare?(text: string, options?: SpeakOptions): Promise<void>;
   speak(text: string, options?: SpeakOptions): Promise<void>;
   pause(): void;
   resume(): void;

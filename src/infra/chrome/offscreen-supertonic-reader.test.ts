@@ -34,6 +34,26 @@ describe('OffscreenSupertonicReader', () => {
     });
   });
 
+  it('forwards speech preparation to offscreen document', async () => {
+    const chrome = chromeApi();
+    chrome.runtime.getContexts.mockResolvedValue([{}]);
+    chrome.runtime.sendMessage.mockResolvedValue({ ok: true });
+    const subject = new OffscreenSupertonicReader(chrome);
+
+    await subject.prepare('next paragraph', {
+      rate: 1.2,
+      pitch: 0.8,
+      resumeFromChar: 3,
+      onBoundary: vi.fn(),
+    });
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      dest: 'offscreen',
+      method: 'prepare',
+      args: ['next paragraph', { rate: 1.2, pitch: 0.8, resumeFromChar: 3 }],
+    });
+  });
+
   it('forwards serializable speech options to offscreen document', async () => {
     const chrome = chromeApi();
     chrome.runtime.getContexts.mockResolvedValue([{}]);

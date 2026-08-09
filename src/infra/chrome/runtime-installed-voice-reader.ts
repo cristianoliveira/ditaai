@@ -12,15 +12,17 @@ export class RuntimeInstalledVoiceReader implements AvailableTextReader {
     return response.available === true;
   }
 
+  async prepare(text: string, options?: SpeakOptions): Promise<void> {
+    await this.send('prepareInstalledVoice', [text, this.serializableOptions(options)]);
+  }
+
   async speak(text: string, options?: SpeakOptions): Promise<void> {
-    const serializableOptions = options
-      ? {
-          rate: options.rate,
-          pitch: options.pitch,
-          resumeFromChar: options.resumeFromChar,
-        }
-      : undefined;
-    await this.send('speakWithInstalledVoice', [text, serializableOptions]);
+    await this.send('speakWithInstalledVoice', [text, this.serializableOptions(options)]);
+  }
+
+  private serializableOptions(options?: SpeakOptions): SpeakOptions | undefined {
+    if (!options) return undefined;
+    return { rate: options.rate, pitch: options.pitch, resumeFromChar: options.resumeFromChar };
   }
 
   pause(): void {

@@ -17,6 +17,20 @@ describe('RuntimeInstalledVoiceReader', () => {
     });
   });
 
+  it('asks service worker to prepare installed speech', async () => {
+    const sendMessage = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    const subject = new RuntimeInstalledVoiceReader();
+
+    await subject.prepare('next paragraph', { rate: 1.2, onBoundary: vi.fn() });
+
+    expect(sendMessage).toHaveBeenCalledWith({
+      dest: 'serviceWorker',
+      method: 'prepareInstalledVoice',
+      args: ['next paragraph', { rate: 1.2 }],
+    });
+  });
+
   it('sends serializable speech options through service worker', async () => {
     const sendMessage = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('chrome', { runtime: { sendMessage } });

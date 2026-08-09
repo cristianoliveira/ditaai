@@ -7,9 +7,9 @@
 // punctuation this reduces to flat proportional timing; with punctuation the
 // gaps across sentence/clause boundaries stretch, tracking the audio better.
 
-import type { BoundaryEvent } from '../../domain/audio/text-reader';
+import type { ScheduledBoundary } from '../../domain/audio/text-reader';
 
-export interface WordTiming extends BoundaryEvent {
+export interface WordTiming extends ScheduledBoundary {
   /** When to fire this word's boundary, as a fraction of total audio (0..1). */
   startFraction: number;
 }

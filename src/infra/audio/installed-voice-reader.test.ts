@@ -20,7 +20,48 @@ function installedReader(available: boolean): AvailableTextReader {
 }
 
 describe('InstalledVoiceReader', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('prepares installed voice when it is available', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    installed.prepare = vi.fn().mockResolvedValue(undefined);
+    const fallback = reader();
+    const subject = new InstalledVoiceReader(installed, fallback);
+
+    await subject.prepare('next paragraph', { rate: 1.2, onBoundary: vi.fn() });
+
+    expect(installed.prepare).toHaveBeenCalledWith('next paragraph', { rate: 1.2 });
+  });
+
+  it('plays prepared installed speech without rechecking availability', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    installed.prepare = vi.fn().mockResolvedValue(undefined);
+    const fallback = reader();
+    const subject = new InstalledVoiceReader(installed, fallback);
+
+    await subject.prepare('next paragraph', { rate: 1.2 });
+    await subject.speak('next paragraph', { rate: 1.2 });
+
+    expect(installed.isAvailable).toHaveBeenCalledOnce();
+    expect(installed.speak).toHaveBeenCalledWith('next paragraph', { rate: 1.2 });
+    expect(fallback.speak).not.toHaveBeenCalled();
+  });
+
+  it('skips preparation when installed voice is unavailable', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(false);
+    installed.prepare = vi.fn().mockResolvedValue(undefined);
+    const subject = new InstalledVoiceReader(installed, reader());
+
+    await subject.prepare('next paragraph');
+
+    expect(installed.prepare).not.toHaveBeenCalled();
+  });
 
   it('uses installed voice when it is available', async () => {
     vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
@@ -94,6 +135,53 @@ describe('InstalledVoiceReader', () => {
     expect(onBoundary).toHaveBeenCalledWith(event);
 
     await speakPromise;
+  });
+
+  it('schedules prepared word boundaries outside the offscreen inference loop', async () => {
+    vi.useFakeTimers();
+    let listener: ((msg: unknown) => void) | undefined;
+    vi.stubGlobal('chrome', {
+      runtime: {
+        onMessage: {
+          addListener: vi.fn((fn: (msg: unknown) => void) => {
+            listener = fn;
+          }),
+        },
+      },
+    });
+    const installed = installedReader(true);
+    let resolveSpeak!: () => void;
+    vi.mocked(installed.speak).mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSpeak = resolve;
+      }),
+    );
+    const onBoundary = vi.fn();
+    const subject = new InstalledVoiceReader(installed, reader());
+    const speaking = subject.speak('hello world', { onBoundary });
+    await vi.waitFor(() => expect(installed.speak).toHaveBeenCalled());
+
+    listener?.({
+      dest: 'contentScript',
+      method: 'installedVoiceBoundarySchedule',
+      args: [
+        {
+          durationMs: 1_000,
+          boundaries: [
+            { charIndex: 0, charLength: 5, startFraction: 0 },
+            { charIndex: 6, charLength: 5, startFraction: 0.5 },
+          ],
+        },
+      ],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onBoundary).toHaveBeenCalledWith({ charIndex: 0, charLength: 5 });
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(onBoundary).toHaveBeenLastCalledWith({ charIndex: 6, charLength: 5 });
+
+    resolveSpeak();
+    await speaking;
   });
 
   it('clears boundary callback on stop', async () => {

@@ -24,20 +24,31 @@ export default defineBackground(() => {
   // asked to speak. Independent of PlaybackController: widget-driven playback
   // never registers a tab with the router, so relying on controller.tabId would
   // silently drop every word boundary (no highlighting, no per-word logging).
-  const boundaryRelay = new InstalledVoiceBoundaryRelay((tabId, event) => {
+  const sendInstalledVoiceTiming = (tabId: number, method: string, timing: unknown) => {
     chrome.tabs
       .sendMessage(tabId, {
         dest: 'contentScript',
-        method: 'installedVoiceBoundary',
-        args: [event],
+        method,
+        args: [timing],
       })
       .catch(() => {});
-  });
+  };
+  const boundaryRelay = new InstalledVoiceBoundaryRelay(
+    (tabId, event) => sendInstalledVoiceTiming(tabId, 'installedVoiceBoundary', event),
+    (tabId, schedule) =>
+      sendInstalledVoiceTiming(tabId, 'installedVoiceBoundarySchedule', schedule),
+  );
 
   // Forward word-boundary events from offscreen → the originating content tab.
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg?.dest === 'serviceWorker' && msg.method === 'installedVoiceBoundary') {
+    if (msg?.dest !== 'serviceWorker') return false;
+    if (msg.method === 'installedVoiceBoundary') {
       boundaryRelay.deliver(msg.args?.[0]);
+      sendResponse({ ok: true });
+      return true;
+    }
+    if (msg.method === 'installedVoiceBoundarySchedule') {
+      boundaryRelay.deliverSchedule(msg.args?.[0]);
       sendResponse({ ok: true });
       return true;
     }

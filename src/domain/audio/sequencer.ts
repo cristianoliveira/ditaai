@@ -68,7 +68,18 @@ export class SegmentSequencer {
         },
       };
 
-      await this.reader.speak(segment, speakOptions);
+      await this.prepareSegment(segment, speakOptions);
+      if (this.stopped) break;
+
+      const speaking = this.reader.speak(segment, speakOptions);
+      const nextSegment = this.segments[this.index + 1];
+      if (nextSegment) {
+        void this.prepareSegment(nextSegment, {
+          ...speakOptions,
+          resumeFromChar: 0,
+        });
+      }
+      await speaking;
 
       if (this.stopped) break;
 
@@ -120,6 +131,14 @@ export class SegmentSequencer {
   /** Update the speaking rate; takes effect on the next segment. */
   setRate(rate: number): void {
     this.rate = rate;
+  }
+
+  private async prepareSegment(segment: string, options: SpeakOptions): Promise<void> {
+    try {
+      await this.reader.prepare?.(segment, options);
+    } catch (error) {
+      console.warn('[dita] speech preparation failed; continuing without lookahead', error);
+    }
   }
 
   private waitWhilePaused(): Promise<void> {

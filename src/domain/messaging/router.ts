@@ -60,6 +60,10 @@ export function createMessageRouter(
       ok: true,
       available: (await deps.installedReader?.isAvailable()) ?? false,
     }),
+    prepareInstalledVoice: async ([text, options]) => {
+      await deps.installedReader?.prepare?.(text as string, options as SpeakOptions | undefined);
+      return { ok: true };
+    },
     speakWithInstalledVoice: async ([text, options]) => {
       if (!deps.installedReader) return { ok: false, error: 'Installed voice unavailable' };
       await deps.installedReader.speak(text as string, options as SpeakOptions | undefined);

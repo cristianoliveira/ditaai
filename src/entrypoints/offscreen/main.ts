@@ -73,6 +73,14 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
   if (method === 'isAvailable') {
     return { ok: true, available: await isAvailable() };
   }
+  if (method === 'prepare') {
+    const [text, options] = args as [string, SpeakOptions | undefined];
+    log('prepare:start', { textLength: text.length });
+    const r = await getReader();
+    await r.prepare(text, options);
+    log('prepare:complete', { textLength: text.length });
+    return { ok: true };
+  }
   if (method === 'speak') {
     const [text, options] = args as [string, SpeakOptions | undefined];
     log('speak:start', { textLength: text.length });
@@ -84,8 +92,19 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
         args: [event],
       });
     };
-    await r.speak(text, options);
-    r.onBoundary = undefined;
+    r.onBoundarySchedule = (schedule) => {
+      chrome.runtime.sendMessage({
+        dest: 'serviceWorker',
+        method: 'installedVoiceBoundarySchedule',
+        args: [schedule],
+      });
+    };
+    try {
+      await r.speak(text, options);
+    } finally {
+      r.onBoundary = undefined;
+      r.onBoundarySchedule = undefined;
+    }
     log('speak:complete', { textLength: text.length });
     return { ok: true };
   }
