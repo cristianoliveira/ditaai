@@ -76,7 +76,16 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
   if (method === 'speak') {
     const [text, options] = args as [string, SpeakOptions | undefined];
     log('speak:start', { textLength: text.length });
-    await (await getReader()).speak(text, options);
+    const r = await getReader();
+    r.onBoundary = (event) => {
+      chrome.runtime.sendMessage({
+        dest: 'serviceWorker',
+        method: 'installedVoiceBoundary',
+        args: [event],
+      });
+    };
+    await r.speak(text, options);
+    r.onBoundary = undefined;
     log('speak:complete', { textLength: text.length });
     return { ok: true };
   }

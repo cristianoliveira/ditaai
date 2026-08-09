@@ -36,6 +36,9 @@ export class SupertonicOnnxReader implements TextReader {
   private sourceNode: AudioBufferSourceNode | null = null;
   private speechCount = 0;
 
+  /** Called for each word boundary during playback. Set before speak(). */
+  onBoundary?: (event: BoundaryEvent) => void;
+
   constructor(config: SupertonicOnnxConfig = {}) {
     this.modelAssets = config.modelAssets ?? 'assets/supertonic';
     this.voiceStyle =
@@ -151,7 +154,7 @@ export class SupertonicOnnxReader implements TextReader {
       while (boundaryIndex < words.length) {
         const word = words[boundaryIndex];
         if (!word || word.charIndex > currentCharPos) break;
-        options?.onBoundary?.(word);
+        this.onBoundary?.(word);
         boundaryIndex++;
       }
 
@@ -169,7 +172,7 @@ export class SupertonicOnnxReader implements TextReader {
             boundaryIndex++;
             continue;
           }
-          options?.onBoundary?.(word);
+          this.onBoundary?.(word);
           boundaryIndex++;
         }
         this.sourceNode = null;

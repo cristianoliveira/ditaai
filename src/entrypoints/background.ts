@@ -18,6 +18,27 @@ export default defineBackground(() => {
     resolveActiveTab,
     installedReader,
   });
+
+  // Forward word-boundary events from offscreen → content script (highlighting).
+  // Must register before attachRuntimeListener so it handles boundary messages first.
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg?.dest === 'serviceWorker' && msg.method === 'installedVoiceBoundary') {
+      const state = controller.getState();
+      if (state.tabId) {
+        chrome.tabs
+          .sendMessage(state.tabId, {
+            dest: 'contentScript',
+            method: 'installedVoiceBoundary',
+            args: msg.args,
+          })
+          .catch(() => {});
+      }
+      sendResponse({ ok: true });
+      return true;
+    }
+    return false;
+  });
+
   attachRuntimeListener(router);
 
   // Action button: click the icon → toggle the widget on the active tab

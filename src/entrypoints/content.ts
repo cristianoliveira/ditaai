@@ -1,9 +1,11 @@
 // Content script entry — runs at document_idle.
 // Page-level composition root: widget UI + text extraction + playback + highlighting.
 
+import { FakeBoundaryReader } from '../content/fake-reader';
 import { clearHighlight, highlightWord } from '../content/highlighter';
 import { DitaWidget } from '../content/widget';
 import { SegmentSequencer } from '../domain/audio/sequencer';
+import type { TextReader } from '../domain/audio/text-reader';
 import type { TextSegment } from '../domain/document/text-processor';
 import { prepareSegments } from '../domain/document/text-processor';
 import { InstalledVoiceReader } from '../infra/audio/installed-voice-reader';
@@ -33,10 +35,11 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
   main() {
-    const reader = new InstalledVoiceReader(
-      new RuntimeInstalledVoiceReader(),
-      new SpeechSynthesisReader(),
-    );
+    // biome-ignore lint/complexity/useLiteralKeys: TS index signature requires bracket notation
+    const isTestMode = document.documentElement.dataset['ditaTestReader'] === 'fake';
+    const reader: TextReader = isTestMode
+      ? new FakeBoundaryReader()
+      : new InstalledVoiceReader(new RuntimeInstalledVoiceReader(), new SpeechSynthesisReader());
     const sequencer = new SegmentSequencer(reader);
 
     let widget: DitaWidget | null = null;
