@@ -48,6 +48,7 @@ function buildChunks(doc: Document): Chunk[] {
 }
 
 const HIGHLIGHT_PREF = 'highlightWords';
+const DOMAIN_SELECTORS_KEY = 'domainSelectors';
 
 async function loadHighlightEnabled(): Promise<boolean> {
   const stored = await chrome.storage.local.get(HIGHLIGHT_PREF);
@@ -56,6 +57,26 @@ async function loadHighlightEnabled(): Promise<boolean> {
 
 async function saveHighlightEnabled(enabled: boolean): Promise<void> {
   await chrome.storage.local.set({ [HIGHLIGHT_PREF]: enabled });
+}
+
+async function loadDomainSelector(): Promise<string | null> {
+  const stored = await chrome.storage.local.get(DOMAIN_SELECTORS_KEY);
+  const map: Record<string, string> = stored[DOMAIN_SELECTORS_KEY] ?? {};
+  return map[window.location.hostname] ?? null;
+}
+
+async function saveDomainSelector(selector: string): Promise<void> {
+  const stored = await chrome.storage.local.get(DOMAIN_SELECTORS_KEY);
+  const map: Record<string, string> = stored[DOMAIN_SELECTORS_KEY] ?? {};
+  map[window.location.hostname] = selector;
+  await chrome.storage.local.set({ [DOMAIN_SELECTORS_KEY]: map });
+}
+
+async function clearDomainSelector(): Promise<void> {
+  const stored = await chrome.storage.local.get(DOMAIN_SELECTORS_KEY);
+  const map: Record<string, string> = stored[DOMAIN_SELECTORS_KEY] ?? {};
+  delete map[window.location.hostname];
+  await chrome.storage.local.set({ [DOMAIN_SELECTORS_KEY]: map });
 }
 
 export default defineContentScript({
@@ -75,8 +96,16 @@ export default defineContentScript({
     let currentIndex = 0;
     let highlightWordsEnabled = true;
     let activeSelector: string | null = null;
+
+    // Restore saved selector for this domain on init.
     void loadHighlightEnabled().then((value) => {
       highlightWordsEnabled = value;
+    });
+    void loadDomainSelector().then((selector) => {
+      if (selector) {
+        activeSelector = selector;
+        console.info(`[dita] restored selector for ${window.location.hostname}: ${selector}`);
+      }
     });
 
     function clearAllHighlights(): void {
@@ -196,7 +225,6 @@ export default defineContentScript({
           onClose: () => {
             sequencer.stop();
             clearAllHighlights();
-            activeSelector = null;
             widget?.unmount();
             widget = null;
           },
@@ -214,6 +242,11 @@ export default defineContentScript({
             const selector = await picker.enter();
             if (selector) {
               activeSelector = selector;
+              void saveDomainSelector(selector);
+            } else {
+              // Cancelled — clear stored selector for this domain
+              activeSelector = null;
+              void clearDomainSelector();
             }
             widget = buildWidget();
             widget.mount();
@@ -233,7 +266,6 @@ export default defineContentScript({
         widget.unmount();
         reader.stop();
         clearAllHighlights();
-        activeSelector = null;
         widget = null;
         return;
       }
