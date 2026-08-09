@@ -10,6 +10,7 @@ export interface WidgetCallbacks {
   onStop(): void;
   onClose(): void;
   onSettings?(): void;
+  onToggleHighlight?(enabled: boolean): void;
 }
 
 const STYLES = `
@@ -81,6 +82,19 @@ const STYLES = `
   }
   .dita-btn-settings:hover { background: #2a2a4a; color: #fff; }
 
+  .dita-btn-highlight {
+    width: 28px; height: 28px;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 700;
+    color: #8b8ba7;
+  }
+  .dita-btn-highlight:hover { background: #2a2a4a; color: #fff; }
+  .dita-btn-highlight[aria-pressed='true'] {
+    color: #fff;
+    background: rgba(108, 92, 231, 0.45);
+  }
+
   .dita-progress {
     font-size: 11px;
     color: #8b8ba7;
@@ -93,10 +107,13 @@ export class DitaWidget {
   private host: HTMLDivElement;
   private shadow: ShadowRoot;
   private playBtn: HTMLButtonElement;
+  private highlightBtn: HTMLButtonElement;
   private progressEl: HTMLSpanElement;
   private state: WidgetState = 'idle';
+  private highlightEnabled = true;
 
-  constructor(callbacks: WidgetCallbacks) {
+  constructor(callbacks: WidgetCallbacks, options?: { highlightEnabled?: boolean }) {
+    this.highlightEnabled = options?.highlightEnabled ?? true;
     this.host = document.createElement('div');
     this.host.id = 'dita-widget-host';
     this.shadow = this.host.attachShadow({ mode: 'open' });
@@ -142,7 +159,27 @@ export class DitaWidget {
     settingsBtn.textContent = '⚙';
     settingsBtn.addEventListener('click', () => callbacks.onSettings?.());
 
-    widget.append(label, this.playBtn, this.progressEl, stopBtn, settingsBtn, closeBtn);
+    this.highlightBtn = document.createElement('button');
+    this.highlightBtn.className = 'dita-btn dita-btn-highlight';
+    this.highlightBtn.textContent = 'Aa';
+    this.highlightBtn.setAttribute('role', 'switch');
+    this.highlightBtn.setAttribute('aria-label', 'Toggle word highlighting');
+    this.applyHighlightVisual();
+    this.highlightBtn.addEventListener('click', () => {
+      this.highlightEnabled = !this.highlightEnabled;
+      this.applyHighlightVisual();
+      callbacks.onToggleHighlight?.(this.highlightEnabled);
+    });
+
+    widget.append(
+      label,
+      this.playBtn,
+      this.progressEl,
+      stopBtn,
+      this.highlightBtn,
+      settingsBtn,
+      closeBtn,
+    );
     this.shadow.append(style, widget);
   }
 
@@ -175,5 +212,14 @@ export class DitaWidget {
 
   setProgress(current: number, total: number): void {
     this.progressEl.textContent = total > 0 ? `${current}/${total}` : '';
+  }
+
+  setHighlightEnabled(enabled: boolean): void {
+    this.highlightEnabled = enabled;
+    this.applyHighlightVisual();
+  }
+
+  private applyHighlightVisual(): void {
+    this.highlightBtn.setAttribute('aria-pressed', String(this.highlightEnabled));
   }
 }

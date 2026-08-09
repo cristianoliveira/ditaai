@@ -45,6 +45,17 @@ function buildChunks(doc: Document): Chunk[] {
   return chunks;
 }
 
+const HIGHLIGHT_PREF = 'highlightWords';
+
+async function loadHighlightEnabled(): Promise<boolean> {
+  const stored = await chrome.storage.local.get(HIGHLIGHT_PREF);
+  return stored[HIGHLIGHT_PREF] !== false;
+}
+
+async function saveHighlightEnabled(enabled: boolean): Promise<void> {
+  await chrome.storage.local.set({ [HIGHLIGHT_PREF]: enabled });
+}
+
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
@@ -60,6 +71,10 @@ export default defineContentScript({
     let chunks: Chunk[] = [];
     let activeElement: Element | null = null;
     let currentIndex = 0;
+    let highlightWordsEnabled = true;
+    void loadHighlightEnabled().then((value) => {
+      highlightWordsEnabled = value;
+    });
 
     function clearAllHighlights(): void {
       if (activeElement) {
@@ -78,79 +93,87 @@ export default defineContentScript({
         return;
       }
 
-      widget = new DitaWidget({
-        onPlay: () => {
-          chunks = buildChunks(document);
-          const texts = chunks.map((chunk) => chunk.text);
-          if (texts.length === 0) return;
+      widget = new DitaWidget(
+        {
+          onPlay: () => {
+            chunks = buildChunks(document);
+            const texts = chunks.map((chunk) => chunk.text);
+            if (texts.length === 0) return;
 
-          console.info(
-            `[dita] segments ${JSON.stringify({
-              count: texts.length,
-              totalChars: texts.reduce((n, t) => n + t.length, 0),
-              first: texts[0]?.slice(0, 80),
-            })}`,
-          );
-
-          sequencer.load(texts);
-
-          sequencer.onSegmentChange = (index) => {
-            currentIndex = index;
-            clearAllHighlights();
-            activeElement = chunks[index]?.element ?? null;
-            if (activeElement) highlightParagraph(activeElement);
             console.info(
-              `[dita] segment ${JSON.stringify({ index, chars: texts[index]?.length ?? 0 })}`,
+              `[dita] segments ${JSON.stringify({
+                count: texts.length,
+                totalChars: texts.reduce((n, t) => n + t.length, 0),
+                first: texts[0]?.slice(0, 80),
+              })}`,
             );
-          };
 
-          widget?.setState('playing');
-          void sequencer
-            .play({
-              onBoundary: (event) => {
-                const chunk = chunks[currentIndex];
-                console.info(
-                  `[dita] boundary ${JSON.stringify(
-                    describeBoundary(chunk?.text ?? '', currentIndex, event),
-                  )}`,
-                );
-                if (activeElement && chunk) {
-                  highlightWord(activeElement, event.charIndex + chunk.base, event.charLength);
-                }
-              },
-            })
-            .then(() => {
+            sequencer.load(texts);
+
+            sequencer.onSegmentChange = (index) => {
+              currentIndex = index;
               clearAllHighlights();
-              widget?.setState('idle');
+              activeElement = chunks[index]?.element ?? null;
+              if (activeElement) highlightParagraph(activeElement);
+              console.info(
+                `[dita] segment ${JSON.stringify({ index, chars: texts[index]?.length ?? 0 })}`,
+              );
+            };
+
+            widget?.setState('playing');
+            void sequencer
+              .play({
+                onBoundary: (event) => {
+                  const chunk = chunks[currentIndex];
+                  console.info(
+                    `[dita] boundary ${JSON.stringify(
+                      describeBoundary(chunk?.text ?? '', currentIndex, event),
+                    )}`,
+                  );
+                  if (highlightWordsEnabled && activeElement && chunk) {
+                    highlightWord(activeElement, event.charIndex + chunk.base, event.charLength);
+                  }
+                },
+              })
+              .then(() => {
+                clearAllHighlights();
+                widget?.setState('idle');
+              });
+          },
+          onPause: () => {
+            sequencer.pause();
+            widget?.setState('paused');
+          },
+          onResume: () => {
+            sequencer.resume();
+            widget?.setState('playing');
+          },
+          onStop: () => {
+            sequencer.stop();
+            clearAllHighlights();
+            widget?.setState('idle');
+          },
+          onClose: () => {
+            sequencer.stop();
+            clearAllHighlights();
+            widget?.unmount();
+            widget = null;
+          },
+          onSettings: () => {
+            chrome.runtime.sendMessage({
+              dest: 'background',
+              method: 'openVoicesPage',
+              args: [],
             });
+          },
+          onToggleHighlight: (enabled) => {
+            highlightWordsEnabled = enabled;
+            void saveHighlightEnabled(enabled);
+            if (!enabled && activeElement) clearHighlight(activeElement);
+          },
         },
-        onPause: () => {
-          sequencer.pause();
-          widget?.setState('paused');
-        },
-        onResume: () => {
-          sequencer.resume();
-          widget?.setState('playing');
-        },
-        onStop: () => {
-          sequencer.stop();
-          clearAllHighlights();
-          widget?.setState('idle');
-        },
-        onClose: () => {
-          sequencer.stop();
-          clearAllHighlights();
-          widget?.unmount();
-          widget = null;
-        },
-        onSettings: () => {
-          chrome.runtime.sendMessage({
-            dest: 'background',
-            method: 'openVoicesPage',
-            args: [],
-          });
-        },
-      });
+        { highlightEnabled: highlightWordsEnabled },
+      );
       widget.mount();
     }
 
