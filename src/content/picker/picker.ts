@@ -99,6 +99,30 @@ const OVERLAY_STYLES = `
   .${HOVER_PREVIEW_CLASS} .hover-count.zero {
     background: #e74c3c;
   }
+  .dita-picker-dismiss {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 2147483647;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(26, 26, 46, 0.9);
+    color: #8b8ba7;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    transition: background 0.15s, color 0.15s;
+  }
+  .dita-picker-dismiss:hover {
+    background: #2a2a4a;
+    color: #fff;
+  }
+
   .${HOVER_PREVIEW_CLASS} .hover-hint {
     font-size: 10px;
     color: #8b8ba7;
@@ -138,6 +162,7 @@ const OVERLAY_STYLES = `
 
 export class Picker {
   private overlay: HTMLDivElement | null = null;
+  private dismissBtn: HTMLButtonElement | null = null;
   private hoverPreview: HTMLDivElement | null = null;
   private hoverInput: HTMLInputElement | null = null;
   private hoverCount: HTMLSpanElement | null = null;
@@ -182,11 +207,8 @@ export class Picker {
 
       this.overlay?.addEventListener('mousemove', this.onOverlayMouseMove);
       this.overlay?.addEventListener('click', this.onOverlayClick);
-      this.overlay?.addEventListener('keydown', (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          cleanup(null);
-        }
-      });
+
+      document.addEventListener('keydown', this.onKeyDown, true);
 
       this.resolveCleanup = cleanup;
     });
@@ -250,16 +272,28 @@ export class Picker {
     this.hoverCandidates = document.createElement('div');
     this.hoverCandidates.className = 'hover-candidates';
 
+    // Dismiss button (top-right corner)
+    this.dismissBtn = document.createElement('button');
+    this.dismissBtn.className = 'dita-picker-dismiss';
+    this.dismissBtn.textContent = '✕';
+    this.dismissBtn.addEventListener('click', () => {
+      this.resolveCleanup?.(null);
+    });
+    document.body.appendChild(this.dismissBtn);
+
     this.hoverPreview.append(this.hoverInput, this.hoverCount, hint, this.hoverCandidates);
     document.body.appendChild(this.hoverPreview);
     document.body.appendChild(this.overlay);
   }
 
   private removeOverlay(): void {
+    document.removeEventListener('keydown', this.onKeyDown, true);
     this.overlay?.removeEventListener('mousemove', this.onOverlayMouseMove);
     this.overlay?.removeEventListener('click', this.onOverlayClick);
     this.overlay?.remove();
     this.overlay = null;
+    this.dismissBtn?.remove();
+    this.dismissBtn = null;
     this.hoverPreview?.remove();
     this.hoverPreview = null;
     this.hoverInput = null;
@@ -312,6 +346,13 @@ export class Picker {
   }
 
   // ---- click = lock selection ----
+
+  private onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this.resolveCleanup?.(null);
+    }
+  };
 
   private onOverlayClick = (e: MouseEvent): void => {
     this.clearHoverHighlight();
