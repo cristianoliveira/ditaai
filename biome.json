@@ -4,7 +4,11 @@
     "enabled": true
   },
   "files": {
-    "ignore": ["src/infra/audio/supertonic-helper.ts"]
+    "ignore": [
+      "src/infra/audio/supertonic-helper.ts",
+      "scripts/bump-version.mjs",
+      "scripts/install-voices.mjs"
+    ]
   },
   "overrides": [
     {

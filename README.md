@@ -40,8 +40,31 @@ Then load `dist/chrome-mv3/` as an unpacked extension in Chrome.
 
 ```sh
 just check       # lint + typecheck + unit tests (same as CI)
-just test:e2e    # end-to-end tests (real extension in Chromium)
+just test-e2e    # end-to-end tests (real extension in Chromium)
 ```
+
+## Local observability
+
+Run Dita in a persistent headed Chromium while capturing browser and extension
+activity to local structured logs:
+
+```sh
+just observe         # foreground: build, open Chromium, collect events
+just observe-start   # background: agent-friendly startup
+just observe-status  # report current browser/session state
+just observe-errors  # show current warnings and errors
+just observe-stop    # stop only the observability browser
+```
+
+Live events are written as JSONL to
+`.tmp/observability/current/events.jsonl`. Previous sessions are archived under
+`.tmp/observability/sessions/`; browser storage and installed voices persist in
+`.tmp/observability/profile/`.
+
+Captured events include page/service-worker console output, uncaught browser
+errors, failed requests, HTTP error responses, navigation, pages, and workers.
+Set `DITA_OBSERVE_URL` to open a specific page at startup. Run from `nix develop`
+so Playwright can use the bundled Chrome for Testing.
 
 ## Structure
 

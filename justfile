@@ -15,11 +15,11 @@ check:
 
 # Format + lint
 lint:
-  pnpm biome check src/ e2e/
+  pnpm biome check src/ e2e/ scripts/
 
 # Auto-fix formatting
 format:
-  pnpm biome check --write src/ e2e/
+  pnpm biome check --write src/ e2e/ scripts/
 
 # TypeScript type checking (src + e2e)
 typecheck:
@@ -41,6 +41,26 @@ test-e2e:
 # End-to-end tests in interactive UI mode
 test-e2e-ui:
   pnpm test:e2e:ui
+
+# Open persistent Chromium in foreground and write live events
+observe:
+  pnpm observe
+
+# Start persistent Chromium in background (agent-friendly)
+observe-start:
+  pnpm observe:start
+
+# Show current observability process state
+observe-status:
+  pnpm observe:status
+
+# Show latest warnings/errors from current observability session
+observe-errors:
+  pnpm observe:errors
+
+# Stop current observability browser without killing unrelated Chrome processes
+observe-stop:
+  pnpm observe:stop
 
 # === Build ===
 

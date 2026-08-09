@@ -1,0 +1,36 @@
+import fs from 'node:fs/promises';
+import process from 'node:process';
+
+export async function readSessionStatus(sessionPath, probeProcess = isProcessAlive) {
+  let session;
+  try {
+    session = JSON.parse(await fs.readFile(sessionPath, 'utf8'));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { status: 'missing', alive: false };
+    throw error;
+  }
+
+  const pid = Number.isInteger(session.pid) ? session.pid : undefined;
+  return {
+    status: session.status ?? 'unknown',
+    ...(pid ? { pid } : {}),
+    alive: pid ? probeProcess(pid) : false,
+    ...(session.extensionId ? { extensionId: session.extensionId } : {}),
+    ...(session.eventsPath ? { eventsPath: session.eventsPath } : {}),
+  };
+}
+
+export function requestSessionStop(session, sendSignal = process.kill) {
+  if (!session.alive || !session.pid) return 'already-stopped';
+  sendSignal(session.pid, 'SIGINT');
+  return 'stopping';
+}
+
+export function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
