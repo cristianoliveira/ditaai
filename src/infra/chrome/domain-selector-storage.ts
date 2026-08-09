@@ -9,20 +9,20 @@ const KEY = 'domainSelectors';
 export class ChromeDomainSelectorStorage implements DomainSelectorStore {
   async load(hostname: string): Promise<string | null> {
     const stored = await chrome.storage.local.get(KEY);
-    const map: Record<string, string> = stored[KEY] ?? {};
+    const map: Record<string, string> = (stored[KEY] as Record<string, string>) ?? {};
     return map[hostname] ?? null;
   }
 
   async save(hostname: string, selector: string): Promise<void> {
     const stored = await chrome.storage.local.get(KEY);
-    const map: Record<string, string> = stored[KEY] ?? {};
+    const map: Record<string, string> = (stored[KEY] as Record<string, string>) ?? {};
     map[hostname] = selector;
     await chrome.storage.local.set({ [KEY]: map });
   }
 
   async clear(hostname: string): Promise<void> {
     const stored = await chrome.storage.local.get(KEY);
-    const map: Record<string, string> = stored[KEY] ?? {};
+    const map: Record<string, string> = (stored[KEY] as Record<string, string>) ?? {};
     delete map[hostname];
     await chrome.storage.local.set({ [KEY]: map });
   }

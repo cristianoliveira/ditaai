@@ -223,10 +223,10 @@ export default defineContentScript({
             const selector = await picker.enter(activeSelector ?? undefined);
             if (selector) {
               activeSelector = selector;
-              void saveDomainSelector(selector);
+              void selectorStore.save(hostname, selector);
             } else {
               activeSelector = null;
-              void clearDomainSelector();
+              void selectorStore.clear(hostname);
             }
             widget = buildWidget();
             widget.mount();

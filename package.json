@@ -1,6 +1,6 @@
 {
   "name": "dita",
-  "version": "0.3.0-c1146f2-1786267733",
+  "version": "0.3.0-e77021e-1786267923",
   "private": true,
   "description": "Chrome extension with local Piper TTS",
   "type": "module",
