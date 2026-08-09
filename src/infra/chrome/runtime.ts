@@ -7,11 +7,20 @@ import type {
   TabTextFetcher,
 } from '../../domain/messaging/router';
 
+export interface RuntimeListenerHooks {
+  /** Notified for every serviceWorker-bound message, with the real sender
+   * (carries sender.tab.id for content-script messages). */
+  onReceived?: (msg: RuntimeMessage, sender: chrome.runtime.MessageSender) => void;
+}
+
 export function attachRuntimeListener(
   router: (msg: RuntimeMessage) => unknown | Promise<unknown>,
+  hooks?: RuntimeListenerHooks,
 ): void {
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg?.dest !== 'serviceWorker') return false;
+
+    hooks?.onReceived?.(msg as RuntimeMessage, sender);
 
     const method = String(msg.method ?? 'unknown');
     const traceVoice = method.toLowerCase().includes('installedvoice');

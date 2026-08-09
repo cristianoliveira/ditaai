@@ -1,6 +1,11 @@
-// Word-level DOM highlighter.
-// Wraps the active word in a <mark> element using charIndex/charLength,
-// cleans up the previous mark, and smooth-scrolls to keep it visible.
+// Word + paragraph highlighting for the content script.
+//
+// charIndex from the TTS is an offset into the SPOKEN string, which is
+// whitespace-collapsed (see text-processor.collapseWhitespace). The DOM holds
+// the raw text, so we map collapsed offsets back onto raw text nodes, walking
+// "words" (maximal non-whitespace runs) and recording each one's position in
+// the collapsed string. This keeps highlight in sync with audio even when the
+// raw DOM has newlines, indentation, or inline children.
 
 const HIGHLIGHT_CLASS = 'dita-word-highlight';
 const SENTENCE_CLASS = 'dita-sentence-highlight';
@@ -28,7 +33,61 @@ function injectStyle(): void {
   styleInjected = true;
 }
 
-/** Remove all existing highlights from an element. */
+interface WordSegment {
+  node: Text;
+  start: number;
+  end: number;
+}
+
+interface Word {
+  segments: WordSegment[];
+  /** Start offset of this word in the collapsed (whitespace-normalised) string. */
+  collapsedStart: number;
+  length: number;
+}
+
+/** Walk text nodes and group non-whitespace runs into words, tracking each
+ * word's offset in the collapsed string (words joined by single spaces). */
+function buildWords(root: Element): Word[] {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const words: Word[] = [];
+  let collapsedPos = 0;
+  let prevWasSpace = true; // leading whitespace is trimmed
+  let current: Word | null = null;
+
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    const text = node.data ?? '';
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i] ?? '';
+      if (/\s/.test(ch)) {
+        current = null;
+        prevWasSpace = true;
+        continue;
+      }
+      if (prevWasSpace) {
+        if (words.length > 0) collapsedPos += 1; // separating space between words
+        current = {
+          segments: [{ node, start: i, end: i + 1 }],
+          collapsedStart: collapsedPos,
+          length: 1,
+        };
+        words.push(current);
+      } else if (current) {
+        const last: WordSegment | undefined = current.segments[current.segments.length - 1];
+        if (last && last.node === node) last.end = i + 1;
+        else current.segments.push({ node, start: i, end: i + 1 });
+        current.length += 1;
+      }
+      collapsedPos += 1;
+      prevWasSpace = false;
+    }
+    node = walker.nextNode() as Text | null;
+  }
+  return words;
+}
+
+/** Remove all word highlights from an element and merge the text back. */
 export function clearHighlight(element: Element): void {
   const marks = element.querySelectorAll(`.${HIGHLIGHT_CLASS}`);
   for (const mark of marks) {
@@ -39,39 +98,48 @@ export function clearHighlight(element: Element): void {
   }
 }
 
-/**
- * Highlight a word range within an element using charIndex/charLength.
- * Walks text nodes to find the position, wraps it in a <mark>.
- */
-export function highlightWord(element: Element, charIndex: number, charLength: number): void {
+/** Highlight the word at a collapsed-string offset, robust to whitespace and
+ * inline children. charLength may be 0 (some Chrome builds omit it). */
+export function highlightWord(element: Element, charIndex: number, _charLength: number): void {
   injectStyle();
   clearHighlight(element);
 
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-  let currentPos = 0;
-  let node = walker.nextNode() as Text | null;
+  const word = buildWords(element).find(
+    (w) => charIndex >= w.collapsedStart && charIndex < w.collapsedStart + w.length,
+  );
+  if (!word) return;
 
-  while (node) {
-    const nodeLen = node.textContent?.length ?? 0;
-    if (currentPos + nodeLen > charIndex) {
-      const startInNode = charIndex - currentPos;
-      const endInNode = Math.min(startInNode + charLength, nodeLen);
-
-      try {
-        const range = document.createRange();
-        range.setStart(node, Math.max(0, startInNode));
-        range.setEnd(node, endInNode);
-
-        const mark = document.createElement('mark');
-        mark.className = HIGHLIGHT_CLASS;
-        range.surroundContents(mark);
-        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } catch {
-        // range crosses element boundary — skip this word
-      }
-      return;
+  let firstMark: HTMLElement | null = null;
+  for (const seg of word.segments) {
+    if (seg.start === seg.end) continue;
+    try {
+      const range = document.createRange();
+      range.setStart(seg.node, seg.start);
+      range.setEnd(seg.node, seg.end);
+      const mark = document.createElement('mark');
+      mark.className = HIGHLIGHT_CLASS;
+      range.surroundContents(mark);
+      if (!firstMark) firstMark = mark;
+    } catch {
+      // range could not be wrapped (e.g. detached node) — skip this segment
     }
-    currentPos += nodeLen;
-    node = walker.nextNode() as Text | null;
   }
+  if (firstMark) {
+    try {
+      firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch {
+      // scrollIntoView unsupported in some hosts — ignore
+    }
+  }
+}
+
+/** Mark the element as the active paragraph (orientation highlight). */
+export function highlightParagraph(element: Element): void {
+  injectStyle();
+  element.classList.add(SENTENCE_CLASS);
+}
+
+/** Remove the active-paragraph mark from an element. */
+export function clearParagraph(element: Element): void {
+  element.classList.remove(SENTENCE_CLASS);
 }

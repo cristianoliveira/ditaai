@@ -3,6 +3,7 @@
 
 import { createMessageRouter } from '../domain/messaging/router';
 import { PlaybackController } from '../domain/playback/playback-controller';
+import { InstalledVoiceBoundaryRelay } from '../infra/chrome/installed-voice-boundary-relay';
 import { patchSendMessageCallback } from '../infra/chrome/messaging';
 import { OffscreenSupertonicReader } from '../infra/chrome/offscreen-supertonic-reader';
 import { attachRuntimeListener, fetchTabText, resolveActiveTab } from '../infra/chrome/runtime';
@@ -19,27 +20,38 @@ export default defineBackground(() => {
     installedReader,
   });
 
-  // Forward word-boundary events from offscreen → content script (highlighting).
-  // Must register before attachRuntimeListener so it handles boundary messages first.
+  // Route installed-voice boundaries from offscreen back to the content tab that
+  // asked to speak. Independent of PlaybackController: widget-driven playback
+  // never registers a tab with the router, so relying on controller.tabId would
+  // silently drop every word boundary (no highlighting, no per-word logging).
+  const boundaryRelay = new InstalledVoiceBoundaryRelay((tabId, event) => {
+    chrome.tabs
+      .sendMessage(tabId, {
+        dest: 'contentScript',
+        method: 'installedVoiceBoundary',
+        args: [event],
+      })
+      .catch(() => {});
+  });
+
+  // Forward word-boundary events from offscreen → the originating content tab.
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.dest === 'serviceWorker' && msg.method === 'installedVoiceBoundary') {
-      const state = controller.getState();
-      if (state.tabId) {
-        chrome.tabs
-          .sendMessage(state.tabId, {
-            dest: 'contentScript',
-            method: 'installedVoiceBoundary',
-            args: msg.args,
-          })
-          .catch(() => {});
-      }
+      boundaryRelay.deliver(msg.args?.[0]);
       sendResponse({ ok: true });
       return true;
     }
     return false;
   });
 
-  attachRuntimeListener(router);
+  attachRuntimeListener(router, {
+    onReceived: (_msg, sender) => {
+      // The content tab that requested installed-voice speech is the target for
+      // its word boundaries. Captured here because only the service worker sees
+      // sender.tab.id for content-script messages.
+      if (_msg.method === 'speakWithInstalledVoice') boundaryRelay.rememberOrigin(sender.tab?.id);
+    },
+  });
 
   // Action button: click the icon → toggle the widget on the active tab
   chrome.action.onClicked.addListener(async (tab) => {
