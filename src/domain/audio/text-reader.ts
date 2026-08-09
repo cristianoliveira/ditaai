@@ -22,3 +22,7 @@ export interface TextReader {
   resume(): void;
   stop(): void;
 }
+
+export interface AvailableTextReader extends TextReader {
+  isAvailable(): Promise<boolean>;
+}

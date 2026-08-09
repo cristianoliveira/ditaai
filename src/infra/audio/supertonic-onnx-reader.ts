@@ -34,6 +34,7 @@ export class SupertonicOnnxReader implements TextReader {
   private tts: TextToSpeech | null = null;
   private audioContext: AudioContext | null = null;
   private sourceNode: AudioBufferSourceNode | null = null;
+  private speechCount = 0;
 
   constructor(config: SupertonicOnnxConfig = {}) {
     this.modelAssets = config.modelAssets ?? 'assets/supertonic';
@@ -48,15 +49,28 @@ export class SupertonicOnnxReader implements TextReader {
   }
 
   async speak(text: string, options?: SpeakOptions): Promise<void> {
+    const speechId = ++this.speechCount;
     const offset = options?.resumeFromChar ?? 0;
     const textToSpeak = offset > 0 ? text.slice(offset) : text;
     if (!textToSpeak.trim()) return;
 
     if (!this.tts) {
+      const startedAt = Date.now();
+      console.info(`[dita][supertonic:${speechId}] models:initialize`);
       const result = await loadTextToSpeech(this.modelAssets);
       this.tts = result.tts;
+      console.info(`[dita][supertonic:${speechId}] models:ready`, {
+        durationMs: Date.now() - startedAt,
+      });
+    } else {
+      console.info(`[dita][supertonic:${speechId}] models:reuse`);
     }
 
+    const inferenceStartedAt = Date.now();
+    console.info(`[dita][supertonic:${speechId}] inference:start`, {
+      textLength: textToSpeak.length,
+      totalSteps: this.totalSteps,
+    });
     const style = await loadVoiceStyle([this.voiceStyle] as ArrayBuffer[] | string[]);
     const { wav } = await this.tts.infer(
       [textToSpeak],
@@ -65,9 +79,18 @@ export class SupertonicOnnxReader implements TextReader {
       this.totalSteps,
       this.speed,
     );
+    console.info(`[dita][supertonic:${speechId}] inference:complete`, {
+      durationMs: Date.now() - inferenceStartedAt,
+      sampleCount: wav.length,
+    });
 
+    const playbackStartedAt = Date.now();
+    console.info(`[dita][supertonic:${speechId}] playback:start`);
     const wavBuffer = writeWav(new Float32Array(wav), this.tts.sampleRate);
     await this.playAudioWithBoundaries(wavBuffer, textToSpeak, offset, options);
+    console.info(`[dita][supertonic:${speechId}] playback:complete`, {
+      durationMs: Date.now() - playbackStartedAt,
+    });
   }
 
   stop(): void {

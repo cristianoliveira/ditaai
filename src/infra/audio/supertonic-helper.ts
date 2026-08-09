@@ -348,10 +348,16 @@ export async function loadTextToSpeech(
     'vocoder.onnx',
   ];
 
+  const executionProviders =
+    typeof navigator !== 'undefined' && 'gpu' in navigator ? ['webgpu', 'wasm'] : ['wasm'];
+  const sessionOptions: ort.InferenceSession.SessionOptions = {
+    executionProviders,
+    graphOptimizationLevel: 'all',
+  };
   const sessions = await Promise.all(
     modelFiles.map(async (f) => {
       const buf = await loader.arrayBuffer(f);
-      return ort.InferenceSession.create(buf);
+      return ort.InferenceSession.create(buf, sessionOptions);
     }),
   );
 

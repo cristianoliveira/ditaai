@@ -4,6 +4,7 @@
 import { createMessageRouter } from '../domain/messaging/router';
 import { PlaybackController } from '../domain/playback/playback-controller';
 import { patchSendMessageCallback } from '../infra/chrome/messaging';
+import { OffscreenSupertonicReader } from '../infra/chrome/offscreen-supertonic-reader';
 import { attachRuntimeListener, fetchTabText, resolveActiveTab } from '../infra/chrome/runtime';
 
 export default defineBackground(() => {
@@ -11,7 +12,12 @@ export default defineBackground(() => {
   patchSendMessageCallback();
 
   const controller = new PlaybackController();
-  const router = createMessageRouter(controller, { fetchTabText, resolveActiveTab });
+  const installedReader = new OffscreenSupertonicReader();
+  const router = createMessageRouter(controller, {
+    fetchTabText,
+    resolveActiveTab,
+    installedReader,
+  });
   attachRuntimeListener(router);
 
   // Action button: click the icon → toggle the widget on the active tab

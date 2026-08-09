@@ -50,10 +50,12 @@ export async function launchExtensionContext(
   const errors: string[] = [];
   const { args: extraArgs = [], ...contextOptions } = options;
 
+  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: true,
     // Full Chromium (new headless) — required for extensions.
     channel: 'chromium',
+    ...(executablePath ? { executablePath } : {}),
     args: [
       `--disable-extensions-except=${EXTENSION_BUILD_DIR}`,
       `--load-extension=${EXTENSION_BUILD_DIR}`,

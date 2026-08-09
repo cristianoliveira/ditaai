@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AvailableTextReader } from '../audio/text-reader';
 import { PlaybackController } from '../playback/playback-controller';
 import {
   type ActiveTabResolver,
@@ -15,8 +16,19 @@ function makeRouter(texts: string[] = ['hello world']) {
   const ctrl = new PlaybackController();
   const fetcher: TabTextFetcher = vi.fn().mockResolvedValue(texts);
   const resolver: ActiveTabResolver = vi.fn().mockResolvedValue(99);
-  const router = createMessageRouter(ctrl, { fetchTabText: fetcher, resolveActiveTab: resolver });
-  return { ctrl, fetcher, resolver, router };
+  const installedReader: AvailableTextReader = {
+    isAvailable: vi.fn().mockResolvedValue(true),
+    speak: vi.fn().mockResolvedValue(undefined),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    stop: vi.fn(),
+  };
+  const router = createMessageRouter(ctrl, {
+    fetchTabText: fetcher,
+    resolveActiveTab: resolver,
+    installedReader,
+  });
+  return { ctrl, fetcher, resolver, installedReader, router };
 }
 
 describe('createMessageRouter', () => {
@@ -78,6 +90,21 @@ describe('createMessageRouter', () => {
     ctrl.play(7);
     const state = router(msg('getPlaybackState'));
     expect(state).toEqual({ state: 'PLAYING', tabId: 7 });
+  });
+
+  it('routes installed voice playback', async () => {
+    const { installedReader, router } = makeRouter();
+
+    await expect(router(msg('isInstalledVoiceAvailable'))).resolves.toEqual({
+      ok: true,
+      available: true,
+    });
+    await expect(router(msg('speakWithInstalledVoice', ['hello', { rate: 1.2 }]))).resolves.toEqual(
+      {
+        ok: true,
+      },
+    );
+    expect(installedReader.speak).toHaveBeenCalledWith('hello', { rate: 1.2 });
   });
 
   it('returns error for unknown method', () => {

@@ -2,6 +2,7 @@
 // The background entrypoint wires this to chrome.runtime.onMessage and
 // provides the tabTextFetcher and activeTabResolver implementations.
 
+import type { AvailableTextReader, SpeakOptions } from '../audio/text-reader';
 import type { PlaybackController } from '../playback/playback-controller';
 
 export interface RuntimeMessage {
@@ -20,7 +21,11 @@ export type ActiveTabResolver = () => Promise<number>;
 
 export function createMessageRouter(
   controller: PlaybackController,
-  deps: { fetchTabText: TabTextFetcher; resolveActiveTab: ActiveTabResolver },
+  deps: {
+    fetchTabText: TabTextFetcher;
+    resolveActiveTab: ActiveTabResolver;
+    installedReader?: AvailableTextReader;
+  },
 ): MessageHandler {
   const handlers: Record<string, (args: unknown[]) => unknown | Promise<unknown>> = {
     playTab: async ([tabId]) => {
@@ -51,6 +56,27 @@ export function createMessageRouter(
       return { ok: true };
     },
     getPlaybackState: () => controller.getState(),
+    isInstalledVoiceAvailable: async () => ({
+      ok: true,
+      available: (await deps.installedReader?.isAvailable()) ?? false,
+    }),
+    speakWithInstalledVoice: async ([text, options]) => {
+      if (!deps.installedReader) return { ok: false, error: 'Installed voice unavailable' };
+      await deps.installedReader.speak(text as string, options as SpeakOptions | undefined);
+      return { ok: true };
+    },
+    pauseInstalledVoice: () => {
+      deps.installedReader?.pause();
+      return { ok: true };
+    },
+    resumeInstalledVoice: () => {
+      deps.installedReader?.resume();
+      return { ok: true };
+    },
+    stopInstalledVoice: () => {
+      deps.installedReader?.stop();
+      return { ok: true };
+    },
   };
 
   return (msg) => {
