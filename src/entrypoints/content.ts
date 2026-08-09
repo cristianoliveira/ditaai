@@ -18,6 +18,7 @@ import { collapseWhitespace, splitText } from '../domain/document/text-processor
 import { filterParagraphs } from '../domain/selection/selection';
 import { InstalledVoiceReader } from '../infra/audio/installed-voice-reader';
 import { SpeechSynthesisReader } from '../infra/audio/speech-synthesis-reader';
+import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-storage';
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
 
 /** A spoken chunk and its source paragraph. `base` is the chunk's offset within
