@@ -12,6 +12,7 @@ export interface WidgetCallbacks {
   onSettings?(): void;
   onToggleHighlight?(enabled: boolean): void;
   onSelect?(): void;
+  onChangeRate?(rate: number): void;
 }
 
 const STYLES = `
@@ -110,6 +111,18 @@ const STYLES = `
     min-width: 32px;
     text-align: center;
   }
+
+  .dita-rate {
+    width: 70px;
+    accent-color: #6c5ce7;
+    cursor: pointer;
+  }
+  .dita-rate-label {
+    font-size: 11px;
+    color: #8b8ba7;
+    min-width: 28px;
+    text-align: center;
+  }
 `;
 
 export class DitaWidget {
@@ -117,12 +130,15 @@ export class DitaWidget {
   private shadow: ShadowRoot;
   private playBtn: HTMLButtonElement;
   private highlightBtn: HTMLButtonElement;
+  private rateInput: HTMLInputElement;
+  private rateLabel: HTMLSpanElement;
   private progressEl: HTMLSpanElement;
   private state: WidgetState = 'idle';
   private highlightEnabled = true;
 
-  constructor(callbacks: WidgetCallbacks, options?: { highlightEnabled?: boolean }) {
+  constructor(callbacks: WidgetCallbacks, options?: { highlightEnabled?: boolean; rate?: number }) {
     this.highlightEnabled = options?.highlightEnabled ?? true;
+    const initialRate = options?.rate ?? 1;
     this.host = document.createElement('div');
     this.host.id = 'dita-widget-host';
     this.shadow = this.host.attachShadow({ mode: 'open' });
@@ -186,10 +202,30 @@ export class DitaWidget {
       callbacks.onToggleHighlight?.(this.highlightEnabled);
     });
 
+    this.rateInput = document.createElement('input');
+    this.rateInput.type = 'range';
+    this.rateInput.min = '0.5';
+    this.rateInput.max = '2';
+    this.rateInput.step = '0.25';
+    this.rateInput.value = String(initialRate);
+    this.rateInput.className = 'dita-rate';
+    this.rateInput.setAttribute('aria-label', 'Reading speed');
+    this.rateInput.addEventListener('input', () => {
+      const rate = Number(this.rateInput.value);
+      this.rateLabel.textContent = `${rate}×`;
+      callbacks.onChangeRate?.(rate);
+    });
+
+    this.rateLabel = document.createElement('span');
+    this.rateLabel.className = 'dita-rate-label';
+    this.rateLabel.textContent = `${initialRate}×`;
+
     widget.append(
       label,
       this.playBtn,
       this.progressEl,
+      this.rateInput,
+      this.rateLabel,
       stopBtn,
       selectBtn,
       this.highlightBtn,

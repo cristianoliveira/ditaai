@@ -15,6 +15,16 @@ function highlightButton(): HTMLButtonElement | null {
   return root?.querySelector<HTMLButtonElement>('.dita-btn-highlight') ?? null;
 }
 
+function rateSlider(): HTMLInputElement | null {
+  const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+  return root?.querySelector<HTMLInputElement>('.dita-rate') ?? null;
+}
+
+function rateLabel(): HTMLElement | null {
+  const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+  return root?.querySelector<HTMLElement>('.dita-rate-label') ?? null;
+}
+
 describe('DitaWidget highlight toggle', () => {
   afterEach(() => {
     document.body.innerHTML = '';
@@ -58,6 +68,41 @@ describe('DitaWidget highlight toggle', () => {
     widget.setHighlightEnabled(false);
     expect(highlightButton()?.getAttribute('aria-pressed')).toBe('false');
     expect(onToggle).not.toHaveBeenCalled();
+  });
+});
+
+describe('DitaWidget rate slider', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('renders a speed slider defaulting to 1x', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    expect(rateSlider()?.value).toBe('1');
+    expect(rateSlider()?.getAttribute('aria-label')).toBe('Reading speed');
+    expect(rateLabel()?.textContent).toBe('1×');
+  });
+
+  it('changing the slider notifies the new rate and updates the label', () => {
+    const onChangeRate = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onChangeRate });
+    widget.mount();
+    const slider = rateSlider();
+    if (!slider) throw new Error('slider missing');
+
+    slider.value = '1.5';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(onChangeRate).toHaveBeenCalledWith(1.5);
+    expect(rateLabel()?.textContent).toBe('1.5×');
+  });
+
+  it('accepts an initial rate', () => {
+    const widget = new DitaWidget(noopCallbacks, { rate: 1.5 });
+    widget.mount();
+    expect(rateSlider()?.value).toBe('1.5');
+    expect(rateLabel()?.textContent).toBe('1.5×');
   });
 });
 

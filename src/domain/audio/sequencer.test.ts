@@ -200,7 +200,8 @@ describe('SegmentSequencer', () => {
   it('applies setRate to the next segment while playing', async () => {
     const rates: (number | undefined)[] = [];
     let resolveFn: (() => void) | null = null;
-    const reader: TextReader = {
+    const reader: TextReader & { resolveSpeak: () => void } = {
+      resolveSpeak: () => resolveFn?.(),
       speak: vi.fn((_text: string, options?: SpeakOptions) => {
         rates.push(options?.rate);
         return new Promise<void>((resolve) => {
@@ -219,11 +220,11 @@ describe('SegmentSequencer', () => {
     await vi.waitFor(() => expect(rates).toEqual([1]));
 
     seq.setRate(1.5);
-    resolveFn?.(); // finish 'one'; the loop rebuilds speakOptions with the new rate
+    reader.resolveSpeak(); // finish 'one'; the loop rebuilds speakOptions with the new rate
 
     await vi.waitFor(() => expect(rates).toEqual([1, 1.5]));
 
-    resolveFn?.(); // finish 'two'
+    reader.resolveSpeak(); // finish 'two'
     await promise;
   });
 });

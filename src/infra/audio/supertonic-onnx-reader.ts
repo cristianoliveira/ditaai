@@ -76,12 +76,13 @@ export class SupertonicOnnxReader implements TextReader {
       totalSteps: this.totalSteps,
     });
     const style = await loadVoiceStyle([this.voiceStyle] as ArrayBuffer[] | string[]);
+    const speed = options?.rate ?? this.speed;
     const { wav } = await this.tts.infer(
       [textToSpeak],
       [this.language],
       style,
       this.totalSteps,
-      this.speed,
+      speed,
     );
     console.info(`[dita][supertonic:${speechId}] inference:complete`, {
       durationMs: Date.now() - inferenceStartedAt,
@@ -91,7 +92,7 @@ export class SupertonicOnnxReader implements TextReader {
     const playbackStartedAt = Date.now();
     console.info(`[dita][supertonic:${speechId}] playback:start`);
     const wavBuffer = writeWav(new Float32Array(wav), this.tts.sampleRate);
-    await this.playAudioWithBoundaries(wavBuffer, textToSpeak, offset, options);
+    await this.playAudioWithBoundaries(wavBuffer, textToSpeak, offset);
     console.info(`[dita][supertonic:${speechId}] playback:complete`, {
       durationMs: Date.now() - playbackStartedAt,
     });
@@ -125,7 +126,6 @@ export class SupertonicOnnxReader implements TextReader {
     wavBuffer: ArrayBuffer,
     text: string,
     offset: number,
-    options?: SpeakOptions,
   ): Promise<void> {
     const ctx = this.getAudioContext();
     const audioBuffer = await ctx.decodeAudioData(wavBuffer);
@@ -134,7 +134,7 @@ export class SupertonicOnnxReader implements TextReader {
     const words = computeWordTimings(text, offset);
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
-    source.playbackRate.value = options?.rate ?? 1;
+    source.playbackRate.value = 1;
     source.connect(ctx.destination);
     this.sourceNode = source;
 

@@ -59,6 +59,22 @@ async function saveHighlightEnabled(enabled: boolean): Promise<void> {
   await chrome.storage.local.set({ [HIGHLIGHT_PREF]: enabled });
 }
 
+const RATE_PREF = 'playbackRate';
+
+function clampRate(rate: number): number {
+  return Math.min(2, Math.max(0.5, rate));
+}
+
+async function loadPlaybackRate(): Promise<number> {
+  const stored = await chrome.storage.local.get(RATE_PREF);
+  const value = stored[RATE_PREF];
+  return typeof value === 'number' ? clampRate(value) : 1;
+}
+
+async function savePlaybackRate(rate: number): Promise<void> {
+  await chrome.storage.local.set({ [RATE_PREF]: clampRate(rate) });
+}
+
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
@@ -75,12 +91,16 @@ export default defineContentScript({
     let activeElement: Element | null = null;
     let currentIndex = 0;
     let highlightWordsEnabled = true;
+    let playbackRate = 1;
     const selectorStore = new ChromeDomainSelectorStorage();
     const hostname = window.location.hostname;
     let activeSelector: string | null = null;
 
     void loadHighlightEnabled().then((value) => {
       highlightWordsEnabled = value;
+    });
+    void loadPlaybackRate().then((value) => {
+      playbackRate = value;
     });
     void selectorStore.load(hostname).then((selector) => {
       if (selector) {
@@ -167,6 +187,7 @@ export default defineContentScript({
       widget?.setState('playing');
       void sequencer
         .play({
+          rate: playbackRate,
           onBoundary: (event) => {
             const chunk = chunks[currentIndex];
             console.info(
@@ -236,8 +257,20 @@ export default defineContentScript({
             void saveHighlightEnabled(enabled);
             if (!enabled && activeElement) clearHighlight(activeElement);
           },
+          onChangeRate: (rate) => {
+            playbackRate = rate;
+            void savePlaybackRate(rate);
+            sequencer.setRate(rate);
+            // The new rate only takes effect on the next inferred segment, so stop
+            // and let the user restart at the chosen speed.
+            if (sequencer.getState().playing) {
+              sequencer.stop();
+              clearAllHighlights();
+              widget?.setState('idle');
+            }
+          },
         },
-        { highlightEnabled: highlightWordsEnabled },
+        { highlightEnabled: highlightWordsEnabled, rate: playbackRate },
       );
     }
 
