@@ -150,11 +150,26 @@ export class Picker {
   private previewActive = false;
   private styleEl: HTMLStyleElement | null = null;
 
-  enter(): Promise<string | null> {
+  enter(initialSelector?: string): Promise<string | null> {
     console.info('[dita] picker entered');
     this.injectStyles();
     this.createOverlay();
     this.overlay?.classList.add(OVERLAY_INTERACTIVE);
+
+    // Pre-populate with an existing selector
+    if (initialSelector) {
+      this.selectedSelector = initialSelector;
+      if (this.hoverInput) {
+        this.hoverInput.value = initialSelector;
+        this.hoverInput.setAttribute('data-last-hover', initialSelector);
+      }
+      const count = this.getMatchCount(initialSelector);
+      if (this.hoverCount) {
+        this.hoverCount.textContent = String(count);
+        this.hoverCount.className = count === 0 ? 'hover-count zero' : 'hover-count';
+      }
+      this.highlightMatches(initialSelector);
+    }
 
     return new Promise((resolve) => {
       const cleanup = (selector: string | null) => {

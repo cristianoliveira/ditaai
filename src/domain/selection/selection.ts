@@ -3,6 +3,13 @@
 
 import type { ParagraphSegment } from '../../content/paragraph-extractor';
 
+/** Port: persists selected CSS selectors keyed by domain (hostname). */
+export interface DomainSelectorStore {
+  load(hostname: string): Promise<string | null>;
+  save(hostname: string, selector: string): Promise<void>;
+  clear(hostname: string): Promise<void>;
+}
+
 /**
  * Generate a list of CSS selector candidates for an element, sorted from
  * most-broad (highest match count) to most-specific (fewest matches).

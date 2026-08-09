@@ -48,7 +48,6 @@ function buildChunks(doc: Document): Chunk[] {
 }
 
 const HIGHLIGHT_PREF = 'highlightWords';
-const DOMAIN_SELECTORS_KEY = 'domainSelectors';
 
 async function loadHighlightEnabled(): Promise<boolean> {
   const stored = await chrome.storage.local.get(HIGHLIGHT_PREF);
@@ -57,26 +56,6 @@ async function loadHighlightEnabled(): Promise<boolean> {
 
 async function saveHighlightEnabled(enabled: boolean): Promise<void> {
   await chrome.storage.local.set({ [HIGHLIGHT_PREF]: enabled });
-}
-
-async function loadDomainSelector(): Promise<string | null> {
-  const stored = await chrome.storage.local.get(DOMAIN_SELECTORS_KEY);
-  const map: Record<string, string> = stored[DOMAIN_SELECTORS_KEY] ?? {};
-  return map[window.location.hostname] ?? null;
-}
-
-async function saveDomainSelector(selector: string): Promise<void> {
-  const stored = await chrome.storage.local.get(DOMAIN_SELECTORS_KEY);
-  const map: Record<string, string> = stored[DOMAIN_SELECTORS_KEY] ?? {};
-  map[window.location.hostname] = selector;
-  await chrome.storage.local.set({ [DOMAIN_SELECTORS_KEY]: map });
-}
-
-async function clearDomainSelector(): Promise<void> {
-  const stored = await chrome.storage.local.get(DOMAIN_SELECTORS_KEY);
-  const map: Record<string, string> = stored[DOMAIN_SELECTORS_KEY] ?? {};
-  delete map[window.location.hostname];
-  await chrome.storage.local.set({ [DOMAIN_SELECTORS_KEY]: map });
 }
 
 export default defineContentScript({
@@ -95,16 +74,17 @@ export default defineContentScript({
     let activeElement: Element | null = null;
     let currentIndex = 0;
     let highlightWordsEnabled = true;
+    const selectorStore = new ChromeDomainSelectorStorage();
+    const hostname = window.location.hostname;
     let activeSelector: string | null = null;
 
-    // Restore saved selector for this domain on init.
     void loadHighlightEnabled().then((value) => {
       highlightWordsEnabled = value;
     });
-    void loadDomainSelector().then((selector) => {
+    void selectorStore.load(hostname).then((selector) => {
       if (selector) {
         activeSelector = selector;
-        console.info(`[dita] restored selector for ${window.location.hostname}: ${selector}`);
+        console.info(`[dita] restored selector for ${hostname}: ${selector}`);
       }
     });
 
@@ -239,12 +219,11 @@ export default defineContentScript({
             if (!widget) return;
             widget.unmount();
             const picker = new Picker();
-            const selector = await picker.enter();
+            const selector = await picker.enter(activeSelector ?? undefined);
             if (selector) {
               activeSelector = selector;
               void saveDomainSelector(selector);
             } else {
-              // Cancelled — clear stored selector for this domain
               activeSelector = null;
               void clearDomainSelector();
             }
