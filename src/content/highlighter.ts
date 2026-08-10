@@ -14,7 +14,13 @@ const SENTENCE_CLASS = 'dita-sentence-highlight';
 const START_CLASS = 'dita-start-point';
 
 const HIGHLIGHT_STYLE = `
-  .${HIGHLIGHT_CLASS} {
+  :root .${HIGHLIGHT_CLASS} {
+    /* <mark> is a new element: explicitly inherit typography so an active
+       word never changes an article heading's size or weight. */
+    font: inherit !important;
+    line-height: inherit !important;
+    letter-spacing: inherit !important;
+    text-transform: inherit !important;
     background: ${theme.highlight.fill};
     color: ${theme.highlight.text};
     border-radius: 3px;

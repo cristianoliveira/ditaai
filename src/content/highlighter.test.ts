@@ -20,6 +20,15 @@ describe('highlightWord', () => {
     expect(marked(p)).toBe('world');
   });
 
+  it('preserves the source typography on the active word', () => {
+    const p = html('<h1>hello world</h1>');
+    highlightWord(p, 6, 5);
+
+    const style = document.head.querySelector('style')?.textContent;
+    expect(style).toContain(':root .dita-word-highlight');
+    expect(style).toContain('font: inherit !important');
+  });
+
   it('maps a collapsed offset onto raw DOM text that has extra whitespace (desync regression)', () => {
     // Build the text node explicitly so the raw DOM keeps "Hello\n\nworld"
     // regardless of how an HTML parser would normalise whitespace.
