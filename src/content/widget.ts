@@ -68,6 +68,7 @@ const STYLES = `
     transition: background 0.15s;
   }
   .dita-btn:hover { background: #5a5a7a; }
+  .dita-btn svg { display: block; width: 16px; height: 16px; fill: currentColor; }
 
   .dita-btn-play { background: ${theme.accent}; }
   .dita-btn-play:hover { background: ${theme.accentHover}; }
@@ -137,6 +138,13 @@ const STYLES = `
   }
 `;
 
+/** Inline SVG icons — deterministic and flex-centerable, unlike the ▶/⏸
+ * glyphs whose ink sits off-center in the em box and shifts per font/platform. */
+const PLAY_ICON =
+  '<svg viewBox="0 0 24 24" data-icon="play" aria-hidden="true"><polygon points="5 3 19 12 5 21"/></svg>';
+const PAUSE_ICON =
+  '<svg viewBox="0 0 24 24" data-icon="pause" aria-hidden="true"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>';
+
 export class DitaWidget {
   private host: HTMLDivElement;
   private shadow: ShadowRoot;
@@ -170,7 +178,7 @@ export class DitaWidget {
 
     this.playBtn = document.createElement('button');
     this.playBtn.className = 'dita-btn dita-btn-play';
-    this.playBtn.textContent = '▶';
+    this.playBtn.innerHTML = PLAY_ICON;
     this.playBtn.addEventListener('click', () => {
       if (this.state === 'playing') {
         callbacks.onPause();
@@ -278,12 +286,12 @@ export class DitaWidget {
   setState(state: WidgetState): void {
     this.state = state;
     if (state === 'playing') {
-      this.playBtn.textContent = '⏸';
+      this.playBtn.innerHTML = PAUSE_ICON;
       this.playBtn.className = 'dita-btn dita-btn-play';
     } else if (state === 'paused') {
-      this.playBtn.textContent = '▶';
+      this.playBtn.innerHTML = PLAY_ICON;
     } else {
-      this.playBtn.textContent = '▶';
+      this.playBtn.innerHTML = PLAY_ICON;
       this.progressEl.textContent = '';
     }
   }

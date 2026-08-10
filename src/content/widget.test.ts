@@ -149,6 +149,60 @@ describe('DitaWidget jump buttons', () => {
   });
 });
 
+describe('DitaWidget play button', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function playButton(): HTMLButtonElement | null {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    return root?.querySelector<HTMLButtonElement>('.dita-btn-play') ?? null;
+  }
+
+  it('renders the play icon as a centered SVG, not a font glyph', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    const btn = playButton();
+    // SVG centers deterministically via flex; the ▶ glyph sits off-center in
+    // its em box and renders differently per font/platform.
+    expect(btn?.querySelector('svg[data-icon="play"]')).not.toBeNull();
+    expect(btn?.textContent ?? '').not.toContain('▶');
+  });
+
+  it('swaps to a pause SVG while playing and back to play otherwise', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    expect(playButton()?.querySelector('svg[data-icon="play"]')).not.toBeNull();
+
+    widget.setState('playing');
+    expect(playButton()?.querySelector('svg[data-icon="pause"]')).not.toBeNull();
+
+    widget.setState('paused');
+    expect(playButton()?.querySelector('svg[data-icon="play"]')).not.toBeNull();
+  });
+
+  it('fires onPlay from idle, onPause while playing, onResume while paused', () => {
+    const onPlay = vi.fn();
+    const onPause = vi.fn();
+    const onResume = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onPlay, onPause, onResume });
+    widget.mount();
+    const btn = playButton();
+    if (!btn) throw new Error('play button missing');
+
+    btn.click();
+    expect(onPlay).toHaveBeenCalled();
+
+    widget.setState('playing');
+    btn.click();
+    expect(onPause).toHaveBeenCalled();
+
+    widget.setState('paused');
+    btn.click();
+    expect(onResume).toHaveBeenCalled();
+  });
+});
+
 describe('DitaWidget Select button', () => {
   afterEach(() => {
     document.body.innerHTML = '';
