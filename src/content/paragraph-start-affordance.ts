@@ -5,6 +5,8 @@
 // host to begin reading from that paragraph. The affordance knows nothing about
 // chunks, indices, or playback — it only reports which element the user picked.
 
+import { theme } from './theme';
+
 export interface ParagraphStartAffordanceDeps {
   /** True for paragraph elements Dita can read. */
   isReadable: (element: Element) => boolean;
@@ -28,7 +30,7 @@ const SHADOW_STYLE = `
     height: ${BUTTON_SIZE}px;
     border: none;
     border-radius: 50%;
-    background: #6c5ce7;
+    background: ${theme.accent};
     color: #fff;
     font-size: 12px;
     cursor: pointer;
@@ -43,7 +45,7 @@ const SHADOW_STYLE = `
 
 const PAGE_STYLE = `
   .${CANDIDATE_CLASS} {
-    background: rgba(108, 92, 231, 0.12);
+    background: ${theme.accentTint(0.12)};
     border-radius: 3px;
   }
 `;

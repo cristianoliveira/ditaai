@@ -2,6 +2,8 @@
 // Shadow-DOM isolated. Shows the selector, match count, action buttons,
 // and a list of alternative CSS selectors (candidates).
 
+import { theme } from '../theme';
+
 export interface PickerPanelOptions {
   selector: string;
   matchCount: number;
@@ -60,7 +62,7 @@ const STYLES = `
     outline: none;
     transition: border-color 0.15s;
   }
-  .selector-input:focus { border-color: #6c5ce7; }
+  .selector-input:focus { border-color: ${theme.accent}; }
 
   .match-badge {
     display: inline-flex;
@@ -70,7 +72,7 @@ const STYLES = `
     height: 24px;
     padding: 0 6px;
     border-radius: 12px;
-    background: #6c5ce7;
+    background: ${theme.accent};
     color: #fff;
     font-size: 11px;
     font-weight: 700;
@@ -102,8 +104,8 @@ const STYLES = `
   }
   .candidate-item:hover { background: #2a2a4a; }
   .candidate-item.active {
-    background: rgba(108, 92, 231, 0.2);
-    border: 1px solid rgba(108, 92, 231, 0.4);
+    background: ${theme.accentTint(0.2)};
+    border: 1px solid ${theme.accentTint(0.4)};
   }
 
   .panel-actions {
@@ -127,10 +129,10 @@ const STYLES = `
 
   .action-preview { background: #3a3a5a; color: #e0e0e0; }
   .action-preview:hover { background: #4a4a6a; }
-  .action-preview.active { background: rgba(108, 92, 231, 0.3); color: #fff; }
+  .action-preview.active { background: ${theme.accentTint(0.3)}; color: #fff; }
 
-  .action-confirm { background: #6c5ce7; color: #fff; }
-  .action-confirm:hover { background: #7d6ff0; }
+  .action-confirm { background: ${theme.accent}; color: #fff; }
+  .action-confirm:hover { background: ${theme.accentHover}; }
 
   .action-cancel { background: transparent; color: #8b8ba7; flex: 0 0 auto; padding: 8px 12px; }
   .action-cancel:hover { color: #fff; }

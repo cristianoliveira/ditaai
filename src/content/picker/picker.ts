@@ -14,6 +14,7 @@
 //  On resolve: overlay + panel are cleaned up.
 
 import { buildCandidates } from '../../domain/selection/selection';
+import { theme } from '../theme';
 import { PickerPanel } from './picker-panel';
 
 const OVERLAY_ID = 'dita-picker-overlay';
@@ -39,14 +40,14 @@ const OVERLAY_STYLES = `
   }
 
   .${HIGHLIGHT_CLASS} {
-    outline: 2px solid rgba(108, 92, 231, 0.8);
-    background: rgba(108, 92, 231, 0.15);
+    outline: 2px solid ${theme.accentTint(0.8)};
+    background: ${theme.accentTint(0.15)};
     transition: outline 0.1s, background 0.1s;
   }
 
   .${MATCH_HIGHLIGHT_CLASS} {
-    outline: 2px solid rgba(108, 92, 231, 0.5);
-    background: rgba(108, 92, 231, 0.1);
+    outline: 2px solid ${theme.accentTint(0.5)};
+    background: ${theme.accentTint(0.1)};
   }
 
   .${HOVER_PREVIEW_CLASS} {
@@ -81,7 +82,7 @@ const OVERLAY_STYLES = `
     transition: border-color 0.15s;
   }
   .${HOVER_PREVIEW_CLASS} .hover-selector:focus {
-    border-color: #6c5ce7;
+    border-color: ${theme.accent};
   }
   .${HOVER_PREVIEW_CLASS} .hover-count {
     display: inline-flex;
@@ -91,7 +92,7 @@ const OVERLAY_STYLES = `
     height: 22px;
     padding: 0 6px;
     border-radius: 11px;
-    background: #6c5ce7;
+    background: ${theme.accent};
     color: #fff;
     font-size: 11px;
     font-weight: 700;
@@ -150,12 +151,12 @@ const OVERLAY_STYLES = `
   }
   .${HOVER_PREVIEW_CLASS} .hover-candidate:hover {
     background: #3a3a5a;
-    border-color: #6c5ce7;
+    border-color: ${theme.accent};
     color: #fff;
   }
   .${HOVER_PREVIEW_CLASS} .hover-candidate.active {
-    background: rgba(108, 92, 231, 0.25);
-    border-color: #6c5ce7;
+    background: ${theme.accentTint(0.25)};
+    border-color: ${theme.accent};
     color: #fff;
   }
 `;

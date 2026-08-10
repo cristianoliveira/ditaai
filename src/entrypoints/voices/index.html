@@ -26,6 +26,12 @@
   </main>
 
   <style>
+    /* Accent — single declaration for this page. Keep in sync with
+       src/content/theme.ts (theme.accent / theme.accentHover). */
+    :root {
+      --dita-accent: #f59e0b;
+      --dita-accent-hover: #fbbf24;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, system-ui, sans-serif;
@@ -54,7 +60,7 @@
     h2 {
       font-size: 16px;
       font-weight: 600;
-      color: #6c5ce7;
+      color: var(--dita-accent);
       margin-bottom: 12px;
     }
     section {
@@ -95,7 +101,7 @@
       transition: box-shadow 0.15s;
     }
     .voice-card:hover {
-      box-shadow: 0 4px 16px rgba(108, 92, 231, 0.15);
+      box-shadow: 0 4px 16px rgba(245, 158, 11, 0.15);
     }
     .voice-card .name {
       font-size: 15px;
@@ -123,11 +129,11 @@
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .btn-download {
-      background: #6c5ce7;
+      background: var(--dita-accent);
       color: #fff;
     }
-    .btn-download:hover:not(:disabled) { background: #7d6ff0; }
-    .btn-download.loading { background: #4a3a8a; }
+    .btn-download:hover:not(:disabled) { background: var(--dita-accent-hover); }
+    .btn-download.loading { background: #6b4d12; }
 
     .btn-installed {
       background: #1a3a2a;
@@ -136,14 +142,14 @@
     }
 
     .btn-download-all {
-      background: #6c5ce7;
+      background: var(--dita-accent);
       color: #fff;
       width: 100%;
       padding: 12px;
       font-size: 14px;
       margin-top: 8px;
     }
-    .btn-download-all:hover:not(:disabled) { background: #7d6ff0; }
+    .btn-download-all:hover:not(:disabled) { background: var(--dita-accent-hover); }
 
     .progress-bar {
       height: 4px;
@@ -154,7 +160,7 @@
     }
     .progress-bar .fill {
       height: 100%;
-      background: #6c5ce7;
+      background: var(--dita-accent);
       border-radius: 2px;
       transition: width 0.3s ease;
     }

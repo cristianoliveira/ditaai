@@ -2,6 +2,7 @@
 // Style-isolated so page CSS can't break it.
 
 import type { JumpDirection } from '../domain/playback/jump';
+import { theme } from './theme';
 
 export type WidgetState = 'idle' | 'playing' | 'paused';
 
@@ -68,8 +69,8 @@ const STYLES = `
   }
   .dita-btn:hover { background: #5a5a7a; }
 
-  .dita-btn-play { background: #6c5ce7; }
-  .dita-btn-play:hover { background: #7d6ff0; }
+  .dita-btn-play { background: ${theme.accent}; }
+  .dita-btn-play:hover { background: ${theme.accentHover}; }
 
   .dita-btn-jump {
     width: 32px; height: 32px;
@@ -113,7 +114,7 @@ const STYLES = `
   .dita-btn-highlight:hover { background: #2a2a4a; color: #fff; }
   .dita-btn-highlight[aria-pressed='true'] {
     color: #fff;
-    background: rgba(108, 92, 231, 0.45);
+    background: ${theme.accentTint(0.45)};
   }
 
   .dita-progress {
@@ -125,7 +126,7 @@ const STYLES = `
 
   .dita-rate {
     width: 70px;
-    accent-color: #6c5ce7;
+    accent-color: ${theme.accent};
     cursor: pointer;
   }
   .dita-rate-label {

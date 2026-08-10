@@ -7,23 +7,26 @@
 // the collapsed string. This keeps highlight in sync with audio even when the
 // raw DOM has newlines, indentation, or inline children.
 
+import { theme } from './theme';
+
 const HIGHLIGHT_CLASS = 'dita-word-highlight';
 const SENTENCE_CLASS = 'dita-sentence-highlight';
 const START_CLASS = 'dita-start-point';
 
 const HIGHLIGHT_STYLE = `
   .${HIGHLIGHT_CLASS} {
-    background: rgba(108, 92, 231, 0.35);
+    background: ${theme.highlight.fill};
+    color: ${theme.highlight.text};
     border-radius: 3px;
-    box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
+    box-shadow: ${theme.highlight.edge};
     transition: background 0.1s ease;
   }
   .${SENTENCE_CLASS} {
-    background: rgba(108, 92, 231, 0.12);
+    background: ${theme.highlight.paragraph};
     border-radius: 3px;
   }
   .${START_CLASS} {
-    box-shadow: inset 4px 0 0 #6c5ce7;
+    box-shadow: inset 4px 0 0 ${theme.highlight.bar};
   }
 `;
 
