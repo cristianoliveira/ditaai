@@ -610,6 +610,35 @@ export default defineContentScript({
         sendResponse({ ok: true });
         return false;
       }
+      if (msg.method === 'openWidget') {
+        if (!widget?.isMounted()) mountWidget();
+        sendResponse({ ok: true });
+        return false;
+      }
+      if (msg.method === 'getPlaybackState') {
+        sendResponse(sequencer.getState());
+        return false;
+      }
+      if (msg.method === 'togglePlay') {
+        togglePlay();
+        sendResponse(sequencer.getState());
+        return false;
+      }
+      if (msg.method === 'pausePlayback') {
+        pausePlayback();
+        sendResponse(sequencer.getState());
+        return false;
+      }
+      if (msg.method === 'resumePlayback') {
+        resumePlayback();
+        sendResponse(sequencer.getState());
+        return false;
+      }
+      if (msg.method === 'stopPlayback') {
+        stopPlayback();
+        sendResponse(sequencer.getState());
+        return false;
+      }
       if (msg.method === 'pronounceSelection') {
         const word = typeof msg.args?.[0] === 'string' ? msg.args[0].trim() : '';
         if (word) showPronunciationPopover(word);

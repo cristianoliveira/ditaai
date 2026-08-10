@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DitaAi player</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; width: 250px; background: #0f0f1a; color: #e0e0f0; font-family: -apple-system, system-ui, sans-serif; }
+    .player { padding: 18px; }
+    .eyebrow { margin: 0 0 7px; color: #f59e0b; font-size: 11px; font-weight: 700; letter-spacing: .12em; }
+    .status { margin: 0 0 16px; font-size: 14px; }
+    .controls { display: flex; gap: 8px; }
+    button { border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600; padding: 9px 14px; }
+    .primary { background: #f59e0b; color: #17100a; flex: 1; }
+    .secondary { background: #2a2a4a; color: #e0e0f0; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+  </style>
+</head>
+<body>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

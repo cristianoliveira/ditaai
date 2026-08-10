@@ -96,20 +96,6 @@ export default defineBackground(() => {
     },
   );
 
-  // Action button: click the icon → toggle the widget on the active tab
-  chrome.action.onClicked.addListener(async (tab) => {
-    if (!tab.id) return;
-    try {
-      await chrome.tabs.sendMessage(tab.id, {
-        dest: 'contentScript',
-        method: 'toggleWidget',
-        args: [],
-      });
-    } catch {
-      // content script not loaded (chrome:// pages, etc.) — ignore
-    }
-  });
-
   // Context menu: right-click selected text → open the pronunciation popover in
   // the content tab. removeAll on install keeps the item idempotent across
   // updates (context menus persist, so a bare create would throw on duplicate).
