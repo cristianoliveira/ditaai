@@ -140,11 +140,11 @@ export default defineContentScript({
       }
     }
 
-    /** Recompute the set of readable paragraph elements (after selector changes). */
+    /** Recompute the set of readable paragraph elements (after selector changes).
+     * Mirrors buildChunksFiltered exactly — including its container-selector
+     * fallback — so the start affordance matches what playback will actually read. */
     function refreshReadable(): void {
-      const paragraphs = extractParagraphs(document);
-      const filtered = activeSelector ? filterParagraphs(paragraphs, activeSelector) : paragraphs;
-      readableElements = new Set(filtered.map((p) => p.element));
+      readableElements = new Set(buildChunksFiltered(document).map((c) => c.element));
     }
 
     /** Show/clear the persistent start-point marker. */
