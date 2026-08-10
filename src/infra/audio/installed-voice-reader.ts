@@ -67,6 +67,16 @@ export class InstalledVoiceReader implements TextReader {
         const prepared = this.preparedInstalledSpeech.delete(this.preparationKey(text, options));
         if (prepared || (await this.installedReader.isAvailable())) {
           this.activeReader = this.installedReader;
+          console.info(
+            `[dita][installed-voice] speak ${JSON.stringify({
+              engine: 'installed',
+              prepared,
+              rate: options?.rate ?? null,
+              volume: options?.volume ?? null,
+              resumeFromChar: options?.resumeFromChar ?? 0,
+              chars: text.length,
+            })}`,
+          );
           // Strip onBoundary — it can't cross chrome.runtime.sendMessage.
           // The installed reader will use the boundary listener above instead.
           await this.installedReader.speak(text, this.serializableOptions(options));
@@ -92,6 +102,16 @@ export class InstalledVoiceReader implements TextReader {
 
     this.boundaryCallback = undefined;
     this.activeReader = this.fallbackReader;
+    console.info(
+      `[dita][installed-voice] speak ${JSON.stringify({
+        engine: 'fallback',
+        poisoned: this.poisoned,
+        rate: options?.rate ?? null,
+        volume: options?.volume ?? null,
+        resumeFromChar: options?.resumeFromChar ?? 0,
+        chars: text.length,
+      })}`,
+    );
     await this.fallbackReader.speak(text, options);
   }
 

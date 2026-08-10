@@ -312,7 +312,12 @@ export default defineContentScript({
         // widget (mountWidget only sets it once, at mount time).
         widget?.setProgress(index + 1, texts.length);
         console.info(
-          `[dita] segment ${JSON.stringify({ index, chars: texts[index]?.length ?? 0 })}`,
+          `[dita] segment ${JSON.stringify({
+            index,
+            chars: texts[index]?.length ?? 0,
+            rate: playbackRate,
+            volume: playbackVolume,
+          })}`,
         );
       };
 
@@ -404,13 +409,21 @@ export default defineContentScript({
       playbackVolume = clampVolume(volume);
       void savePlaybackVolume(playbackVolume);
       widget?.setVolume(playbackVolume);
-      scheduleSliderRestart(() => sequencer.setVolume(playbackVolume));
+      console.info(`[dita] applyVolume ${JSON.stringify({ volume: playbackVolume })}`);
+      scheduleSliderRestart(() => {
+        console.info(`[dita] restart(volume) ${JSON.stringify({ volume: playbackVolume })}`);
+        sequencer.setVolume(playbackVolume);
+      });
     }
 
     function applyRate(rate: number): void {
       playbackRate = clampRate(rate);
       void savePlaybackRate(playbackRate);
-      scheduleSliderRestart(() => sequencer.setRate(playbackRate));
+      console.info(`[dita] applyRate ${JSON.stringify({ rate: playbackRate })}`);
+      scheduleSliderRestart(() => {
+        console.info(`[dita] restart(rate) ${JSON.stringify({ rate: playbackRate })}`);
+        sequencer.setRate(playbackRate);
+      });
     }
 
     function adjustVolume(delta: number): void {

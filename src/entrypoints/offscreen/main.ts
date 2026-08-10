@@ -89,7 +89,13 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
   }
   if (method === 'prepare') {
     const [, text, options] = args as [string | null, string, SpeakOptions | undefined];
-    log('prepare:start', { selectedVoiceId, textLength: text.length });
+    log('prepare:start', {
+      selectedVoiceId,
+      textLength: text.length,
+      rate: options?.rate ?? null,
+      volume: options?.volume ?? null,
+      resumeFromChar: options?.resumeFromChar ?? 0,
+    });
     const r = await getReader(selectedVoiceId);
     await r.prepare(text, options);
     log('prepare:complete', { textLength: text.length });
@@ -97,7 +103,13 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
   }
   if (method === 'speak') {
     const [, text, options] = args as [string | null, string, SpeakOptions | undefined];
-    log('speak:start', { selectedVoiceId, textLength: text.length });
+    log('speak:start', {
+      selectedVoiceId,
+      textLength: text.length,
+      rate: options?.rate ?? null,
+      volume: options?.volume ?? null,
+      resumeFromChar: options?.resumeFromChar ?? 0,
+    });
     const r = await getReader(selectedVoiceId);
     r.onBoundary = (event) => {
       chrome.runtime.sendMessage({

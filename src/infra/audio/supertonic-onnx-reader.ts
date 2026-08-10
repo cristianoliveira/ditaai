@@ -81,7 +81,12 @@ export class SupertonicOnnxReader implements TextReader {
     this.preparations.delete(preparationKey);
 
     const playbackStartedAt = Date.now();
-    console.info(`[dita][supertonic:${speechId}] playback:start`);
+    console.info(`[dita][supertonic:${speechId}] playback:start`, {
+      rate: options?.rate ?? null,
+      volume: options?.volume ?? null,
+      resumeFromChar: options?.resumeFromChar ?? 0,
+      chars: text.length,
+    });
     await this.playAudioWithBoundaries(prepared, options?.volume);
     console.info(`[dita][supertonic:${speechId}] playback:complete`, {
       durationMs: Date.now() - playbackStartedAt,
@@ -124,6 +129,7 @@ export class SupertonicOnnxReader implements TextReader {
     console.info(`[dita][supertonic:prepare:${preparationId}] inference:start`, {
       textLength: text.length,
       totalSteps: this.totalSteps,
+      speed,
     });
     const { wav } = await tts.infer([text], [this.language], style, this.totalSteps, speed);
     console.info(`[dita][supertonic:prepare:${preparationId}] inference:complete`, {

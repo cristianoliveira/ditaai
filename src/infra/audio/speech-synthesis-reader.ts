@@ -14,6 +14,14 @@ export class SpeechSynthesisReader implements TextReader {
       if (options?.rate) utterance.rate = options.rate;
       if (options?.pitch) utterance.pitch = options.pitch;
       if (options?.volume != null) utterance.volume = options.volume;
+      console.info(
+        `[dita][speech-synthesis] speak ${JSON.stringify({
+          rate: utterance.rate,
+          volume: utterance.volume,
+          resumeFromChar: offset,
+          chars: speakText.length,
+        })}`,
+      );
 
       // Native boundary events give precise word-level charIndex/charLength.
       // Offset back to absolute position when resuming mid-segment.
