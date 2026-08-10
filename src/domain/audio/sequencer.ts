@@ -16,6 +16,7 @@ export class SegmentSequencer {
   private playing = false;
   private stopped = false;
   private paused = false;
+  private seeking = false;
   private resolveResume: (() => void) | null = null;
   private lastCharIndex = 0;
   private resumeCharIndex = 0;
@@ -32,6 +33,7 @@ export class SegmentSequencer {
     this.playing = false;
     this.stopped = false;
     this.paused = false;
+    this.seeking = false;
     this.lastCharIndex = 0;
     this.resumeCharIndex = 0;
     this.rate = undefined;
@@ -49,6 +51,7 @@ export class SegmentSequencer {
     this.stopped = false;
     this.paused = false;
     this.playing = true;
+    this.seeking = false;
     this.rate = options?.rate;
 
     while (this.index < this.segments.length && !this.stopped) {
@@ -70,6 +73,10 @@ export class SegmentSequencer {
 
       await this.prepareSegment(segment, speakOptions);
       if (this.stopped) break;
+      if (this.seeking) {
+        this.seeking = false;
+        continue; // playhead moved during prepare — re-evaluate at the new index
+      }
 
       const speaking = this.reader.speak(segment, speakOptions);
       const nextSegment = this.segments[this.index + 1];
@@ -82,6 +89,10 @@ export class SegmentSequencer {
       await speaking;
 
       if (this.stopped) break;
+      if (this.seeking) {
+        this.seeking = false;
+        continue; // playhead moved during speak — re-evaluate at the new index
+      }
 
       // Paused mid-segment: save exact word position, wait for resume
       if (this.paused) {
@@ -118,6 +129,7 @@ export class SegmentSequencer {
   stop(): void {
     this.stopped = true;
     this.paused = false;
+    this.seeking = false;
     this.reader.stop();
     this.resolveResume?.();
     this.resolveResume = null;
@@ -131,6 +143,26 @@ export class SegmentSequencer {
   /** Update the speaking rate; takes effect on the next segment. */
   setRate(rate: number): void {
     this.rate = rate;
+  }
+
+  /**
+   * Jump the playhead to a segment index. While playing, cancels the current
+   * utterance and continues from the target; while paused, moves the highlight
+   * to the target and stays paused (resume continues from there). No-op when
+   * idle or with no segments loaded.
+   */
+  seek(target: number): void {
+    if (this.segments.length === 0) return;
+    if (!this.playing && !this.paused) return;
+    this.index = Math.max(0, Math.min(target, this.segments.length - 1));
+    this.resumeCharIndex = 0;
+    this.lastCharIndex = 0;
+    if (this.paused) {
+      this.onSegmentChange?.(this.index); // immediate highlight update
+      return;
+    }
+    this.seeking = true;
+    this.reader.stop(); // cancel current utterance → loop re-evaluates at the new index
   }
 
   private async prepareSegment(segment: string, options: SpeakOptions): Promise<void> {

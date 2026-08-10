@@ -230,6 +230,105 @@ describe('SegmentSequencer', () => {
     await promise;
   });
 
+  describe('seek', () => {
+    it('jumps forward to a later segment and continues from there', async () => {
+      const reader = makeDelayedReader();
+      const seq = new SegmentSequencer(reader);
+      const changes: number[] = [];
+      seq.load(['a', 'b', 'c', 'd', 'e']);
+      seq.onSegmentChange = (i) => changes.push(i);
+
+      const promise = seq.play();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+
+      seq.seek(3); // jump to 'd' — reader.stop() resolves 'a'
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'd']));
+
+      reader.resolveSpeak(); // finish 'd'
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'd', 'e']));
+      reader.resolveSpeak(); // finish 'e'
+      await promise;
+
+      expect(reader.calls).toEqual(['a', 'd', 'e']); // skipped b, c
+      expect(changes).toContain(3);
+    });
+
+    it('jumps backward to an earlier segment', async () => {
+      const reader = makeDelayedReader();
+      const seq = new SegmentSequencer(reader);
+      seq.load(['a', 'b', 'c', 'd']);
+
+      const promise = seq.play();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+      reader.resolveSpeak();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'b']));
+      reader.resolveSpeak();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'b', 'c']));
+
+      seq.seek(0); // back to 'a' while speaking 'c'
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'b', 'c', 'a']));
+
+      seq.stop();
+      reader.resolveSpeak();
+      await promise;
+
+      expect(reader.calls).toEqual(['a', 'b', 'c', 'a']);
+    });
+
+    it('clamps the target to bounds', async () => {
+      const reader = makeDelayedReader();
+      const seq = new SegmentSequencer(reader);
+      seq.load(['a', 'b', 'c']);
+
+      const promise = seq.play();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+
+      seq.seek(99); // clamps to last
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'c']));
+
+      reader.resolveSpeak();
+      await promise;
+    });
+
+    it('is a no-op when idle', () => {
+      const reader = makeFakeReader();
+      const seq = new SegmentSequencer(reader);
+      seq.load(['a', 'b', 'c']);
+
+      seq.seek(2);
+
+      expect(reader.stop).not.toHaveBeenCalled();
+      expect(seq.getState().current).toBe(0);
+    });
+
+    it('while paused moves the highlight and stays paused', async () => {
+      const reader = makeDelayedReader();
+      const seq = new SegmentSequencer(reader);
+      const changes: number[] = [];
+      seq.load(['a', 'b', 'c', 'd']);
+      seq.onSegmentChange = (i) => changes.push(i);
+
+      const promise = seq.play();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+      seq.pause();
+      reader.resolveSpeak();
+      await Promise.resolve();
+      expect(seq.getState().playing).toBe(false);
+
+      changes.length = 0;
+      seq.seek(2); // paused → move highlight, stay paused
+      expect(changes).toEqual([2]);
+      expect(seq.getState().playing).toBe(false);
+
+      seq.resume(); // resumes from target
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'c']));
+      reader.resolveSpeak();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'c', 'd']));
+      reader.resolveSpeak();
+      await promise;
+    });
+  });
+
   it('empty segments does nothing', async () => {
     const reader = makeFakeReader();
     const seq = new SegmentSequencer(reader);

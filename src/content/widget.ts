@@ -1,6 +1,8 @@
 // Floating playback widget — injected into the page via Shadow DOM.
 // Style-isolated so page CSS can't break it.
 
+import type { JumpDirection } from '../domain/playback/jump';
+
 export type WidgetState = 'idle' | 'playing' | 'paused';
 
 export interface WidgetCallbacks {
@@ -9,6 +11,7 @@ export interface WidgetCallbacks {
   onResume(): void;
   onStop(): void;
   onClose(): void;
+  onJump?(direction: JumpDirection): void;
   onSettings?(): void;
   onToggleHighlight?(enabled: boolean): void;
   onSelect?(): void;
@@ -67,6 +70,14 @@ const STYLES = `
 
   .dita-btn-play { background: #6c5ce7; }
   .dita-btn-play:hover { background: #7d6ff0; }
+
+  .dita-btn-jump {
+    width: 32px; height: 32px;
+    font-size: 14px;
+    background: transparent;
+    color: #8b8ba7;
+  }
+  .dita-btn-jump:hover { background: #2a2a4a; color: #fff; }
 
   .dita-btn-close {
     width: 28px; height: 28px;
@@ -169,6 +180,18 @@ export class DitaWidget {
       }
     });
 
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'dita-btn dita-btn-jump';
+    prevBtn.textContent = '⏮';
+    prevBtn.setAttribute('aria-label', 'Previous paragraph');
+    prevBtn.addEventListener('click', () => callbacks.onJump?.('backward'));
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'dita-btn dita-btn-jump';
+    nextBtn.textContent = '⏭';
+    nextBtn.setAttribute('aria-label', 'Next paragraph');
+    nextBtn.addEventListener('click', () => callbacks.onJump?.('forward'));
+
     const stopBtn = document.createElement('button');
     stopBtn.className = 'dita-btn';
     stopBtn.textContent = '■';
@@ -222,7 +245,9 @@ export class DitaWidget {
 
     widget.append(
       label,
+      prevBtn,
       this.playBtn,
+      nextBtn,
       this.progressEl,
       this.rateInput,
       this.rateLabel,

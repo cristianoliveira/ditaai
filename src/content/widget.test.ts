@@ -106,6 +106,49 @@ describe('DitaWidget rate slider', () => {
   });
 });
 
+describe('DitaWidget jump buttons', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function jumpButtons(): { prev: HTMLButtonElement | null; next: HTMLButtonElement | null } {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    const btns = root?.querySelectorAll<HTMLButtonElement>('.dita-btn-jump') ?? [];
+    return { prev: btns[0] ?? null, next: btns[1] ?? null };
+  }
+
+  it('renders previous and next buttons with aria-labels', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+
+    const { prev, next } = jumpButtons();
+    expect(prev).not.toBeNull();
+    expect(next).not.toBeNull();
+    expect(prev?.getAttribute('aria-label')).toBe('Previous paragraph');
+    expect(next?.getAttribute('aria-label')).toBe('Next paragraph');
+  });
+
+  it('previous button fires onJump backward', () => {
+    const onJump = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onJump });
+    widget.mount();
+
+    jumpButtons().prev?.click();
+
+    expect(onJump).toHaveBeenCalledWith('backward');
+  });
+
+  it('next button fires onJump forward', () => {
+    const onJump = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onJump });
+    widget.mount();
+
+    jumpButtons().next?.click();
+
+    expect(onJump).toHaveBeenCalledWith('forward');
+  });
+});
+
 describe('DitaWidget Select button', () => {
   afterEach(() => {
     document.body.innerHTML = '';

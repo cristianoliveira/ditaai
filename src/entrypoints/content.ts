@@ -15,6 +15,7 @@ import { DitaWidget } from '../content/widget';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
 import { collapseWhitespace, splitText } from '../domain/document/text-processor';
+import { type JumpStrategy, createParagraphJumper } from '../domain/playback/jump';
 import { filterParagraphs } from '../domain/selection/selection';
 import { InstalledVoiceReader } from '../infra/audio/installed-voice-reader';
 import { SpeechSynthesisReader } from '../infra/audio/speech-synthesis-reader';
@@ -46,6 +47,18 @@ function buildChunks(doc: Document): Chunk[] {
     }
   }
   return chunks;
+}
+
+/** First chunk index of each paragraph — used as jump breakpoints. */
+function paragraphBreakpoints(chunks: Chunk[]): number[] {
+  if (chunks.length === 0) return [];
+  const breaks = [0];
+  for (let i = 1; i < chunks.length; i++) {
+    const prev = chunks[i - 1];
+    const curr = chunks[i];
+    if (prev && curr && curr.element !== prev.element) breaks.push(i);
+  }
+  return breaks;
 }
 
 const HIGHLIGHT_PREF = 'highlightWords';
@@ -90,6 +103,7 @@ export default defineContentScript({
     let chunks: Chunk[] = [];
     let activeElement: Element | null = null;
     let currentIndex = 0;
+    let paragraphJumper: JumpStrategy = createParagraphJumper([]);
     let highlightWordsEnabled = true;
     let playbackRate = 1;
     const selectorStore = new ChromeDomainSelectorStorage();
@@ -173,6 +187,7 @@ export default defineContentScript({
       );
 
       sequencer.load(texts);
+      paragraphJumper = createParagraphJumper(paragraphBreakpoints(chunks));
 
       sequencer.onSegmentChange = (index) => {
         currentIndex = index;
@@ -218,6 +233,10 @@ export default defineContentScript({
           onResume: () => {
             sequencer.resume();
             widget?.setState('playing');
+          },
+          onJump: (direction) => {
+            const target = paragraphJumper.jump(currentIndex, direction, chunks.length);
+            if (target !== currentIndex) sequencer.seek(target);
           },
           onStop: () => {
             sequencer.stop();
