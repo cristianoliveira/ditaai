@@ -14,6 +14,10 @@ import {
 import { extractParagraphs } from '../content/paragraph-extractor';
 import { ParagraphStartAffordance } from '../content/paragraph-start-affordance';
 import { Picker } from '../content/picker/picker';
+import {
+  PronunciationManager,
+  type PronunciationManagerEntry,
+} from '../content/pronunciation-manager';
 import { PronunciationPopover } from '../content/pronunciation-popover';
 import { ShortcutController } from '../content/shortcuts';
 import { DitaWidget } from '../content/widget';
@@ -129,6 +133,17 @@ async function savePlaybackVolume(volume: number): Promise<void> {
   await chrome.storage.local.set({ [VOLUME_PREF]: clampVolume(volume) });
 }
 
+const PRONUNCIATIONS_ENABLED_PREF = 'pronunciationsEnabled';
+
+async function loadPronunciationsEnabled(): Promise<boolean> {
+  const stored = await chrome.storage.local.get(PRONUNCIATIONS_ENABLED_PREF);
+  return stored[PRONUNCIATIONS_ENABLED_PREF] !== false; // default on
+}
+
+async function savePronunciationsEnabled(enabled: boolean): Promise<void> {
+  await chrome.storage.local.set({ [PRONUNCIATIONS_ENABLED_PREF]: enabled });
+}
+
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
@@ -149,6 +164,7 @@ export default defineContentScript({
     let playbackRate = 1;
     let playbackVolume = 1;
     let substitutions: Substitutions = {};
+    let pronunciationsEnabled = true;
     const selectorStore = new ChromeDomainSelectorStorage();
     const substitutionStore = new ChromeSubstitutionStorage();
     const hostname = window.location.hostname;
@@ -178,6 +194,9 @@ export default defineContentScript({
     void substitutionStore.load().then((dict) => {
       substitutions = dict;
     });
+    void loadPronunciationsEnabled().then((value) => {
+      pronunciationsEnabled = value;
+    });
 
     // Keep the in-memory dict fresh when storage changes (this tab or another),
     // so a substitution saved from the popover applies immediately.
@@ -185,6 +204,11 @@ export default defineContentScript({
       if (area !== 'local') return;
       if (changes[SUBSTITUTIONS_KEY]) {
         substitutions = sanitizeSubstitutions(changes[SUBSTITUTIONS_KEY].newValue);
+        refreshOpenManager();
+      }
+      if (changes[PRONUNCIATIONS_ENABLED_PREF]) {
+        pronunciationsEnabled = changes[PRONUNCIATIONS_ENABLED_PREF].newValue !== false;
+        refreshOpenManager();
       }
     });
 
@@ -211,7 +235,7 @@ export default defineContentScript({
     }
 
     function buildChunksFiltered(doc: Document): Chunk[] {
-      const allChunks = buildChunks(doc, substitutions);
+      const allChunks = buildChunks(doc, pronunciationsEnabled ? substitutions : {});
       if (!activeSelector) return allChunks;
 
       // First try: filter paragraphs that match the selector.
@@ -234,7 +258,11 @@ export default defineContentScript({
           for (const text of splitText(cleaned)) {
             const found = cleaned.indexOf(text, searchFrom);
             const base = found === -1 ? searchFrom : found;
-            chunks.push({ text: applySubstitutions(text, substitutions), element: el, base });
+            chunks.push({
+              text: applySubstitutions(text, pronunciationsEnabled ? substitutions : {}),
+              element: el,
+              base,
+            });
             searchFrom = base + text.length;
           }
         }
@@ -411,6 +439,9 @@ export default defineContentScript({
               args: [],
             });
           },
+          onDictionary: () => {
+            showPronunciationManager();
+          },
           onSelect: async () => {
             if (!widget) return;
             unmountWidget();
@@ -507,6 +538,51 @@ export default defineContentScript({
         },
       });
       pronunciationPopover.mount();
+    }
+
+    let pronunciationManager: PronunciationManager | null = null;
+
+    function managerEntries(): PronunciationManagerEntry[] {
+      return Object.entries(substitutions).map(([word, spoken]) => ({ word, spoken }));
+    }
+
+    function refreshOpenManager(): void {
+      if (pronunciationManager?.isMounted()) {
+        pronunciationManager.update(managerEntries(), pronunciationsEnabled);
+      }
+    }
+
+    function showPronunciationManager(): void {
+      pronunciationManager?.unmount();
+      pronunciationManager = new PronunciationManager({
+        entries: managerEntries(),
+        enabled: pronunciationsEnabled,
+        onAdd: (word, spoken) => {
+          substitutions = { ...substitutions, [word]: spoken };
+          void substitutionStore.save(substitutions);
+          refreshOpenManager();
+        },
+        onDelete: (word) => {
+          const next = { ...substitutions };
+          delete next[word];
+          substitutions = next;
+          void substitutionStore.save(substitutions);
+          refreshOpenManager();
+        },
+        onPreview: (spoken) => {
+          void reader.speak(spoken, { volume: playbackVolume });
+        },
+        onToggleEnabled: (enabled) => {
+          pronunciationsEnabled = enabled;
+          void savePronunciationsEnabled(enabled);
+          refreshOpenManager();
+        },
+        onClose: () => {
+          pronunciationManager?.unmount();
+          pronunciationManager = null;
+        },
+      });
+      pronunciationManager.mount();
     }
 
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

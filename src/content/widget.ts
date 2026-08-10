@@ -16,6 +16,7 @@ export interface WidgetCallbacks {
   onSettings?(): void;
   onToggleHighlight?(enabled: boolean): void;
   onSelect?(): void;
+  onDictionary?(): void;
   onChangeRate?(rate: number): void;
   onChangeVolume?(volume: number): void;
 }
@@ -97,6 +98,14 @@ const STYLES = `
     color: #8b8ba7;
   }
   .dita-btn-select:hover { background: #2a2a4a; color: #fff; }
+
+  .dita-btn-dict {
+    width: 28px; height: 28px;
+    background: transparent;
+    font-size: 13px;
+    color: #8b8ba7;
+  }
+  .dita-btn-dict:hover { background: #2a2a4a; color: #fff; }
 
   .dita-btn-settings {
     width: 28px; height: 28px;
@@ -233,6 +242,12 @@ export class DitaWidget {
     selectBtn.setAttribute('aria-label', 'Select what to read');
     selectBtn.addEventListener('click', () => callbacks.onSelect?.());
 
+    const dictBtn = document.createElement('button');
+    dictBtn.className = 'dita-btn dita-btn-dict';
+    dictBtn.textContent = '📖';
+    dictBtn.setAttribute('aria-label', 'Manage pronunciations');
+    dictBtn.addEventListener('click', () => callbacks.onDictionary?.());
+
     const closeBtn = document.createElement('button');
     closeBtn.className = 'dita-btn dita-btn-close';
     closeBtn.textContent = '✕';
@@ -305,6 +320,7 @@ export class DitaWidget {
       this.volumeLabel,
       stopBtn,
       selectBtn,
+      dictBtn,
       this.highlightBtn,
       settingsBtn,
       closeBtn,

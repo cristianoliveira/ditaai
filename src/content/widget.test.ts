@@ -320,3 +320,32 @@ describe('DitaWidget Select button', () => {
     expect(onSelect).toHaveBeenCalled();
   });
 });
+
+describe('DitaWidget Dictionary button', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function dictButton(): HTMLButtonElement | null {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    return root?.querySelector<HTMLButtonElement>('.dita-btn-dict') ?? null;
+  }
+
+  it('renders a Dictionary button with an aria-label', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+
+    const btn = dictButton();
+    expect(btn).not.toBeNull();
+    expect(btn?.getAttribute('aria-label')).toBe('Manage pronunciations');
+  });
+
+  it('fires onDictionary callback when clicked', () => {
+    const onDictionary = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onDictionary });
+    widget.mount();
+
+    dictButton()?.click();
+    expect(onDictionary).toHaveBeenCalled();
+  });
+});
