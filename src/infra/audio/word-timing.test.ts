@@ -38,9 +38,10 @@ describe('computeWordTimings', () => {
 
   it('produces monotonically non-decreasing start fractions', () => {
     const words = computeWordTimings('one two three four five.', 0);
-    for (let i = 1; i < words.length; i++) {
-      expect(at(words, i).startFraction).toBeGreaterThanOrEqual(at(words, i - 1).startFraction);
-    }
+    const decreasing = words
+      .slice(1)
+      .filter((w, i) => w.startFraction < at(words, i).startFraction);
+    expect(decreasing).toEqual([]);
   });
 
   it('reduces to flat proportional timing when there is no punctuation', () => {

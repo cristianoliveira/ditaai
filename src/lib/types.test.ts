@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { expectErr, expectOk } from './result-assert';
 import { err, ok } from './types';
 
 describe('Result', () => {
   it('wraps an ok value', () => {
-    const r = ok(42);
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value).toBe(42);
+    expect(expectOk(ok(42))).toBe(42);
   });
 
   it('wraps an error', () => {
-    const r = err(new Error('boom'));
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.message).toBe('boom');
+    expect(expectErr(err(new Error('boom'))).message).toBe('boom');
   });
 });

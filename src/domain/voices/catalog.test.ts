@@ -21,18 +21,17 @@ describe('catalog', () => {
       expect(females).toHaveLength(5);
     });
 
-    it('each voice has a huggingface source pointing to voice_styles/', () => {
-      for (const v of SUPERTONIC_VOICES) {
+    it.each(SUPERTONIC_VOICES)(
+      'voice $id has a huggingface source pointing to voice_styles/',
+      (v) => {
         expect(v.source.type).toBe('huggingface');
         expect(v.source.repo).toBe('Supertone/supertonic-3');
         expect(v.source.path).toMatch(/^voice_styles\/[MF]\d\.json$/);
-      }
-    });
+      },
+    );
 
-    it('each voice id matches its filename', () => {
-      for (const v of SUPERTONIC_VOICES) {
-        expect(v.source.path).toBe(`voice_styles/${v.id}.json`);
-      }
+    it.each(SUPERTONIC_VOICES)('voice $id matches its filename', (v) => {
+      expect(v.source.path).toBe(`voice_styles/${v.id}.json`);
     });
   });
 
@@ -55,10 +54,8 @@ describe('catalog', () => {
       expect(names).toContain('unicode_indexer.json');
     });
 
-    it('all assets point to onnx/ directory', () => {
-      for (const a of SUPERTONIC_ENGINE_ASSETS.assets) {
-        expect(a.source.path).toMatch(/^onnx\//);
-      }
+    it.each(SUPERTONIC_ENGINE_ASSETS.assets)('asset $name points to onnx/', (a) => {
+      expect(a.source.path).toMatch(/^onnx\//);
     });
   });
 
@@ -79,8 +76,8 @@ describe('catalog', () => {
   describe('findVoice', () => {
     it('finds M1 by id and engine', () => {
       const v = findVoice('M1', 'supertonic');
-      expect(v).toBeDefined();
-      expect(v?.gender).toBe('male');
+      if (!v) throw new Error('M1 not found');
+      expect(v.gender).toBe('male');
     });
 
     it('returns undefined for unknown id', () => {

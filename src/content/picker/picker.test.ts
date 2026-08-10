@@ -79,8 +79,7 @@ describe('Picker', () => {
     confirmBtn.click();
 
     const result = await promise;
-    expect(result).toBeTruthy();
-    expect(typeof result).toBe('string');
+    expect(result).toBeTypeOf('string');
     expect(result?.length).toBeGreaterThan(0);
   });
 

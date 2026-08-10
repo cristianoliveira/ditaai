@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { expectErr, expectOk } from '../../lib/result-assert';
 import { PiperClient } from './client';
 
 describe('PiperClient', () => {
@@ -19,10 +20,7 @@ describe('PiperClient', () => {
     const client = new PiperClient({ baseUrl: 'http://127.0.0.1:17493' });
     const result = await client.synthesize('hello');
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBe(audioData);
-    }
+    expect(expectOk(result)).toBe(audioData);
   });
 
   it('returns error on HTTP failure', async () => {
@@ -38,10 +36,7 @@ describe('PiperClient', () => {
     const client = new PiperClient({ baseUrl: 'http://127.0.0.1:17493' });
     const result = await client.synthesize('');
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.message).toContain('400');
-    }
+    expect(expectErr(result).message).toContain('400');
   });
 
   it('returns error on network failure', async () => {
@@ -50,9 +45,6 @@ describe('PiperClient', () => {
     const client = new PiperClient({ baseUrl: 'http://127.0.0.1:17493' });
     const result = await client.synthesize('hello');
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.message).toContain('Connection refused');
-    }
+    expect(expectErr(result).message).toContain('Connection refused');
   });
 });

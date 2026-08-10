@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Result } from '../../lib/types';
+import { expectErr } from '../../lib/result-assert';
 import { type TtsProvider, synthesizeWith } from './synthesis';
 
 describe('synthesizeWith', () => {
@@ -18,10 +18,7 @@ describe('synthesizeWith', () => {
   it('returns error for unknown voice', async () => {
     const providers = new Map<string, TtsProvider>();
     const result = await synthesizeWith(providers, { text: 'hello', voiceUri: 'unknown' });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.message).toContain('No provider for voice');
-    }
+    expect(expectErr(result).message).toContain('No provider for voice');
   });
 
   it('passes rate to provider', async () => {

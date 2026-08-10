@@ -48,10 +48,8 @@ describe('buildCandidates', () => {
     const candidates = buildCandidates(p);
 
     const pathCandidates = candidates.filter((c) => c.includes('>'));
-    for (const c of pathCandidates) {
-      const depth = c.split('>').length;
-      expect(depth).toBeLessThanOrEqual(4); // element + up to 3 ancestors
-    }
+    const maxDepth = Math.max(...pathCandidates.map((c) => c.split('>').length));
+    expect(maxDepth).toBeLessThanOrEqual(4); // element + up to 3 ancestors
   });
 
   it('includes tag.class even when multiple elements share the class', () => {
@@ -124,22 +122,8 @@ describe('buildCandidates', () => {
     if (!p) throw new Error('p not found');
     const candidates = buildCandidates(p);
 
-    for (const candidate of candidates) {
-      expect(p.matches(candidate), `"${candidate}" should match target`).toBe(true);
-    }
-  });
-
-  it('each candidate matches the target element', () => {
-    document.body.innerHTML = `
-      <article><div class="box"><p class="text">target</p></div>
-      <p class="text">not target</p></article>`;
-    const p = document.querySelector('.box p');
-    if (!p) throw new Error('p not found');
-    const candidates = buildCandidates(p);
-
-    for (const candidate of candidates) {
-      expect(p.matches(candidate), `"${candidate}" should match target`).toBe(true);
-    }
+    const nonMatching = candidates.filter((candidate) => !p.matches(candidate));
+    expect(nonMatching).toEqual([]);
   });
 });
 
