@@ -56,11 +56,6 @@ just observe-errors  # show current warnings and errors
 just observe-stop    # stop only the observability browser
 ```
 
-Live events are written as JSONL to
-`.tmp/observability/current/events.jsonl`. Previous sessions are archived under
-`.tmp/observability/sessions/`; browser storage and installed voices persist in
-`.tmp/observability/profile/`.
-
 Captured events include page/service-worker console output, uncaught browser
 errors, failed requests, HTTP error responses, navigation, pages, and workers.
 Set `DITA_OBSERVE_URL` to open a specific page at startup. Run from `nix develop`
@@ -75,8 +70,5 @@ src/
   lib/           # zero-dependency shared code
   entrypoints/   # WXT entry points (background, content, popup)
 e2e/             # Playwright E2E with deterministic fake TTS
-docs/            # IDEA.md, ARCHITECTURE.md, E2E-ARCHITECTURE.md
+docs/            # More context
 ```
-
-See [docs/IDEA.md](docs/IDEA.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
-and [docs/E2E-ARCHITECTURE.md](docs/E2E-ARCHITECTURE.md).

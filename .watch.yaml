@@ -14,3 +14,14 @@
     - '**/*.js'
     - '**/*.config.ts'
   run_on_init: true
+
+- name: smoke test
+  run:
+    - sleep 30
+    - just observe-stop
+    - just observe-start
+  change: '**/*.ts'
+  ignore:
+    - '**/*.js'
+    - '**/*.config.ts'
+  run_on_init: true
