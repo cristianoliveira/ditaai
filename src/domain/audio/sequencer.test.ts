@@ -584,4 +584,63 @@ describe('SegmentSequencer', () => {
     reader.resolveSpeak(); // release 'x' → loop B exits
     await second;
   });
+
+  describe('onIdle', () => {
+    it('fires once when playback completes naturally', async () => {
+      const reader = makeFakeReader();
+      const seq = new SegmentSequencer(reader);
+      const idle: string[] = [];
+      seq.onIdle = () => idle.push('idle');
+
+      seq.load(['a', 'b']);
+      await seq.play();
+
+      expect(idle).toEqual(['idle']);
+    });
+
+    it('does not fire on pause, only when the loop truly ends', async () => {
+      const reader = makeDelayedReader();
+      const seq = new SegmentSequencer(reader);
+      const idle: string[] = [];
+      seq.onIdle = () => idle.push('idle');
+
+      seq.load(['a', 'b']);
+      const promise = seq.play();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+
+      seq.pause();
+      reader.resolveSpeak();
+      await Promise.resolve();
+
+      expect(seq.getState().paused).toBe(true);
+      expect(idle).toEqual([]); // paused is not idle
+
+      seq.stop(); // ends the loop → onIdle fires
+      await promise;
+      expect(idle).toEqual(['idle']);
+    });
+
+    it('is silent for a superseded loop and fires once for the new one', async () => {
+      const reader = makeDelayedReader();
+      const seq = new SegmentSequencer(reader);
+      const idle: string[] = [];
+      seq.onIdle = () => idle.push('idle');
+
+      seq.load(['a']);
+      void seq.play(); // loop A — speak('a') hangs
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+
+      // Re-enter like playAction does (load → play) while A is alive.
+      seq.load(['x']);
+      const second = seq.play();
+      // Guard stops A (reader.stop resolves 'a'); B starts and speaks 'x'.
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'x']));
+
+      reader.resolveSpeak(); // release 'x' → B completes
+      await second;
+
+      // A was superseded (silent); only B's completion fired onIdle.
+      expect(idle).toEqual(['idle']);
+    });
+  });
 });

@@ -154,6 +154,17 @@ export default defineContentScript({
       ? new FakeBoundaryReader()
       : new InstalledVoiceReader(new RuntimeInstalledVoiceReader(), new SpeechSynthesisReader());
     const sequencer = new SegmentSequencer(reader);
+    // The sequencer owns the "truly idle" signal: it fires exactly once per
+    // playback session, only when the active loop ends without being superseded
+    // (natural completion or stop) — never for pause, and never for a loop
+    // displaced by a newer play(). Driving idle from here (instead of each
+    // play()'s .then()) avoids a restart mid-session flipping the widget to
+    // idle while the new loop is already playing.
+    sequencer.onIdle = () => {
+      clearAllHighlights();
+      setStartMarker(null);
+      widget?.setState('idle');
+    };
 
     let widget: DitaWidget | null = null;
     let chunks: Chunk[] = [];
@@ -322,27 +333,21 @@ export default defineContentScript({
       };
 
       widget?.setState('playing');
-      void sequencer
-        .play({
-          rate: playbackRate,
-          volume: playbackVolume,
-          onBoundary: (event) => {
-            const chunk = chunks[currentIndex];
-            console.info(
-              `[dita] boundary ${JSON.stringify(
-                describeBoundary(chunk?.text ?? '', currentIndex, event),
-              )}`,
-            );
-            if (highlightWordsEnabled && activeElement && chunk) {
-              highlightWord(activeElement, event.charIndex + chunk.base, event.charLength);
-            }
-          },
-        })
-        .then(() => {
-          clearAllHighlights();
-          setStartMarker(null);
-          widget?.setState('idle');
-        });
+      void sequencer.play({
+        rate: playbackRate,
+        volume: playbackVolume,
+        onBoundary: (event) => {
+          const chunk = chunks[currentIndex];
+          console.info(
+            `[dita] boundary ${JSON.stringify(
+              describeBoundary(chunk?.text ?? '', currentIndex, event),
+            )}`,
+          );
+          if (highlightWordsEnabled && activeElement && chunk) {
+            highlightWord(activeElement, event.charIndex + chunk.base, event.charLength);
+          }
+        },
+      });
     }
 
     /** Begin (or restart) reading from a specific paragraph element. */

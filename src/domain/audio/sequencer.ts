@@ -32,6 +32,12 @@ export class SegmentSequencer {
 
   /** Called when the active segment changes. */
   onSegmentChange?: (index: number) => void;
+  /** Called when the active play loop ends without being superseded — natural
+   * completion or an explicit stop(). Not fired for pause, and not fired for a
+   * loop displaced by a newer play(): the newer loop owns the idle transition.
+   * Lets the UI go idle exactly once per playback session even when play() is
+   * re-entered (e.g. starting a new segment mid-session). */
+  onIdle?: () => void;
 
   constructor(private reader: TextReader) {}
 
@@ -66,17 +72,25 @@ export class SegmentSequencer {
     // segment, racing the installed voice ("Session already started"). Tear
     // the prior loop down and await its exit before starting a new one.
     while (this.currentPlay) {
+      const previous = this.currentPlay;
+      // Supersede: the prior loop is no longer active, so its own completion
+      // must not signal idle — the newer loop owns that transition.
+      this.currentPlay = null;
       this.stopped = true;
       this.reader.stop();
       this.resolveResume?.();
       this.resolveResume = null;
-      await this.currentPlay.catch(() => {});
+      await previous.catch(() => {});
     }
 
     const done = this.runLoop(options);
     this.currentPlay = done;
     try {
       await done;
+      // Natural end (or stop): this loop is still the active one, so it owns
+      // the idle transition. A superseded loop has currentPlay !== done and
+      // stays silent, leaving the newer loop in charge.
+      if (this.currentPlay === done) this.onIdle?.();
     } finally {
       if (this.currentPlay === done) this.currentPlay = null;
     }
