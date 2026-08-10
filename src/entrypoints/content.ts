@@ -154,16 +154,18 @@ export default defineContentScript({
       ? new FakeBoundaryReader()
       : new InstalledVoiceReader(new RuntimeInstalledVoiceReader(), new SpeechSynthesisReader());
     const sequencer = new SegmentSequencer(reader);
-    // The sequencer owns the "truly idle" signal: it fires exactly once per
-    // playback session, only when the active loop ends without being superseded
-    // (natural completion or stop) — never for pause, and never for a loop
-    // displaced by a newer play(). Driving idle from here (instead of each
-    // play()'s .then()) avoids a restart mid-session flipping the widget to
-    // idle while the new loop is already playing.
-    sequencer.onIdle = () => {
-      clearAllHighlights();
-      setStartMarker(null);
-      widget?.setState('idle');
+    // Single source of truth for widget state. The sequencer emits every
+    // observable transition here; this is the ONLY place that reflects playback
+    // state into the widget. Driving the widget from anywhere else (a per-play
+    // .then(), each control handler, …) is what let a superseded loop flip it
+    // back to idle mid-session. Idle also owns DOM teardown (highlights + start
+    // marker) so it runs exactly once per session.
+    sequencer.onStateChange = (state) => {
+      widget?.reflect(state);
+      if (!state.playing && !state.paused) {
+        clearAllHighlights();
+        setStartMarker(null);
+      }
     };
 
     let widget: DitaWidget | null = null;
@@ -318,10 +320,6 @@ export default defineContentScript({
         clearAllHighlights();
         activeElement = chunks[index]?.element ?? null;
         if (activeElement) highlightParagraph(activeElement);
-        // Keep the widget's "current/total" counter in sync on every segment,
-        // including the first one when playback starts from an already-mounted
-        // widget (mountWidget only sets it once, at mount time).
-        widget?.setProgress(index + 1, texts.length);
         console.info(
           `[dita] segment ${JSON.stringify({
             index,
@@ -332,7 +330,6 @@ export default defineContentScript({
         );
       };
 
-      widget?.setState('playing');
       void sequencer.play({
         rate: playbackRate,
         volume: playbackVolume,
@@ -369,19 +366,14 @@ export default defineContentScript({
 
     function pausePlayback(): void {
       sequencer.pause();
-      widget?.setState('paused');
     }
 
     function resumePlayback(): void {
       sequencer.resume();
-      widget?.setState('playing');
     }
 
     function stopPlayback(): void {
       sequencer.stop();
-      clearAllHighlights();
-      setStartMarker(null);
-      widget?.setState('idle');
     }
 
     function jumpPlayback(direction: JumpDirection): void {
@@ -490,12 +482,8 @@ export default defineContentScript({
       widget = buildWidget();
       widget.mount();
       // Playback may already be running (started via keyboard shortcut) — the
-      // fresh widget must reflect it instead of showing an idle state.
-      const state = sequencer.getState();
-      if (state.playing || state.paused) {
-        widget.setState(state.playing ? 'playing' : 'paused');
-        widget.setProgress(state.current + 1, state.total);
-      }
+      // fresh widget must reflect current sequencer state instead of idle.
+      widget.reflect(sequencer.getState());
       refreshReadable();
       startAffordance.enable();
     }

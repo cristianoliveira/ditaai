@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SegmentSequencer } from './sequencer';
+import { SegmentSequencer, type SequencerState } from './sequencer';
 import type { SpeakOptions, TextReader } from './text-reader';
 
 function makeFakeReader(): TextReader & { calls: string[] } {
@@ -585,24 +585,27 @@ describe('SegmentSequencer', () => {
     await second;
   });
 
-  describe('onIdle', () => {
-    it('fires once when playback completes naturally', async () => {
+  describe('onStateChange', () => {
+    const label = (s: SequencerState) =>
+      `${s.playing ? 'playing' : s.paused ? 'paused' : 'idle'}:${s.current}/${s.total}`;
+
+    it('emits playing per segment then idle on natural completion', async () => {
       const reader = makeFakeReader();
       const seq = new SegmentSequencer(reader);
-      const idle: string[] = [];
-      seq.onIdle = () => idle.push('idle');
+      const events: string[] = [];
+      seq.onStateChange = (s) => events.push(label(s));
 
       seq.load(['a', 'b']);
       await seq.play();
 
-      expect(idle).toEqual(['idle']);
+      expect(events).toEqual(['playing:0/2', 'playing:1/2', 'idle:2/2']);
     });
 
-    it('does not fire on pause, only when the loop truly ends', async () => {
+    it('emits paused on pause and playing on resume', async () => {
       const reader = makeDelayedReader();
       const seq = new SegmentSequencer(reader);
-      const idle: string[] = [];
-      seq.onIdle = () => idle.push('idle');
+      const events: string[] = [];
+      seq.onStateChange = (s) => events.push(label(s));
 
       seq.load(['a', 'b']);
       const promise = seq.play();
@@ -611,36 +614,60 @@ describe('SegmentSequencer', () => {
       seq.pause();
       reader.resolveSpeak();
       await Promise.resolve();
-
       expect(seq.getState().paused).toBe(true);
-      expect(idle).toEqual([]); // paused is not idle
 
-      seq.stop(); // ends the loop → onIdle fires
+      seq.resume();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'a']));
+      reader.resolveSpeak();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'a', 'b']));
+      reader.resolveSpeak();
       await promise;
-      expect(idle).toEqual(['idle']);
+
+      // Only the transitions that matter; segment repeats after resume are
+      // expected and not asserted here.
+      expect(events).toContain('paused:0/2');
+      expect(events.filter((e) => e.startsWith('playing')).length).toBeGreaterThanOrEqual(1);
+      expect(events[events.length - 1]).toBe('idle:2/2');
     });
 
-    it('is silent for a superseded loop and fires once for the new one', async () => {
+    it('emits idle on stop', async () => {
       const reader = makeDelayedReader();
       const seq = new SegmentSequencer(reader);
-      const idle: string[] = [];
-      seq.onIdle = () => idle.push('idle');
+      const events: string[] = [];
+      seq.onStateChange = (s) => events.push(label(s));
+
+      seq.load(['a', 'b', 'c']);
+      const promise = seq.play();
+      await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+
+      seq.stop();
+      reader.resolveSpeak();
+      await promise;
+
+      expect(events[events.length - 1]).toBe('idle:0/3');
+    });
+
+    it('stays silent for a superseded loop; the new loop owns idle', async () => {
+      // The exact race that used to clobber the widget: loop A is displaced by
+      // a re-entered play(). A must not emit idle; only B's end may.
+      const reader = makeDelayedReader();
+      const seq = new SegmentSequencer(reader);
+      const events: string[] = [];
+      seq.onStateChange = (s) => events.push(label(s));
 
       seq.load(['a']);
       void seq.play(); // loop A — speak('a') hangs
       await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+      events.length = 0;
 
-      // Re-enter like playAction does (load → play) while A is alive.
       seq.load(['x']);
-      const second = seq.play();
-      // Guard stops A (reader.stop resolves 'a'); B starts and speaks 'x'.
+      const second = seq.play(); // supersedes A
       await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'x']));
-
       reader.resolveSpeak(); // release 'x' → B completes
       await second;
 
-      // A was superseded (silent); only B's completion fired onIdle.
-      expect(idle).toEqual(['idle']);
+      // Exactly one idle (B's completion), emitted last.
+      expect(events.filter((e) => e.startsWith('idle'))).toEqual(['idle:1/1']);
     });
   });
 });

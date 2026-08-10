@@ -32,12 +32,13 @@ export class SegmentSequencer {
 
   /** Called when the active segment changes. */
   onSegmentChange?: (index: number) => void;
-  /** Called when the active play loop ends without being superseded — natural
-   * completion or an explicit stop(). Not fired for pause, and not fired for a
-   * loop displaced by a newer play(): the newer loop owns the idle transition.
-   * Lets the UI go idle exactly once per playback session even when play() is
-   * re-entered (e.g. starting a new segment mid-session). */
-  onIdle?: () => void;
+  /** Called whenever the observable playback state changes — start, segment
+   * advance, pause, resume, stop, natural completion. The single source of
+   * truth for UI reflection: wire a view to this (via getState()) instead of
+   * imperatively setting state from each call site. A loop displaced by a
+   * newer play() is silent on completion (it no longer "owns" the state), so
+   * idle fires exactly once per session even under re-entry. */
+  onStateChange?: (state: SequencerState) => void;
 
   constructor(private reader: TextReader) {}
 
@@ -90,10 +91,14 @@ export class SegmentSequencer {
       // Natural end (or stop): this loop is still the active one, so it owns
       // the idle transition. A superseded loop has currentPlay !== done and
       // stays silent, leaving the newer loop in charge.
-      if (this.currentPlay === done) this.onIdle?.();
+      if (this.currentPlay === done) this.emitState();
     } finally {
       if (this.currentPlay === done) this.currentPlay = null;
     }
+  }
+
+  private emitState(): void {
+    this.onStateChange?.(this.getState());
   }
 
   private async runLoop(options?: SpeakOptions): Promise<void> {
@@ -109,6 +114,7 @@ export class SegmentSequencer {
       if (!segment) break;
 
       this.onSegmentChange?.(this.index);
+      this.emitState();
 
       // Wrap onBoundary to track word position for precise resume
       const speakOptions: SpeakOptions = {
@@ -183,6 +189,7 @@ export class SegmentSequencer {
     this.paused = true;
     this.playing = false;
     this.reader.stop(); // cancel current utterance → speak promise resolves
+    this.emitState();
   }
 
   resume(): void {
@@ -191,6 +198,7 @@ export class SegmentSequencer {
     this.playing = true;
     this.resolveResume?.();
     this.resolveResume = null;
+    this.emitState();
   }
 
   stop(): void {
@@ -248,6 +256,7 @@ export class SegmentSequencer {
     this.lastCharIndex = 0;
     if (this.paused) {
       this.onSegmentChange?.(this.index); // immediate highlight update
+      this.emitState();
       return;
     }
     this.seeking = true;

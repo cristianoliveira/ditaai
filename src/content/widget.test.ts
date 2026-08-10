@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { SequencerState } from '../domain/audio/sequencer';
 import { DitaWidget } from './widget';
 
 const noopCallbacks = {
@@ -203,6 +204,66 @@ describe('DitaWidget jump buttons', () => {
     jumpButtons().next?.click();
 
     expect(onJump).toHaveBeenCalledWith('forward');
+  });
+});
+
+describe('DitaWidget.reflect (sequencer → widget mapping)', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function playButton(): HTMLButtonElement | null {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    return root?.querySelector<HTMLButtonElement>('.dita-btn-play') ?? null;
+  }
+
+  function progress(): HTMLElement | null {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    return root?.querySelector<HTMLElement>('.dita-progress') ?? null;
+  }
+
+  const idle = (over: Partial<SequencerState> = {}): SequencerState => ({
+    current: 0,
+    total: 10,
+    playing: false,
+    paused: false,
+    ...over,
+  });
+
+  it('idle → play icon, "Play page audio", no progress counter', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    widget.reflect(idle());
+    expect(playButton()?.getAttribute('aria-label')).toBe('Play page audio');
+    expect(playButton()?.querySelector('svg[data-icon="play"]')).not.toBeNull();
+    expect(progress()?.textContent).toBe('');
+  });
+
+  it('playing → pause icon, "Pause page audio", counter shows current+1/total', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    widget.reflect(idle({ current: 2, total: 10, playing: true }));
+    expect(playButton()?.getAttribute('aria-label')).toBe('Pause page audio');
+    expect(playButton()?.querySelector('svg[data-icon="pause"]')).not.toBeNull();
+    expect(progress()?.textContent).toBe('3/10');
+  });
+
+  it('paused → play icon, "Resume page audio", counter retained', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    widget.reflect(idle({ current: 2, total: 10, playing: true }));
+    widget.reflect(idle({ current: 2, total: 10, paused: true }));
+    expect(playButton()?.getAttribute('aria-label')).toBe('Resume page audio');
+    expect(playButton()?.querySelector('svg[data-icon="play"]')).not.toBeNull();
+    expect(progress()?.textContent).toBe('3/10');
+  });
+
+  it('returning to idle clears the counter', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    widget.reflect(idle({ current: 5, total: 10, playing: true }));
+    widget.reflect(idle());
+    expect(progress()?.textContent).toBe('');
   });
 });
 

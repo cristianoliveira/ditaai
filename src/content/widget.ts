@@ -1,6 +1,7 @@
 // Floating playback widget — injected into the page via Shadow DOM.
 // Style-isolated so page CSS can't break it.
 
+import type { SequencerState } from '../domain/audio/sequencer';
 import type { JumpDirection } from '../domain/playback/jump';
 import { theme } from './theme';
 
@@ -355,6 +356,23 @@ export class DitaWidget {
       this.playBtn.innerHTML = PLAY_ICON;
       this.playBtn.setAttribute('aria-label', 'Play page audio');
       this.progressEl.textContent = '';
+    }
+  }
+
+  /** Single source of truth for playback reflection. Maps a sequencer state
+   * snapshot to the widget's icon, aria-label and progress counter. This is
+   * the ONLY method that should react to sequencer state — driving the widget
+   * from anywhere else risks the two drifting (e.g. a stale completion
+   * clobbering a live session back to idle). */
+  reflect(state: SequencerState): void {
+    if (state.playing) {
+      this.setState('playing');
+      this.setProgress(state.current + 1, state.total);
+    } else if (state.paused) {
+      this.setState('paused');
+      this.setProgress(state.current + 1, state.total);
+    } else {
+      this.setState('idle');
     }
   }
 
