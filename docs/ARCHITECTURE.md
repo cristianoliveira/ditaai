@@ -1,6 +1,8 @@
-# Architecture — Dita
+# Architecture — DitaAi
 
-Chrome extension (MV3) that reads pages aloud with local TTS voices.
+Chrome extension (MV3) that turns readable web-page content into a small,
+audiobook-like listening experience with local narration. Product promises and
+boundaries live in [PRODUCT.md](PRODUCT.md).
 
 ## Principles
 
@@ -23,7 +25,7 @@ Chrome extension (MV3) that reads pages aloud with local TTS voices.
 │  messaging/  │  voices/              │  ← cache download/install
 │  document/   │                       │
 │  selection/  │                       │
-│  tts/ voices/│                       │
+│  voices/     │                       │
 ├──────────────┴───────────────────────┤
 │  lib/                                │
 │  types.ts  events.ts                 │  ← Zero-dependency shared code
@@ -60,11 +62,13 @@ which fails if any `domain/` file imports from `infra/` or `content/`.
 - **Tab lifecycle guards installed-voice playback.** The offscreen document
   outlives its tab, so closing/refreshing the speaking tab must stop audio via
   the background (see `tab-lifecycle-watcher.ts` + `domain/playback/speaking-tab.ts`).
-- **`TtsProvider` is a domain port for future backends.** `domain/tts/` is the
-  foundation for cloud/HTTP providers. The active local path implements the
-  `TextReader` port instead.
-- **`VoiceRegistry` is pure domain.** It knows about voices but not about audio
-  rendering. Providers are mapped by key at composition time.
+- **Page extraction is semantic-first.** Content extraction prefers headings,
+  paragraphs, articles, lists, and quotations. If a page has none, it falls
+  back to leaf application containers. User-selected scope resolves ambiguous
+  layouts.
+- **Only active narration paths remain.** The domain exposes `TextReader`; local
+  Supertonic and browser speech implement it. Unwired provider experiments are
+  removed instead of maintained as competing product paths.
 - **Chrome messaging adapter filters noise.** The "Receiving end does not exist"
   error from `chrome.tabs.sendMessage` is swallowed — a known benign rejection
   from polling tabs whose content script is gone.
@@ -102,14 +106,12 @@ src/
     messaging/          # Runtime message router (ports injected by background)
     document/           # Text cleanup/splitting (pure strings)
     selection/          # CSS-selector paragraph filtering
-    tts/                # TtsProvider port + voice registry (cloud/HTTP foundation)
     voices/             # Voice catalog + installer port
   content/              # Page-level UI: widget, highlighter, paragraph affordance, picker
   infra/
     audio/              # speechSynthesis + Supertonic ONNX + installed-voice adapters
     chrome/             # runtime/messaging wrappers, offscreen bridge, tab lifecycle
     voices/             # download-to-cache, cache-storage installer
-    piper/              # legacy HTTP Piper client (unwired, kept for reference only)
   lib/
     types.ts            # Shared types + Result monad
     events.ts           # Typed event emitter

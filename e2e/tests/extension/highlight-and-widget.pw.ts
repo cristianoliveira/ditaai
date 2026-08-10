@@ -19,7 +19,7 @@ test.describe('widget playback and highlighting', () => {
     await server.close();
   });
 
-  test('highlights words and toggles button state during play/pause/resume/stop', async () => {
+  test('highlights words and exposes the current play/pause/resume action', async () => {
     const harness = await launchExtensionContext();
     try {
       const { context, extensionId, errors } = harness;
@@ -46,30 +46,30 @@ test.describe('widget playback and highlighting', () => {
       await expect(page.locator('.dita-widget')).toBeVisible({ timeout: 5_000 });
 
       const playBtn = page.locator('.dita-btn-play');
-      const stopBtn = page.locator('.dita-btn').filter({ hasText: '■' });
+      const stopBtn = page.getByRole('button', { name: 'Stop page audio' });
       const mark = page.locator('mark.dita-word-highlight');
 
-      // Idle: play button shows ▶, no highlights.
-      await expect(playBtn).toHaveText('▶');
+      // Idle: play action is available, no highlights.
+      await expect(playBtn).toHaveAttribute('aria-label', 'Play page audio');
       await expect(mark).toHaveCount(0);
 
-      // Click play → button becomes ⏸, highlights start appearing.
+      // Click play → pause action becomes available, highlights start appearing.
       await playBtn.click();
-      await expect(playBtn).toHaveText('⏸');
+      await expect(playBtn).toHaveAttribute('aria-label', 'Pause page audio');
       await expect(mark).toHaveCount(1, { timeout: 2_000 });
 
-      // Click pause → button shows ▶. Highlight persists (not cleared on pause).
+      // Click pause → resume action becomes available. Highlight persists.
       await playBtn.click();
-      await expect(playBtn).toHaveText('▶');
+      await expect(playBtn).toHaveAttribute('aria-label', 'Resume page audio');
 
-      // Click resume (playBtn again) → button shows ⏸, highlights continue.
+      // Click resume → pause action returns, highlights continue.
       await playBtn.click();
-      await expect(playBtn).toHaveText('⏸');
+      await expect(playBtn).toHaveAttribute('aria-label', 'Pause page audio');
       await expect(mark).toHaveCount(1, { timeout: 2_000 });
 
-      // Click stop → button returns to ▶, highlights cleared.
+      // Click stop → play action returns, highlights clear.
       await stopBtn.click();
-      await expect(playBtn).toHaveText('▶');
+      await expect(playBtn).toHaveAttribute('aria-label', 'Play page audio');
       await expect(mark).toHaveCount(0);
 
       expect(errors).toEqual([]);

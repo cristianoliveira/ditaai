@@ -1,6 +1,6 @@
 # E2E test architecture
 
-How Dita is tested end-to-end: the real extension loaded in Chromium, driven
+How DitaAi is tested end-to-end: the real extension loaded in Chromium, driven
 through its own surfaces, with a deterministic fake TTS engine.
 
 Adapted from `.local/read-aloud/e2e/` — a proven harness pattern for MV3
@@ -28,8 +28,7 @@ e2e/
 ├── playwright.config.ts   # runner: testDir ./tests, testMatch **/*.pw.ts, chromium only
 ├── helpers/
 │   ├── extension.ts       # launchExtensionContext: stage + --load-extension + id discovery + error capture
-│   ├── fixture-server.ts  # static HTML fixture pages over http
-│   └── fake-tts.ts        # LEGACY unused: Piper-origin routing to silent WAV (kept for reference)
+│   └── fixture-server.ts  # static HTML fixture pages over http
 ├── fixtures/              # article.html, empty.html, fake-tts-article.html
 ├── requesters/
 │   ├── service-worker.ts  # chrome.runtime.sendMessage client (serviceWorker dest)

@@ -6,17 +6,17 @@ export default defineConfig({
   outDir: 'dist',
   modules: [path.resolve('src/modules/onnx-runtime.ts')],
   manifest: {
-    name: 'Dita',
+    name: 'DitaAi',
     version: '0.3.0',
-    version_name: '0.3.0-1d5015d-1786352692',
-    description: 'Dita aí — read any page aloud',
+    version_name: '0.3.0-188dbff-1786354014',
+    description: 'Turn web pages into private, local audio',
     permissions: ['storage', 'tabs', 'offscreen'],
     host_permissions: ['<all_urls>'],
     content_security_policy: {
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
     },
     action: {
-      default_title: 'Dita — Read aloud',
+      default_title: 'DitaAi — Listen to this page',
     },
   },
 });

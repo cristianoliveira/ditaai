@@ -47,6 +47,26 @@ describe('extractParagraphs', () => {
     expect(segments.map((s) => s.text)).toEqual(['Real']);
   });
 
+  it('falls back to leaf content containers when a page has no semantic text blocks', () => {
+    document.body.innerHTML = `
+      <main>
+        <div class="story"><span>Page text inside a generic app container.</span></div>
+      </main>`;
+
+    const segments = extractParagraphs(document);
+
+    expect(segments.map((s) => s.text)).toEqual(['Page text inside a generic app container.']);
+    expect(segments[0]?.element).toBe(document.querySelector('.story'));
+  });
+
+  it('does not narrate controls when using generic container fallback', () => {
+    document.body.innerHTML = `
+      <div><button>Buy now</button></div>
+      <div><span>Story content.</span></div>`;
+
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual(['Story content.']);
+  });
+
   it('returns the live DOM element for each segment', () => {
     document.body.innerHTML = '<p>Hello</p>';
     const segments = extractParagraphs(document);

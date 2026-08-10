@@ -171,7 +171,7 @@ export class DitaWidget {
 
     const label = document.createElement('span');
     label.className = 'dita-label';
-    label.textContent = 'Dita';
+    label.textContent = 'DitaAi';
 
     this.progressEl = document.createElement('span');
     this.progressEl.className = 'dita-progress';
@@ -179,6 +179,7 @@ export class DitaWidget {
     this.playBtn = document.createElement('button');
     this.playBtn.className = 'dita-btn dita-btn-play';
     this.playBtn.innerHTML = PLAY_ICON;
+    this.playBtn.setAttribute('aria-label', 'Play page audio');
     this.playBtn.addEventListener('click', () => {
       if (this.state === 'playing') {
         callbacks.onPause();
@@ -202,8 +203,9 @@ export class DitaWidget {
     nextBtn.addEventListener('click', () => callbacks.onJump?.('forward'));
 
     const stopBtn = document.createElement('button');
-    stopBtn.className = 'dita-btn';
+    stopBtn.className = 'dita-btn dita-btn-stop';
     stopBtn.textContent = '■';
+    stopBtn.setAttribute('aria-label', 'Stop page audio');
     stopBtn.addEventListener('click', callbacks.onStop);
 
     const selectBtn = document.createElement('button');
@@ -215,11 +217,13 @@ export class DitaWidget {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'dita-btn dita-btn-close';
     closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Close DitaAi');
     closeBtn.addEventListener('click', callbacks.onClose);
 
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'dita-btn dita-btn-settings';
     settingsBtn.textContent = '⚙';
+    settingsBtn.setAttribute('aria-label', 'Choose narration voice');
     settingsBtn.addEventListener('click', () => callbacks.onSettings?.());
 
     this.highlightBtn = document.createElement('button');
@@ -288,10 +292,13 @@ export class DitaWidget {
     if (state === 'playing') {
       this.playBtn.innerHTML = PAUSE_ICON;
       this.playBtn.className = 'dita-btn dita-btn-play';
+      this.playBtn.setAttribute('aria-label', 'Pause page audio');
     } else if (state === 'paused') {
       this.playBtn.innerHTML = PLAY_ICON;
+      this.playBtn.setAttribute('aria-label', 'Resume page audio');
     } else {
       this.playBtn.innerHTML = PLAY_ICON;
+      this.playBtn.setAttribute('aria-label', 'Play page audio');
       this.progressEl.textContent = '';
     }
   }

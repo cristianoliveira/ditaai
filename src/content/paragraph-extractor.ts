@@ -8,19 +8,35 @@
 // the cleaned spoken chunks (see text-processor splitText).
 
 const READABLE_SELECTORS = 'article, p, h1, h2, h3, h4, h5, h6, li, blockquote';
-const IGNORE_SELECTORS = 'script, style, nav, footer, header, aside, noscript';
+const GENERIC_CONTENT_SELECTORS = 'main, [role="main"], section, div';
+const IGNORE_SELECTORS =
+  'script, style, nav, footer, header, aside, noscript, [aria-hidden="true"]';
+const CONTROL_SELECTORS = 'button, input, select, textarea';
 
 import type { ParagraphSegment } from '../lib/types';
 
 export function extractParagraphs(root: ParentNode = document): ParagraphSegment[] {
-  const blocks = [...root.querySelectorAll(READABLE_SELECTORS)];
-  return blocks
-    .filter((el) => !el.querySelector(READABLE_SELECTORS)) // leaf blocks only
-    .filter((el) => !el.closest(IGNORE_SELECTORS)) // drop nav/footer/header/aside
-    .filter((el) => (el.textContent ?? '').trim() !== '') // drop empty (index alignment)
-    .map((el) => ({
-      text: el.textContent ?? '',
-      tag: el.tagName.toLowerCase(),
-      element: el,
+  const semanticBlocks = extractLeafBlocks(root, READABLE_SELECTORS);
+  if (semanticBlocks.length > 0) return semanticBlocks;
+
+  return extractLeafBlocks(root, GENERIC_CONTENT_SELECTORS).filter(hasNarratableText);
+}
+
+function extractLeafBlocks(root: ParentNode, selectors: string): ParagraphSegment[] {
+  return [...root.querySelectorAll(selectors)]
+    .filter((element) => !element.querySelector(selectors))
+    .filter((element) => !element.closest(IGNORE_SELECTORS))
+    .filter((element) => (element.textContent ?? '').trim() !== '')
+    .map((element) => ({
+      text: element.textContent ?? '',
+      tag: element.tagName.toLowerCase(),
+      element,
     }));
+}
+
+/** Reject containers whose only text belongs to form controls. Linked prose remains narratable. */
+function hasNarratableText(segment: ParagraphSegment): boolean {
+  const copy = segment.element.cloneNode(true) as Element;
+  for (const control of copy.querySelectorAll(CONTROL_SELECTORS)) control.remove();
+  return (copy.textContent ?? '').trim() !== '';
 }

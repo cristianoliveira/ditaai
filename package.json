@@ -1,8 +1,8 @@
 {
-  "name": "dita",
-  "version": "0.3.0-1d5015d-1786352692",
+  "name": "ditaai",
+  "version": "0.3.0-188dbff-1786354014",
   "private": true,
-  "description": "Chrome extension with local Piper TTS",
+  "description": "Turn web pages into private, local audio",
   "type": "module",
   "scripts": {
     "dev": "wxt",

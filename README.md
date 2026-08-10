@@ -1,18 +1,24 @@
-# Dita
+# DitaAi
 
-**Dita aí** — Brazilian Portuguese for "speak it" / "say it out".
+**DitaAi** is a play on Brazilian Portuguese **“dita aí”** (“say it out”) and
+**Dita + AI**.
 
-A read-out-loud Chrome extension. Local-first, private, fully tested.
+Turn a web page into a small, audiobook-like listening experience. Local-first,
+private, and fully tested.
 
-Click (or hotkey) → Dita reads the page aloud, highlighting each word as it
-speaks. The default voice is a Supertonic neural model running locally via
-WebAssembly — text never leaves your machine. Browser speech is the built-in
-fallback when no voice is installed.
+Open DitaAi and press play to hear the page's meaningful content. Pause, resume,
+change speed, move by paragraph, or start from a chosen paragraph while DitaAi
+highlights your place. A Supertonic neural voice can run locally through
+WebAssembly; browser speech is the built-in fallback.
+
+See [product direction](docs/PRODUCT.md) for promises and boundaries.
 
 ## Why
 
-- **Local-first TTS.** Supertonic ONNX models synthesize on-device in an
-  offscreen document. No cloud round-trip for the voice.
+- **Listen instead of read.** DitaAi extracts page content and gives it familiar
+  audiobook controls.
+- **Local-first narration.** Supertonic ONNX models synthesize on-device in an
+  offscreen document. Page text is not sent to a DitaAi server.
 - **Ports and adapters.** Domain logic knows nothing about Chrome APIs, network,
   or the DOM. Every seam is testable.
 - **Testable by construction.** Unit tests in Node against fakes. E2E tests load
@@ -21,7 +27,7 @@ fallback when no voice is installed.
 
 ## Voices
 
-Dita ships with 10 Supertonic presets (M1–M5, F1–F5) from
+DitaAi ships with 10 Supertonic presets (M1–M5, F1–F5) from
 [Supertone/supertonic-3](https://huggingface.co/Supertone/supertonic-3).
 
 - **In the extension:** open the floating widget → settings (gear) → Voices
@@ -36,8 +42,8 @@ Studied, not copied. These projects shaped our thinking:
 
 - [read-aloud](https://github.com/ken107/read-aloud) — ports & adapters layout,
   deterministic fake-TTS E2E harness, messaging contract.
-- Local Piper TTS — `speechSynthesis` bridge pattern, word-boundary emulation
-  from WAV duration.
+- Local TTS engines — `speechSynthesis` bridge patterns and word-boundary
+  timing from generated audio duration.
 
 ## Getting started
 
@@ -58,7 +64,7 @@ just test-e2e    # end-to-end tests (real extension in Chromium)
 
 ## Local observability
 
-Run Dita in a persistent headed Chromium while capturing browser and extension
+Run DitaAi in a persistent headed Chromium while capturing browser and extension
 activity to local structured logs:
 
 ```sh

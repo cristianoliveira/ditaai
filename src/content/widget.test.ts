@@ -169,6 +169,18 @@ describe('DitaWidget play button', () => {
     expect(btn?.textContent ?? '').not.toContain('▶');
   });
 
+  it('describes the current playback action to assistive technology', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    expect(playButton()?.getAttribute('aria-label')).toBe('Play page audio');
+
+    widget.setState('playing');
+    expect(playButton()?.getAttribute('aria-label')).toBe('Pause page audio');
+
+    widget.setState('paused');
+    expect(playButton()?.getAttribute('aria-label')).toBe('Resume page audio');
+  });
+
   it('swaps to a pause SVG while playing and back to play otherwise', () => {
     const widget = new DitaWidget(noopCallbacks);
     widget.mount();
@@ -200,6 +212,26 @@ describe('DitaWidget play button', () => {
     widget.setState('paused');
     btn.click();
     expect(onResume).toHaveBeenCalled();
+  });
+});
+
+describe('DitaWidget secondary controls', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('labels icon-only actions by their page-audio purpose', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot;
+
+    expect(root?.querySelector('.dita-btn-stop')?.getAttribute('aria-label')).toBe(
+      'Stop page audio',
+    );
+    expect(root?.querySelector('.dita-btn-settings')?.getAttribute('aria-label')).toBe(
+      'Choose narration voice',
+    );
+    expect(root?.querySelector('.dita-btn-close')?.getAttribute('aria-label')).toBe('Close DitaAi');
   });
 });
 
