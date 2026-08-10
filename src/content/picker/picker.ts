@@ -509,25 +509,35 @@ export class Picker {
     if (!this.hoverCandidates) return;
     this.hoverCandidates.innerHTML = '';
     for (const candidate of candidates) {
-      const chip = document.createElement('span');
-      chip.className = candidate === activeSelector ? 'hover-candidate active' : 'hover-candidate';
-      chip.textContent = candidate;
-      chip.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (this.hoverInput) {
-          this.hoverInput.value = candidate;
-          this.hoverInput.setAttribute('data-last-hover', candidate);
-        }
-        if (this.hoverCount) {
-          const count = this.getMatchCount(candidate);
-          this.hoverCount.textContent = String(count);
-          this.hoverCount.className = count === 0 ? 'hover-count zero' : 'hover-count';
-        }
-        this.highlightMatches(candidate);
-        this.renderHoverCandidates(candidates, candidate);
-      });
-      this.hoverCandidates.appendChild(chip);
+      this.hoverCandidates.appendChild(this.createHoverChip(candidate, activeSelector, candidates));
     }
+  }
+
+  private createHoverChip(
+    candidate: string,
+    activeSelector: string,
+    candidates: string[],
+  ): HTMLSpanElement {
+    const chip = document.createElement('span');
+    chip.className = candidate === activeSelector ? 'hover-candidate active' : 'hover-candidate';
+    chip.textContent = candidate;
+    chip.addEventListener('click', (e) => this.selectHoverCandidate(e, candidate, candidates));
+    return chip;
+  }
+
+  private selectHoverCandidate(e: Event, candidate: string, candidates: string[]): void {
+    e.stopPropagation();
+    if (this.hoverInput) {
+      this.hoverInput.value = candidate;
+      this.hoverInput.setAttribute('data-last-hover', candidate);
+    }
+    if (this.hoverCount) {
+      const count = this.getMatchCount(candidate);
+      this.hoverCount.textContent = String(count);
+      this.hoverCount.className = count === 0 ? 'hover-count zero' : 'hover-count';
+    }
+    this.highlightMatches(candidate);
+    this.renderHoverCandidates(candidates, candidate);
   }
 
   private findReadableAncestor(el: Element): Element {
