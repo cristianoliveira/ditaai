@@ -37,6 +37,21 @@ describe('InstalledVoiceReader', () => {
     expect(installed.prepare).toHaveBeenCalledWith('next paragraph', { rate: 1.2 });
   });
 
+  it('ignores optional preparation failure and rechecks availability before playback', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    installed.prepare = vi.fn().mockRejectedValue(new Error('Preparation unavailable'));
+    const fallback = reader();
+    const subject = new InstalledVoiceReader(installed, fallback);
+
+    await expect(subject.prepare('next paragraph')).resolves.toBeUndefined();
+    await subject.speak('next paragraph');
+
+    expect(installed.isAvailable).toHaveBeenCalledTimes(2);
+    expect(installed.speak).toHaveBeenCalledWith('next paragraph', undefined);
+    expect(fallback.speak).not.toHaveBeenCalled();
+  });
+
   it('plays prepared installed speech without rechecking availability', async () => {
     vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
     const installed = installedReader(true);

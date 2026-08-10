@@ -8,12 +8,16 @@ interface RuntimeResponse {
 
 export class RuntimeInstalledVoiceReader implements AvailableTextReader {
   async isAvailable(): Promise<boolean> {
-    const response = await this.send('isInstalledVoiceAvailable');
-    return response.available === true;
+    try {
+      const response = await this.send('isInstalledVoiceAvailable', [], false);
+      return response.available === true;
+    } catch {
+      return false;
+    }
   }
 
   async prepare(text: string, options?: SpeakOptions): Promise<void> {
-    await this.send('prepareInstalledVoice', [text, this.serializableOptions(options)]);
+    await this.send('prepareInstalledVoice', [text, this.serializableOptions(options)], false);
   }
 
   async speak(text: string, options?: SpeakOptions): Promise<void> {
@@ -37,9 +41,9 @@ export class RuntimeInstalledVoiceReader implements AvailableTextReader {
     void this.send('stopInstalledVoice');
   }
 
-  private async send(method: string, args: unknown[] = []): Promise<RuntimeResponse> {
+  private async send(method: string, args: unknown[] = [], trace = true): Promise<RuntimeResponse> {
     const startedAt = Date.now();
-    console.info(`[dita][installed-voice][content] ${method}:start`);
+    if (trace) console.info(`[dita][installed-voice][content] ${method}:start`);
     try {
       const response = (await chrome.runtime.sendMessage({
         dest: 'serviceWorker',
@@ -47,15 +51,19 @@ export class RuntimeInstalledVoiceReader implements AvailableTextReader {
         args,
       })) as RuntimeResponse | undefined;
       if (!response?.ok) throw new Error(response?.error ?? 'Installed voice unavailable');
-      console.info(`[dita][installed-voice][content] ${method}:complete`, {
-        durationMs: Date.now() - startedAt,
-      });
+      if (trace) {
+        console.info(`[dita][installed-voice][content] ${method}:complete`, {
+          durationMs: Date.now() - startedAt,
+        });
+      }
       return response;
     } catch (error) {
-      console.error(`[dita][installed-voice][content] ${method}:failed`, {
-        durationMs: Date.now() - startedAt,
-        error,
-      });
+      if (trace) {
+        console.error(`[dita][installed-voice][content] ${method}:failed`, {
+          durationMs: Date.now() - startedAt,
+          error,
+        });
+      }
       throw error;
     }
   }

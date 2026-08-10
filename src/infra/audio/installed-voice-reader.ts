@@ -36,9 +36,15 @@ export class InstalledVoiceReader implements TextReader {
   }
 
   async prepare(text: string, options?: SpeakOptions): Promise<void> {
-    if (!this.installedReader.prepare || !(await this.installedReader.isAvailable())) return;
+    if (!this.installedReader.prepare) return;
 
-    await this.installedReader.prepare(text, this.serializableOptions(options));
+    try {
+      if (!(await this.installedReader.isAvailable())) return;
+      await this.installedReader.prepare(text, this.serializableOptions(options));
+    } catch {
+      return; // Lookahead is optional; speak() rechecks availability and falls back if needed.
+    }
+
     this.preparedInstalledSpeech.add(this.preparationKey(text, options));
     while (this.preparedInstalledSpeech.size > 2) {
       const oldestKey = this.preparedInstalledSpeech.values().next().value;
