@@ -9,6 +9,7 @@ export const SHORTCUT_ACTIONS = [
   'volumeUp',
   'volumeDown',
   'toggleWidget',
+  'focusWidget',
 ] as const;
 
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number];
@@ -27,6 +28,7 @@ export const SHORTCUT_ACTION_LABELS: Record<ShortcutAction, string> = {
   volumeUp: 'Volume up',
   volumeDown: 'Volume down',
   toggleWidget: 'Show / hide widget',
+  focusWidget: 'Focus playback controls',
 };
 
 export const DEFAULT_SHORTCUTS: ShortcutMap = {
@@ -37,6 +39,7 @@ export const DEFAULT_SHORTCUTS: ShortcutMap = {
   volumeUp: 'Alt+Shift+ArrowUp',
   volumeDown: 'Alt+Shift+ArrowDown',
   toggleWidget: 'Alt+Shift+W',
+  focusWidget: 'Alt+Shift+F',
 };
 
 const MODIFIER_ORDER = ['Control', 'Alt', 'Shift', 'Meta'] as const;

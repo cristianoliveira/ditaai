@@ -333,6 +333,33 @@ describe('DitaWidget play button', () => {
   });
 });
 
+describe('DitaWidget keyboard focus', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('moves focus to the play control', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+
+    widget.focus();
+
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot;
+    expect(root?.activeElement).toBe(root?.querySelector('.dita-btn-play'));
+  });
+
+  it('exposes its controls as a named region', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+
+    const controls = document
+      .querySelector('#dita-widget-host')
+      ?.shadowRoot?.querySelector('.dita-widget');
+    expect(controls?.getAttribute('role')).toBe('region');
+    expect(controls?.getAttribute('aria-label')).toBe('DitaAi playback controls');
+  });
+});
+
 describe('DitaWidget secondary controls', () => {
   afterEach(() => {
     document.body.innerHTML = '';

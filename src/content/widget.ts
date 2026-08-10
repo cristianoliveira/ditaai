@@ -71,6 +71,12 @@ const STYLES = `
     transition: background 0.15s;
   }
   .dita-btn:hover { background: #5a5a7a; }
+  .dita-btn:focus-visible,
+  .dita-rate:focus-visible,
+  .dita-volume:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+  }
   .dita-btn svg { display: block; width: 16px; height: 16px; fill: currentColor; }
 
   .dita-btn-play { background: ${theme.accent}; }
@@ -197,6 +203,8 @@ export class DitaWidget {
 
     const widget = document.createElement('div');
     widget.className = 'dita-widget';
+    widget.setAttribute('role', 'region');
+    widget.setAttribute('aria-label', 'DitaAi playback controls');
 
     const label = document.createElement('span');
     label.className = 'dita-label';
@@ -341,6 +349,11 @@ export class DitaWidget {
 
   isMounted(): boolean {
     return this.host.isConnected;
+  }
+
+  /** Give keyboard users a predictable entry point to playback controls. */
+  focus(): void {
+    this.playBtn.focus({ preventScroll: true });
   }
 
   setState(state: WidgetState): void {

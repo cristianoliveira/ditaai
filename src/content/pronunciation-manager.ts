@@ -223,6 +223,7 @@ export class PronunciationManager {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'dita-close';
     closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Close pronunciation manager');
     // biome-ignore lint/complexity/useLiteralKeys: TS index signature requires bracket notation
     closeBtn.dataset['action'] = 'close';
     closeBtn.addEventListener('click', () => this.options.onClose());
@@ -331,6 +332,7 @@ export class PronunciationManager {
     previewBtn.type = 'button';
     previewBtn.title = 'Preview';
     previewBtn.textContent = '▶';
+    previewBtn.setAttribute('aria-label', `Preview pronunciation for ${entry.word}`);
     // biome-ignore lint/complexity/useLiteralKeys: TS index signature requires bracket notation
     previewBtn.dataset['action'] = 'preview';
     previewBtn.addEventListener('click', () => this.options.onPreview(entry.spoken));
@@ -339,6 +341,7 @@ export class PronunciationManager {
     deleteBtn.type = 'button';
     deleteBtn.title = 'Delete';
     deleteBtn.textContent = '🗑';
+    deleteBtn.setAttribute('aria-label', `Delete pronunciation for ${entry.word}`);
     // biome-ignore lint/complexity/useLiteralKeys: TS index signature requires bracket notation
     deleteBtn.dataset['action'] = 'delete';
     deleteBtn.addEventListener('click', () => this.options.onDelete(entry.word));

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SHORTCUTS,
   SHORTCUT_ACTIONS,
+  SHORTCUT_ACTION_LABELS,
   comboFromEvent,
   comboMatchesEvent,
   findConflicts,
@@ -114,6 +115,11 @@ describe('comboFromEvent', () => {
 });
 
 describe('defaults', () => {
+  it('binds a keyboard shortcut for focusing playback controls', () => {
+    expect(DEFAULT_SHORTCUTS.focusWidget).toBe('Alt+Shift+F');
+    expect(SHORTCUT_ACTION_LABELS.focusWidget).toBe('Focus playback controls');
+  });
+
   it('covers every action', () => {
     for (const action of SHORTCUT_ACTIONS) {
       expect(DEFAULT_SHORTCUTS[action]).toBeTruthy();

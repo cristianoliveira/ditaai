@@ -506,6 +506,12 @@ export default defineContentScript({
       mountWidget();
     }
 
+    /** Open the widget when needed and focus its first playback control. */
+    function focusWidget(): void {
+      if (!widget?.isMounted()) mountWidget();
+      widget?.focus();
+    }
+
     // ── Keyboard shortcuts ──────────────────────────────────────────────────
     // Same playback functions as the widget, so behavior is identical either
     // way. The stored keymap (user-editable on the voices page) is merged over
@@ -518,6 +524,7 @@ export default defineContentScript({
       volumeUp: () => adjustVolume(VOLUME_STEP),
       volumeDown: () => adjustVolume(-VOLUME_STEP),
       toggleWidget,
+      focusWidget,
     };
     const shortcutController = new ShortcutController(shortcutActions, DEFAULT_SHORTCUTS);
     void new ChromeShortcutStorage().load().then((map) => shortcutController.update(map));

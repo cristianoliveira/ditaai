@@ -139,6 +139,24 @@ describe('PronunciationManager', () => {
     expect(toggled).toBe(false);
   });
 
+  it('labels icon-only controls for assistive technology', () => {
+    make().mount();
+
+    expect(shadow().querySelector('[data-action="close"]')?.getAttribute('aria-label')).toBe(
+      'Close pronunciation manager',
+    );
+    expect(
+      shadow()
+        .querySelector('[data-entry="ZSH"] [data-action="preview"]')
+        ?.getAttribute('aria-label'),
+    ).toBe('Preview pronunciation for ZSH');
+    expect(
+      shadow()
+        .querySelector('[data-entry="ZSH"] [data-action="delete"]')
+        ?.getAttribute('aria-label'),
+    ).toBe('Delete pronunciation for ZSH');
+  });
+
   it('fires onClose when Close is clicked', () => {
     let closed = false;
     make({
