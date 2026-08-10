@@ -5,17 +5,30 @@
 A read-out-loud Chrome extension. Local-first, private, fully tested.
 
 Click (or hotkey) → Dita reads the page aloud, highlighting each word as it
-speaks. The default voice runs on localhost via [Piper](https://github.com/rhasspy/piper) —
-text never leaves your machine.
+speaks. The default voice is a Supertonic neural model running locally via
+WebAssembly — text never leaves your machine. Browser speech is the built-in
+fallback when no voice is installed.
 
 ## Why
 
-- **Local-first TTS.** Piper synthesizes on-device. No cloud round-trip for the voice.
+- **Local-first TTS.** Supertonic ONNX models synthesize on-device in an
+  offscreen document. No cloud round-trip for the voice.
 - **Ports and adapters.** Domain logic knows nothing about Chrome APIs, network,
   or the DOM. Every seam is testable.
 - **Testable by construction.** Unit tests in Node against fakes. E2E tests load
   the real extension in Chromium with a deterministic fake TTS engine.
 - **No lock-in.** No account required.
+
+## Voices
+
+Dita ships with 10 Supertonic presets (M1–M5, F1–F5) from
+[Supertone/supertonic-3](https://huggingface.co/Supertone/supertonic-3).
+
+- **In the extension:** open the floating widget → settings (gear) → Voices
+  page, then download a voice. Files are stored in Cache Storage
+  (`dita-voices`) and read by the offscreen document at playback time.
+- **Before installing:** `just install-voices [M1 F3 ...]` downloads voice
+  files to `voices/supertonic/` for offline use or packaging.
 
 ## Inspirations
 
@@ -66,9 +79,10 @@ so Playwright can use the bundled Chrome for Testing.
 ```
 src/
   domain/        # business logic (no framework deps)
-  infra/         # Chrome API + Piper HTTP adapters
+  infra/         # Chrome API + audio adapters (speechSynthesis, Supertonic ONNX, cache)
+  content/       # page-level UI: widget, highlighter, picker
   lib/           # zero-dependency shared code
-  entrypoints/   # WXT entry points (background, content, popup)
+  entrypoints/   # WXT entry points (background, content, offscreen, voices)
 e2e/             # Playwright E2E with deterministic fake TTS
 docs/            # More context
 ```

@@ -1,5 +1,5 @@
 // Domain port: anything that can speak text.
-// Implementations live in infra (speechSynthesis, Piper, cloud TTS).
+// Implementations live in infra (Supertonic ONNX via offscreen, browser speechSynthesis, cloud TTS).
 
 export interface BoundaryEvent {
   charIndex: number;

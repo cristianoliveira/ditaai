@@ -16,8 +16,8 @@ extension testing.
    extension state (playback state, storage, worker messages). MV3 worker
    suspension is handled by waiting on messages, not `waitForTimeout`.
 4. **One concern per spec.** Happy and unhappy paths in separate tests.
-5. **Talk to requesters, not `chrome.*`.** Tests use requester/page-object
-   clients. Chrome API access never appears inline in a spec.
+5. **Talk to requesters, not `chrome.*`.** Tests use requester clients.
+   Chrome API access never appears inline in a spec.
 6. **Fail on uncaught errors.** The harness collects page/worker errors; every
    spec asserts the error list is empty (minus documented benign logs).
 
@@ -28,23 +28,22 @@ e2e/
 ├── playwright.config.ts   # runner: testDir ./tests, testMatch **/*.pw.ts, chromium only
 ├── helpers/
 │   ├── extension.ts       # launchExtensionContext: stage + --load-extension + id discovery + error capture
-│   ├── fake-tts.ts        # installFakeTts: route provider origins to local fixture pages
-│   └── fixture-server.ts  # static HTML pages (articles, empty, pdf) served over http
-├── fixtures/              # fake-tts.html, article.html, empty.html — deterministic peers
+│   ├── fixture-server.ts  # static HTML fixture pages over http
+│   └── fake-tts.ts        # LEGACY unused: Piper-origin routing to silent WAV (kept for reference)
+├── fixtures/              # article.html, empty.html, fake-tts-article.html
 ├── requesters/
 │   ├── service-worker.ts  # chrome.runtime.sendMessage client (serviceWorker dest)
 │   └── settings.ts        # chrome.storage.local client (seed voices/settings)
-├── pages/
-│   ├── popup.page.ts      # popup UI page object
-│   └── player.page.ts     # player runtime page object
 ├── types/
-│   └── messages.ts        # shared message + state contracts (mirror src/domain/messaging)
+│   └── messages.ts        # shared message + state contracts (mirror src/domain/messaging/router.ts)
 └── tests/
     └── extension/
-        ├── startup.pw.ts       # manifest loads, SW boots, pages serve, no errors
-        ├── playback.pw.ts      # play text → pause → resume → stop with fake TTS
-        ├── play-tab.pw.ts      # content-script injection reads a fixture page
-        └── error-path.pw.ts    # empty page, missing voice, provider failure
+        ├── startup.pw.ts           # manifest loads, SW boots, harness page serves, no errors
+        ├── playback.pw.ts          # play text → pause → resume → stop via the real SW
+        ├── play-tab.pw.ts          # content-script injection reads a fixture page
+        ├── widget.pw.ts            # toggleWidget injects a visible widget
+        ├── highlight-and-widget.pw.ts  # word highlighting via FakeBoundaryReader
+        └── installed-voice.pw.ts   # offscreen reads extension-owned voice cache (seeded)
 ```
 
 ## The harness contract
@@ -55,7 +54,7 @@ e2e/
 const harness = await launchExtensionContext();
 try {
   const { context, extensionId, errors } = harness;
-  // ... drive the extension via requesters/page objects ...
+  // ... drive the extension via requesters ...
   expect(errors).toEqual([]);
 } finally {
   await harness.close();
@@ -73,17 +72,17 @@ It:
 
 ## Deterministic fake TTS
 
-The default Piper provider talks to `http://127.0.0.1:17493`. In E2E we route
-that origin to a local fixture page that fulfills the provider contract:
-returns a fixed-length silent WAV, records start/stop, emits boundary events.
-No real Piper process, no model files, no audio output.
+No real TTS ever runs. Two mechanisms cover the audio paths:
 
-```ts
-await installFakeTts(context);  // before driving playback
-```
-
-This lets us assert the full pipeline — service worker → player → provider →
-audio runtime — without external dependencies.
+1. **Content-level `FakeBoundaryReader`** (`src/content/fake-reader.ts`).
+   Activated when a fixture page's `<html>` has `data-dita-test-reader="fake"`
+   (set via `page.addInitScript` before the content script loads). It fires
+   synthetic word boundaries on a fixed 50ms interval, so highlighting and
+   widget state are testable deterministically.
+2. **Seeded voice cache** (`installed-voice.pw.ts`). Writes stub responses for
+   the Supertonic engine assets + a voice into the extension's `dita-voices`
+   Cache Storage, then asserts the offscreen document reports the voice as
+   available (`isInstalledVoiceAvailable` → `true`). No model files, no audio.
 
 ## Requesters (test → extension)
 
@@ -91,18 +90,19 @@ Tests never call `chrome.*` directly. Each extension surface has a requester:
 
 - **`ServiceWorkerRequester`** — `chrome.runtime.sendMessage` from an extension
   page. Methods: `playTab`, `playText`, `pause`, `resume`, `stop`,
-  `getPlaybackState`.
+  `getPlaybackState`, plus installed-voice methods (`isInstalledVoiceAvailable`,
+  `speakWithInstalledVoice`, ...).
 - **`SettingsRequester`** — `chrome.storage.local` get/set from an extension
-  page. Seeds voice selection and settings before playback.
+  page. Seeds voice selection and settings before playback tests.
 
 Both require a page on the extension origin
-(`chrome-extension://<id>/...`) so `chrome.runtime` / `chrome.storage` are
-available.
+(`chrome-extension://<id>/...`, e.g. `harness.html`) so `chrome.runtime` /
+`chrome.storage` are available.
 
 ## Message contract
 
-`e2e/types/messages.ts` mirrors `src/domain/messaging.ts`. When the extension's
-message shape changes, both change together. The contract:
+`e2e/types/messages.ts` mirrors `src/domain/messaging/router.ts`. When the
+extension's message shape changes, both change together. The contract:
 
 ```ts
 interface RuntimeMessage {
@@ -118,26 +118,28 @@ type PlaybackState = "STOPPED" | "PLAYING" | "PAUSED";
 
 ```bash
 just build         # stage the extension into dist/
-just test:e2e      # playwright test (headless)
-just test:e2e:ui   # interactive UI mode
+just test-e2e      # playwright test (headless)
+just test-e2e:ui   # interactive UI mode
 ```
 
 E2E is separate from unit tests (`just test`). CI runs both:
-`just check && just test:e2e`.
+`just check && just test-e2e`.
 
 ## What each spec proves
 
 | Spec | Proves |
 | --- | --- |
-| `startup.pw.ts` | Manifest loads, SW boots, extension pages serve, zero uncaught errors |
-| `playback.pw.ts` | Full play → pause → resume → stop cycle through fake TTS |
+| `startup.pw.ts` | Manifest loads, SW boots, harness page serves, zero uncaught errors |
+| `playback.pw.ts` | Full play → pause → resume → stop cycle through the real SW |
 | `play-tab.pw.ts` | Content-script injection reads a real fixture page and plays it |
-| `error-path.pw.ts` | Empty page / missing voice / provider failure handled gracefully |
+| `widget.pw.ts` | `toggleWidget` injects a visible, interactive widget |
+| `highlight-and-widget.pw.ts` | Word highlighting + widget state via `FakeBoundaryReader` |
+| `installed-voice.pw.ts` | Offscreen doc detects installed voice from seeded cache |
 
 ## Anti-patterns (DO NOT)
 
 - Do NOT use `page.waitForTimeout` to wait for async work — poll on state.
 - Do NOT call `chrome.*` inline in specs — use a requester or page object.
 - Do NOT hardcode the extension id — resolve it from the worker URL.
-- Do NOT run real TTS or hit the network in E2E — route to fakes.
+- Do NOT run real TTS or hit the network in E2E — use the fakes above.
 - Do NOT share browser context across specs — one `launchExtensionContext` per test.
