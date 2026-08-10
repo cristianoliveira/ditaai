@@ -23,6 +23,7 @@ export class SegmentSequencer {
   private resumeCharIndex = 0;
   private rate: number | undefined;
   private volume: number | undefined;
+  private restarting = false;
 
   /** Called when the active segment changes. */
   onSegmentChange?: (index: number) => void;
@@ -40,6 +41,7 @@ export class SegmentSequencer {
     this.resumeCharIndex = 0;
     this.rate = undefined;
     this.volume = undefined;
+    this.restarting = false;
   }
 
   getState(): SequencerState {
@@ -83,6 +85,10 @@ export class SegmentSequencer {
         this.seeking = false;
         continue; // playhead moved during prepare — re-evaluate at the new index
       }
+      if (this.restarting) {
+        this.restarting = false;
+        continue; // rate/volume changed during prepare — re-speak with new options
+      }
       // Pause can land during the async prepare gap — the reader had nothing to
       // cancel yet, so gate here instead of speaking a segment the user paused.
       if (this.paused) {
@@ -106,6 +112,10 @@ export class SegmentSequencer {
       if (this.seeking) {
         this.seeking = false;
         continue; // playhead moved during speak — re-evaluate at the new index
+      }
+      if (this.restarting) {
+        this.restarting = false;
+        continue; // rate/volume changed mid-segment — re-speak from the last word
       }
 
       // Paused mid-segment: save exact word position, wait for resume
@@ -152,17 +162,33 @@ export class SegmentSequencer {
     this.lastCharIndex = 0;
     this.rate = undefined;
     this.volume = undefined;
+    this.restarting = false;
     this.playing = false;
   }
 
-  /** Update the speaking rate; takes effect on the next segment. */
+  /** Update the speaking rate. While playing, cancels the current utterance
+   * and re-speaks the current segment from the last spoken word so the new
+   * rate is heard immediately. */
   setRate(rate: number): void {
     this.rate = rate;
+    this.restartFromCurrentWord();
   }
 
-  /** Update the speaking volume (0–1); takes effect on the next segment. */
+  /** Update the speaking volume (0–1). While playing, cancels the current
+   * utterance and re-speaks the current segment from the last spoken word so
+   * the new volume is heard immediately. */
   setVolume(volume: number): void {
     this.volume = volume;
+    this.restartFromCurrentWord();
+  }
+
+  /** Re-speak the current segment from the last word boundary so a changed
+   * rate/volume applies right away. No-op when not actively playing. */
+  private restartFromCurrentWord(): void {
+    if (!this.playing) return;
+    this.resumeCharIndex = this.lastCharIndex;
+    this.restarting = true;
+    this.reader.stop(); // cancel current utterance → speak promise resolves
   }
 
   /**

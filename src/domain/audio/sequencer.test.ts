@@ -69,6 +69,26 @@ function makePrepareDelayedReader(): TextReader & {
   };
 }
 
+/** Reader that fires two word boundaries (chars 0-5 and 6-10) then hangs until
+ * resolved. Used to verify restart-from-last-boundary behaviour. */
+function makeBoundaryReader(capture: SpeakOptions[]): TextReader & { resolveSpeak: () => void } {
+  let resolveFn: (() => void) | null = null;
+  return {
+    resolveSpeak: () => resolveFn?.(),
+    speak: vi.fn((_text: string, options?: SpeakOptions) => {
+      capture.push(options ?? {});
+      options?.onBoundary?.({ charIndex: 0, charLength: 5 });
+      options?.onBoundary?.({ charIndex: 6, charLength: 5 });
+      return new Promise<void>((resolve) => {
+        resolveFn = resolve;
+      });
+    }),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    stop: vi.fn(() => resolveFn?.()),
+  };
+}
+
 describe('SegmentSequencer', () => {
   it('speaks all segments in order', async () => {
     const reader = makeFakeReader();
@@ -447,65 +467,75 @@ describe('SegmentSequencer', () => {
     expect(reader.speak).not.toHaveBeenCalled();
   });
 
-  it('applies setRate to the next segment while playing', async () => {
-    const rates: (number | undefined)[] = [];
-    let resolveFn: (() => void) | null = null;
-    const reader: TextReader & { resolveSpeak: () => void } = {
-      resolveSpeak: () => resolveFn?.(),
-      speak: vi.fn((_text: string, options?: SpeakOptions) => {
-        rates.push(options?.rate);
-        return new Promise<void>((resolve) => {
-          resolveFn = resolve;
-        });
-      }),
-      pause: vi.fn(),
-      resume: vi.fn(),
-      stop: vi.fn(() => resolveFn?.()),
-    };
-
+  it('restarts the current segment from the last boundary on setVolume while playing', async () => {
+    const spoken: SpeakOptions[] = [];
+    const reader = makeBoundaryReader(spoken);
     const seq = new SegmentSequencer(reader);
-    seq.load(['one', 'two']);
+    seq.load(['hello world foo', 'second']);
 
-    const promise = seq.play({ rate: 1 });
-    await vi.waitFor(() => expect(rates).toEqual([1]));
+    const promise = seq.play({ volume: 1 });
+    await vi.waitFor(() => expect(spoken).toHaveLength(1));
+    expect(spoken[0]?.volume).toBe(1); // boundaries fired → lastCharIndex = 6 + 5 = 11
 
-    seq.setRate(1.5);
-    reader.resolveSpeak(); // finish 'one'; the loop rebuilds speakOptions with the new rate
+    seq.setVolume(0.5); // reader.stop() resolves the speak → loop restarts the segment
 
-    await vi.waitFor(() => expect(rates).toEqual([1, 1.5]));
+    await vi.waitFor(() => expect(spoken).toHaveLength(2));
+    expect(spoken[1]?.volume).toBe(0.5);
+    expect(spoken[1]?.resumeFromChar).toBe(11); // resumes from the last spoken word
 
-    reader.resolveSpeak(); // finish 'two'
+    seq.stop();
     await promise;
   });
 
-  it('applies setVolume to the next segment while playing', async () => {
-    const volumes: (number | undefined)[] = [];
-    let resolveFn: (() => void) | null = null;
-    const reader: TextReader & { resolveSpeak: () => void } = {
-      resolveSpeak: () => resolveFn?.(),
-      speak: vi.fn((_text: string, options?: SpeakOptions) => {
-        volumes.push(options?.volume);
-        return new Promise<void>((resolve) => {
-          resolveFn = resolve;
-        });
-      }),
-      pause: vi.fn(),
-      resume: vi.fn(),
-      stop: vi.fn(() => resolveFn?.()),
-    };
+  it('restarts the current segment from the last boundary on setRate while playing', async () => {
+    const spoken: SpeakOptions[] = [];
+    const reader = makeBoundaryReader(spoken);
+    const seq = new SegmentSequencer(reader);
+    seq.load(['hello world foo', 'second']);
 
+    const promise = seq.play({ rate: 1 });
+    await vi.waitFor(() => expect(spoken).toHaveLength(1));
+    expect(spoken[0]?.rate).toBe(1);
+
+    seq.setRate(1.5);
+
+    await vi.waitFor(() => expect(spoken).toHaveLength(2));
+    expect(spoken[1]?.rate).toBe(1.5);
+    expect(spoken[1]?.resumeFromChar).toBe(11);
+
+    seq.stop();
+    await promise;
+  });
+
+  it('keeps the new value for later segments after a restart', async () => {
+    const spoken: SpeakOptions[] = [];
+    const reader = makeBoundaryReader(spoken);
+    const seq = new SegmentSequencer(reader);
+    seq.load(['first seg', 'second seg']);
+
+    const promise = seq.play({ volume: 1 });
+    await vi.waitFor(() => expect(spoken).toHaveLength(1));
+
+    seq.setVolume(0.5); // restart segment 0
+    await vi.waitFor(() => expect(spoken).toHaveLength(2));
+
+    reader.resolveSpeak(); // finish the restarted segment 0 → advance to segment 1
+    await vi.waitFor(() => expect(spoken).toHaveLength(3));
+    expect(spoken[2]?.volume).toBe(0.5); // segment 1 inherits the restarted volume
+    expect(spoken[2]?.resumeFromChar).toBe(0);
+
+    seq.stop();
+    await promise;
+  });
+
+  it('does not restart when setVolume or setRate is called while idle', () => {
+    const reader = makeFakeReader();
     const seq = new SegmentSequencer(reader);
     seq.load(['one', 'two']);
 
-    const promise = seq.play({ volume: 1 });
-    await vi.waitFor(() => expect(volumes).toEqual([1]));
-
     seq.setVolume(0.5);
-    reader.resolveSpeak(); // finish 'one'; the loop rebuilds speakOptions with the new volume
+    seq.setRate(1.5);
 
-    await vi.waitFor(() => expect(volumes).toEqual([1, 0.5]));
-
-    reader.resolveSpeak(); // finish 'two'
-    await promise;
+    expect(reader.stop).not.toHaveBeenCalled();
   });
 });

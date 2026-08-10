@@ -254,6 +254,10 @@ export default defineContentScript({
         clearAllHighlights();
         activeElement = chunks[index]?.element ?? null;
         if (activeElement) highlightParagraph(activeElement);
+        // Keep the widget's "current/total" counter in sync on every segment,
+        // including the first one when playback starts from an already-mounted
+        // widget (mountWidget only sets it once, at mount time).
+        widget?.setProgress(index + 1, texts.length);
         console.info(
           `[dita] segment ${JSON.stringify({ index, chars: texts[index]?.length ?? 0 })}`,
         );
@@ -330,11 +334,30 @@ export default defineContentScript({
       else playAction();
     }
 
+    const SLIDER_RESTART_MS = 200;
+    let sliderRestartTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Coalesce rapid slider drags into one live restart, so dragging the
+     * volume or rate slider doesn't cancel-and-respeak on every input tick. */
+    function scheduleSliderRestart(restart: () => void): void {
+      if (sliderRestartTimer) clearTimeout(sliderRestartTimer);
+      sliderRestartTimer = setTimeout(() => {
+        sliderRestartTimer = null;
+        restart();
+      }, SLIDER_RESTART_MS);
+    }
+
     function applyVolume(volume: number): void {
       playbackVolume = clampVolume(volume);
       void savePlaybackVolume(playbackVolume);
-      sequencer.setVolume(playbackVolume);
       widget?.setVolume(playbackVolume);
+      scheduleSliderRestart(() => sequencer.setVolume(playbackVolume));
+    }
+
+    function applyRate(rate: number): void {
+      playbackRate = clampRate(rate);
+      void savePlaybackRate(playbackRate);
+      scheduleSliderRestart(() => sequencer.setRate(playbackRate));
     }
 
     function adjustVolume(delta: number): void {
@@ -382,18 +405,7 @@ export default defineContentScript({
             void saveHighlightEnabled(enabled);
             if (!enabled && activeElement) clearHighlight(activeElement);
           },
-          onChangeRate: (rate) => {
-            playbackRate = rate;
-            void savePlaybackRate(rate);
-            sequencer.setRate(rate);
-            // The new rate only takes effect on the next inferred segment, so stop
-            // and let the user restart at the chosen speed.
-            if (sequencer.getState().playing) {
-              sequencer.stop();
-              clearAllHighlights();
-              widget?.setState('idle');
-            }
-          },
+          onChangeRate: (rate) => applyRate(rate),
           onChangeVolume: (volume) => applyVolume(volume),
         },
         { highlightEnabled: highlightWordsEnabled, rate: playbackRate, volume: playbackVolume },
