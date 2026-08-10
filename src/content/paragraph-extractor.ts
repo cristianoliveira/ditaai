@@ -10,11 +10,7 @@
 const READABLE_SELECTORS = 'article, p, h1, h2, h3, h4, h5, h6, li, blockquote';
 const IGNORE_SELECTORS = 'script, style, nav, footer, header, aside, noscript';
 
-export interface ParagraphSegment {
-  text: string;
-  tag: string;
-  element: Element;
-}
+import type { ParagraphSegment } from '../lib/types';
 
 export function extractParagraphs(root: ParentNode = document): ParagraphSegment[] {
   const blocks = [...root.querySelectorAll(READABLE_SELECTORS)];

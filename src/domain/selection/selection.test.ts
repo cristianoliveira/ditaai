@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ParagraphSegment } from '../../content/paragraph-extractor';
+import type { ParagraphSegment } from '../../lib/types';
 import { buildCandidates, filterParagraphs } from './selection';
 
 describe('buildCandidates', () => {
@@ -179,5 +179,9 @@ describe('filterParagraphs', () => {
     const paragraphs: ParagraphSegment[] = [{ text: 'x', tag: 'p', element: el }];
 
     expect(() => filterParagraphs(paragraphs, '[invalid')).toThrow();
+  });
+
+  it('does not throw when selector is invalid and there are no paragraphs', () => {
+    expect(() => filterParagraphs([], '[invalid')).not.toThrow();
   });
 });

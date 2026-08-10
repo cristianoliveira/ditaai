@@ -11,7 +11,7 @@ import {
   highlightWord,
   markStartPoint,
 } from '../content/highlighter';
-import { type ParagraphSegment, extractParagraphs } from '../content/paragraph-extractor';
+import { extractParagraphs } from '../content/paragraph-extractor';
 import { ParagraphStartAffordance } from '../content/paragraph-start-affordance';
 import { Picker } from '../content/picker/picker';
 import { DitaWidget } from '../content/widget';
@@ -24,6 +24,7 @@ import { InstalledVoiceReader } from '../infra/audio/installed-voice-reader';
 import { SpeechSynthesisReader } from '../infra/audio/speech-synthesis-reader';
 import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-storage';
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
+import type { ParagraphSegment } from '../lib/types';
 
 /** A spoken chunk and its source paragraph. `base` is the chunk's offset within
  * collapseWhitespace(element.textContent).trim(), so word boundaries (which are

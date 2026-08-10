@@ -24,9 +24,9 @@ export function splitText(text: string, maxLength = MAX_TEXT_SEGMENT_LENGTH): st
   const chunks: string[] = [];
   let remaining = text.trim();
   while (remaining.length > maxLength) {
-    const window = remaining.slice(0, maxLength + 1);
-    let splitAt = lastSentenceBoundary(window);
-    if (splitAt === 0) splitAt = window.lastIndexOf(' ', maxLength);
+    const candidate = remaining.slice(0, maxLength + 1);
+    let splitAt = lastSentenceBoundary(candidate);
+    if (splitAt === 0) splitAt = candidate.lastIndexOf(' ', maxLength);
     if (splitAt <= 0) splitAt = maxLength;
 
     chunks.push(remaining.slice(0, splitAt).trim());

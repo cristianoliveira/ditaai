@@ -1,7 +1,7 @@
 // Element selection domain: builds CSS selector candidates for picker UI,
 // and filters paragraph segments by a confirmed selector.
 
-import type { ParagraphSegment } from '../../content/paragraph-extractor';
+import type { ParagraphSegment } from '../../lib/types';
 
 /** Port: persists selected CSS selectors keyed by domain (hostname). */
 export interface DomainSelectorStore {
@@ -115,9 +115,8 @@ export function filterParagraphs(
   paragraphs: ParagraphSegment[],
   selector: string,
 ): ParagraphSegment[] {
-  // Validate selector syntax
-  document.querySelectorAll(selector); // throws if invalid
-
+  // No explicit selector validation: element.matches throws a DOMException
+  // on invalid syntax, so the filter itself guards against bad selectors.
   return paragraphs.filter((p) => p.element.matches(selector));
 }
 
