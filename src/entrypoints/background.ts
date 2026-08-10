@@ -2,11 +2,13 @@
 // Composition root: wires domain + infra together.
 
 import { createMessageRouter } from '../domain/messaging/router';
+import type { RuntimeMessage } from '../domain/messaging/router';
 import { PlaybackController } from '../domain/playback/playback-controller';
 import { InstalledVoiceBoundaryRelay } from '../infra/chrome/installed-voice-boundary-relay';
 import { patchSendMessageCallback } from '../infra/chrome/messaging';
 import { OffscreenSupertonicReader } from '../infra/chrome/offscreen-supertonic-reader';
 import { attachRuntimeListener, fetchTabText, resolveActiveTab } from '../infra/chrome/runtime';
+import { watchSpeakingTabLifecycle } from '../infra/chrome/tab-lifecycle-watcher';
 
 export default defineBackground(() => {
   // Guard: swallow noisy "Receiving end does not exist" errors
@@ -63,6 +65,36 @@ export default defineBackground(() => {
       if (_msg.method === 'speakWithInstalledVoice') boundaryRelay.rememberOrigin(sender.tab?.id);
     },
   });
+
+  // Stop playback when the speaking tab is closed or refreshed. Installed-voice
+  // audio lives in the offscreen document, which outlives the tab, so without
+  // this it keeps playing after close/refresh (the content script that would
+  // normally send stop is gone).
+  watchSpeakingTabLifecycle(
+    {
+      onRemoved: chrome.tabs.onRemoved,
+      onUpdated: chrome.tabs.onUpdated,
+      onReplaced: chrome.tabs.onReplaced,
+    },
+    () => ({
+      controllerTabId: controller.getState().tabId,
+      originTabId: boundaryRelay.originTabId,
+    }),
+    (tabId) => {
+      router({ dest: 'serviceWorker', method: 'stop', args: [] } satisfies RuntimeMessage);
+      // Only reach the offscreen doc when installed voice is the active path —
+      // otherwise OffscreenSupertonicReader.stop would create an offscreen doc
+      // just to send a no-op stop.
+      if (tabId === boundaryRelay.originTabId) {
+        router({
+          dest: 'serviceWorker',
+          method: 'stopInstalledVoice',
+          args: [],
+        } satisfies RuntimeMessage);
+      }
+      boundaryRelay.clear();
+    },
+  );
 
   // Action button: click the icon → toggle the widget on the active tab
   chrome.action.onClicked.addListener(async (tab) => {

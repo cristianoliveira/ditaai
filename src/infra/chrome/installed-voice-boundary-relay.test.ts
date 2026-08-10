@@ -54,4 +54,27 @@ describe('InstalledVoiceBoundaryRelay', () => {
 
     expect(forward).toHaveBeenCalledWith(2, expect.anything());
   });
+
+  it('exposes the current origin tab id', () => {
+    const relay = new InstalledVoiceBoundaryRelay(vi.fn());
+
+    expect(relay.originTabId).toBeNull();
+
+    relay.rememberOrigin(42);
+    expect(relay.originTabId).toBe(42);
+
+    relay.clear();
+    expect(relay.originTabId).toBeNull();
+  });
+
+  it('clear() stops forwarding boundaries until a new origin is remembered', () => {
+    const forward = vi.fn();
+    const relay = new InstalledVoiceBoundaryRelay(forward);
+
+    relay.rememberOrigin(42);
+    relay.clear();
+    relay.deliver({ charIndex: 0, charLength: 1 });
+
+    expect(forward).not.toHaveBeenCalled();
+  });
 });

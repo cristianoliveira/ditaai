@@ -10,27 +10,37 @@
 export type BoundaryForwarder = (tabId: number, event: unknown) => void;
 
 export class InstalledVoiceBoundaryRelay {
-  private originTabId: number | null = null;
+  private origin: number | null = null;
 
   constructor(
     private readonly forward: BoundaryForwarder,
     private readonly forwardSchedule: BoundaryForwarder = forward,
   ) {}
 
+  /** The tab that initiated the current installed-voice speak, or null. */
+  get originTabId(): number | null {
+    return this.origin;
+  }
+
   /** Record the tab that initiated an installed-voice speak. */
   rememberOrigin(tabId: number | null | undefined): void {
-    if (typeof tabId === 'number') this.originTabId = tabId;
+    if (typeof tabId === 'number') this.origin = tabId;
+  }
+
+  /** Forget the origin — used when the speaking tab is closed or refreshed. */
+  clear(): void {
+    this.origin = null;
   }
 
   /** Deliver a boundary event from offscreen to the originating content tab. */
   deliver(event: unknown): void {
-    if (this.originTabId === null) return;
-    this.forward(this.originTabId, event);
+    if (this.origin === null) return;
+    this.forward(this.origin, event);
   }
 
   /** Deliver a complete boundary schedule for content-side timing. */
   deliverSchedule(schedule: unknown): void {
-    if (this.originTabId === null) return;
-    this.forwardSchedule(this.originTabId, schedule);
+    if (this.origin === null) return;
+    this.forwardSchedule(this.origin, schedule);
   }
 }
