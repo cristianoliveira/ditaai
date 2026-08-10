@@ -23,6 +23,12 @@
       <h2>Voices</h2>
       <div id="voices-grid"></div>
     </section>
+
+    <section id="shortcuts-section">
+      <h2>Keyboard shortcuts</h2>
+      <p>Control narration from anywhere on the page. Click Change, then press the new keys.</p>
+      <div id="shortcuts-list"></div>
+    </section>
   </main>
 
   <style>
@@ -174,6 +180,55 @@
       border-radius: 2px;
       transition: width 0.3s ease;
     }
+
+    .shortcuts-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      background: #1a1a2e;
+      border-radius: 8px;
+    }
+    .shortcut-row.recording { outline: 1px solid var(--dita-accent); }
+    .shortcut-action-label { font-size: 13px; color: #e0e0f0; }
+    .shortcut-combo {
+      font-size: 12px;
+      color: var(--dita-accent-hover);
+      background: #2a2a4a;
+      padding: 4px 10px;
+      border-radius: 6px;
+      min-width: 140px;
+      text-align: center;
+    }
+    .shortcut-change {
+      background: #2a2a4a;
+      color: #fff;
+      border: 1px solid #4a4a6a;
+      padding: 4px 12px;
+      font-size: 12px;
+    }
+    .shortcut-change:hover { background: #3a3a5a; }
+    .shortcut-error {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: #3a2018;
+      color: #f2994a;
+      font-size: 12px;
+    }
+    .shortcut-reset {
+      margin-top: 12px;
+      background: transparent;
+      color: #8b8ba7;
+      border: 1px solid #4a4a6a;
+    }
+    .shortcut-reset:hover { color: #fff; }
   </style>
 
   <script type="module" src="./main.ts"></script>

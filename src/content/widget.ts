@@ -351,6 +351,14 @@ export class DitaWidget {
     this.applyHighlightVisual();
   }
 
+  /** Mirror an external volume change (e.g. keyboard shortcut) into the slider
+   * without re-notifying the caller. Takes 0–1. */
+  setVolume(volume: number): void {
+    const percent = Math.round(Math.min(1, Math.max(0, volume)) * 100);
+    this.volumeInput.value = String(percent);
+    this.volumeLabel.textContent = `${percent}%`;
+  }
+
   private applyHighlightVisual(): void {
     this.highlightBtn.setAttribute('aria-pressed', String(this.highlightEnabled));
   }

@@ -14,16 +14,23 @@ import {
 import { extractParagraphs } from '../content/paragraph-extractor';
 import { ParagraphStartAffordance } from '../content/paragraph-start-affordance';
 import { Picker } from '../content/picker/picker';
+import { ShortcutController } from '../content/shortcuts';
 import { DitaWidget } from '../content/widget';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
 import { collapseWhitespace, splitText } from '../domain/document/text-processor';
-import { type JumpStrategy, createParagraphJumper } from '../domain/playback/jump';
+import {
+  type JumpDirection,
+  type JumpStrategy,
+  createParagraphJumper,
+} from '../domain/playback/jump';
 import { filterParagraphs } from '../domain/selection/selection';
+import { DEFAULT_SHORTCUTS, type ShortcutAction } from '../domain/shortcuts/shortcuts';
 import { InstalledVoiceReader } from '../infra/audio/installed-voice-reader';
 import { SpeechSynthesisReader } from '../infra/audio/speech-synthesis-reader';
 import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-storage';
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
+import { ChromeShortcutStorage } from '../infra/chrome/shortcut-storage';
 import type { ParagraphSegment } from '../lib/types';
 
 /** A spoken chunk and its source paragraph. `base` is the chunk's offset within
@@ -97,6 +104,9 @@ const VOLUME_PREF = 'playbackVolume';
 function clampVolume(volume: number): number {
   return Math.min(1, Math.max(0, volume));
 }
+
+/** Volume step for keyboard shortcuts (0.1 = 10%). */
+const VOLUME_STEP = 0.1;
 
 async function loadPlaybackVolume(): Promise<number> {
   const stored = await chrome.storage.local.get(VOLUME_PREF);
@@ -288,29 +298,58 @@ export default defineContentScript({
       playAction(element);
     }
 
+    // ── Shared playback controls (widget buttons + keyboard shortcuts) ──────
+
+    function pausePlayback(): void {
+      sequencer.pause();
+      widget?.setState('paused');
+    }
+
+    function resumePlayback(): void {
+      sequencer.resume();
+      widget?.setState('playing');
+    }
+
+    function stopPlayback(): void {
+      sequencer.stop();
+      clearAllHighlights();
+      setStartMarker(null);
+      widget?.setState('idle');
+    }
+
+    function jumpPlayback(direction: JumpDirection): void {
+      const target = paragraphJumper.jump(currentIndex, direction, chunks.length);
+      if (target !== currentIndex) sequencer.seek(target);
+    }
+
+    /** Idle → play; playing → pause; paused → resume. */
+    function togglePlay(): void {
+      const state = sequencer.getState();
+      if (state.playing) pausePlayback();
+      else if (state.paused) resumePlayback();
+      else playAction();
+    }
+
+    function applyVolume(volume: number): void {
+      playbackVolume = clampVolume(volume);
+      void savePlaybackVolume(playbackVolume);
+      sequencer.setVolume(playbackVolume);
+      widget?.setVolume(playbackVolume);
+    }
+
+    function adjustVolume(delta: number): void {
+      applyVolume(playbackVolume + delta);
+    }
+
     /** Build a widget wired to the current-closure callbacks. */
     function buildWidget(): DitaWidget {
       return new DitaWidget(
         {
           onPlay: playAction,
-          onPause: () => {
-            sequencer.pause();
-            widget?.setState('paused');
-          },
-          onResume: () => {
-            sequencer.resume();
-            widget?.setState('playing');
-          },
-          onJump: (direction) => {
-            const target = paragraphJumper.jump(currentIndex, direction, chunks.length);
-            if (target !== currentIndex) sequencer.seek(target);
-          },
-          onStop: () => {
-            sequencer.stop();
-            clearAllHighlights();
-            setStartMarker(null);
-            widget?.setState('idle');
-          },
+          onPause: pausePlayback,
+          onResume: resumePlayback,
+          onJump: (direction) => jumpPlayback(direction),
+          onStop: stopPlayback,
           onClose: () => {
             sequencer.stop();
             clearAllHighlights();
@@ -355,12 +394,7 @@ export default defineContentScript({
               widget?.setState('idle');
             }
           },
-          onChangeVolume: (volume) => {
-            playbackVolume = volume;
-            void savePlaybackVolume(volume);
-            // Volume applies from the next segment — no need to interrupt playback.
-            sequencer.setVolume(volume);
-          },
+          onChangeVolume: (volume) => applyVolume(volume),
         },
         { highlightEnabled: highlightWordsEnabled, rate: playbackRate, volume: playbackVolume },
       );
@@ -369,6 +403,13 @@ export default defineContentScript({
     function mountWidget(): void {
       widget = buildWidget();
       widget.mount();
+      // Playback may already be running (started via keyboard shortcut) — the
+      // fresh widget must reflect it instead of showing an idle state.
+      const state = sequencer.getState();
+      if (state.playing || state.paused) {
+        widget.setState(state.playing ? 'playing' : 'paused');
+        widget.setProgress(state.current + 1, state.total);
+      }
       refreshReadable();
       startAffordance.enable();
     }
@@ -390,6 +431,22 @@ export default defineContentScript({
 
       mountWidget();
     }
+
+    // ── Keyboard shortcuts ──────────────────────────────────────────────────
+    // Same playback functions as the widget, so behavior is identical either
+    // way. The stored keymap (user-editable on the voices page) is merged over
+    // defaults when loaded.
+    const shortcutActions: Record<ShortcutAction, () => void> = {
+      togglePlay,
+      stop: stopPlayback,
+      jumpPrev: () => jumpPlayback('backward'),
+      jumpNext: () => jumpPlayback('forward'),
+      volumeUp: () => adjustVolume(VOLUME_STEP),
+      volumeDown: () => adjustVolume(-VOLUME_STEP),
+      toggleWidget,
+    };
+    const shortcutController = new ShortcutController(shortcutActions, DEFAULT_SHORTCUTS);
+    void new ChromeShortcutStorage().load().then((map) => shortcutController.update(map));
 
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg?.dest !== 'contentScript') return false;

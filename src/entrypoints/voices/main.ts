@@ -5,11 +5,14 @@
  * and provides download/install functionality via Cache Storage.
  */
 
+import { DEFAULT_SHORTCUTS } from '../../domain/shortcuts/shortcuts';
 import { SUPERTONIC_ENGINE_ASSETS, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
 import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
+import { ChromeShortcutStorage } from '../../infra/chrome/shortcut-storage';
 import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
+import { ShortcutsPanel } from './shortcuts-panel';
 import { type VoiceCardState, renderVoiceCard } from './voice-card';
 
 const CACHE_NAME = 'dita-voices';
@@ -200,6 +203,29 @@ async function downloadAll(): Promise<void> {
   }
 }
 
+// ── Shortcuts editor ─────────────────────────────────────────────────
+
+const shortcutsList = document.getElementById('shortcuts-list')!;
+const shortcutStorage = new ChromeShortcutStorage();
+const shortcutsPanel = new ShortcutsPanel(
+  {
+    onCapture: (action, combo) => {
+      void shortcutStorage.load().then((map) => {
+        const next = { ...map, [action]: combo };
+        void shortcutStorage.save(next).then(() => shortcutsPanel.update(next));
+      });
+    },
+    onReset: () => {
+      void shortcutStorage
+        .save(DEFAULT_SHORTCUTS)
+        .then(() => shortcutsPanel.update(DEFAULT_SHORTCUTS));
+    },
+  },
+  DEFAULT_SHORTCUTS,
+);
+
 // ── Init ─────────────────────────────────────────────────────────────
 
+shortcutsList.append(shortcutsPanel.mount());
+void shortcutStorage.load().then((map) => shortcutsPanel.update(map));
 refresh();

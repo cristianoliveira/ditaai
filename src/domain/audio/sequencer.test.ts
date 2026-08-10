@@ -35,6 +35,40 @@ function makeDelayedReader(): TextReader & { calls: string[]; resolveSpeak: () =
   };
 }
 
+/** Reader whose first prepare hangs until released — lets us pause during the
+ * preparation gap, before the utterance starts. Later prepares resolve at once. */
+function makePrepareDelayedReader(): TextReader & {
+  calls: string[];
+  resolvePrepare: () => void;
+  resolveSpeak: () => void;
+} {
+  const calls: string[] = [];
+  let resolvePrepareFn: (() => void) | null = null;
+  let resolveSpeakFn: (() => void) | null = null;
+  let prepareCalls = 0;
+  return {
+    calls,
+    resolvePrepare: () => resolvePrepareFn?.(),
+    resolveSpeak: () => resolveSpeakFn?.(),
+    prepare: vi.fn(() => {
+      prepareCalls++;
+      if (prepareCalls > 1) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        resolvePrepareFn = resolve;
+      });
+    }),
+    speak: vi.fn((text: string) => {
+      calls.push(text);
+      return new Promise<void>((resolve) => {
+        resolveSpeakFn = resolve;
+      });
+    }),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    stop: vi.fn(() => resolveSpeakFn?.()),
+  };
+}
+
 describe('SegmentSequencer', () => {
   it('speaks all segments in order', async () => {
     const reader = makeFakeReader();
@@ -96,11 +130,65 @@ describe('SegmentSequencer', () => {
     const seq = new SegmentSequencer(reader);
     seq.load(['one', 'two', 'three']);
 
-    expect(seq.getState()).toEqual({ current: 0, total: 3, playing: false });
+    expect(seq.getState()).toEqual({ current: 0, total: 3, playing: false, paused: false });
 
     await seq.play();
 
     expect(seq.getState().current).toBe(3);
+  });
+
+  it('reports paused state after pause() and clears it on resume', async () => {
+    const reader = makeDelayedReader();
+    const seq = new SegmentSequencer(reader);
+    seq.load(['a', 'b']);
+
+    const promise = seq.play();
+    await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+
+    seq.pause();
+    reader.resolveSpeak(); // cancelled speak resolves
+    await Promise.resolve();
+
+    expect(seq.getState().paused).toBe(true);
+    expect(seq.getState().playing).toBe(false);
+
+    seq.resume();
+    await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'a'])); // re-speak
+    reader.resolveSpeak();
+    await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'a', 'b']));
+    reader.resolveSpeak();
+
+    await promise;
+
+    expect(seq.getState().paused).toBe(false);
+  });
+
+  it('does not speak a segment when pause lands during preparation', async () => {
+    const reader = makePrepareDelayedReader();
+    const seq = new SegmentSequencer(reader);
+    seq.load(['one', 'two']);
+
+    const promise = seq.play();
+    await vi.waitFor(() => expect(reader.prepare).toHaveBeenCalled());
+
+    // Pause while the first segment is still being prepared: the reader has
+    // nothing to cancel yet, and the loop must not start speaking afterwards.
+    seq.pause();
+    reader.resolvePrepare();
+    await Promise.resolve();
+
+    expect(reader.speak).not.toHaveBeenCalled();
+    expect(seq.getState().paused).toBe(true);
+
+    // Resume → the segment is finally spoken.
+    seq.resume();
+    await vi.waitFor(() => expect(reader.calls).toEqual(['one']));
+    reader.resolveSpeak();
+    await vi.waitFor(() => expect(reader.calls).toEqual(['one', 'two']));
+    reader.resolveSpeak();
+
+    await promise;
+    expect(reader.calls).toEqual(['one', 'two']);
   });
 
   it('stop halts playback', async () => {

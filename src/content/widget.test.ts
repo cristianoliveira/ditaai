@@ -149,6 +149,18 @@ describe('DitaWidget volume slider', () => {
     expect(volumeSlider()?.value).toBe('40');
     expect(volumeLabel()?.textContent).toBe('40%');
   });
+
+  it('setVolume mirrors an external volume change without notifying', () => {
+    const onChangeVolume = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onChangeVolume });
+    widget.mount();
+
+    widget.setVolume(0.25);
+
+    expect(volumeSlider()?.value).toBe('25');
+    expect(volumeLabel()?.textContent).toBe('25%');
+    expect(onChangeVolume).not.toHaveBeenCalled();
+  });
 });
 
 describe('DitaWidget jump buttons', () => {

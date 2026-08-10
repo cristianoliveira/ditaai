@@ -8,6 +8,7 @@ export interface SequencerState {
   current: number;
   total: number;
   playing: boolean;
+  paused: boolean;
 }
 
 export class SegmentSequencer {
@@ -46,6 +47,7 @@ export class SegmentSequencer {
       current: this.index,
       total: this.segments.length,
       playing: this.playing,
+      paused: this.paused,
     };
   }
 
@@ -80,6 +82,14 @@ export class SegmentSequencer {
       if (this.seeking) {
         this.seeking = false;
         continue; // playhead moved during prepare — re-evaluate at the new index
+      }
+      // Pause can land during the async prepare gap — the reader had nothing to
+      // cancel yet, so gate here instead of speaking a segment the user paused.
+      if (this.paused) {
+        this.resumeCharIndex = this.lastCharIndex;
+        await this.waitWhilePaused();
+        if (this.stopped) break;
+        continue; // re-speak the same segment once resumed
       }
 
       const speaking = this.reader.speak(segment, speakOptions);
