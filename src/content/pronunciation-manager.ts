@@ -1,6 +1,6 @@
 // Pronunciation manager — floating Shadow-DOM panel for curating the dictionary.
 // Reached from the widget dictionary button. Lists entries with add / delete /
-// preview and a master on/off toggle. Mirrors the picker-panel / popover pattern.
+// preview, a master on/off toggle, and live search. Mirrors picker-panel pattern.
 
 import { theme } from './theme';
 
@@ -73,6 +73,7 @@ const STYLES = `
     background: #1f1f36;
     border-bottom: 1px solid #2a2a4a;
   }
+  .dita-search { padding: 8px 14px; border-bottom: 1px solid #2a2a4a; }
   .dita-input {
     flex: 1;
     min-width: 0;
@@ -98,7 +99,18 @@ const STYLES = `
   .dita-add-btn:hover { background: ${theme.accentHover}; }
   .dita-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .dita-list { overflow-y: auto; padding: 6px 0; }
+  /* flex:1 + min-height:0 lets the list scroll within the capped panel instead
+     of pushing it past max-height (which overflow:hidden would clip). */
+  .dita-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 6px 0;
+  }
+  .dita-list::-webkit-scrollbar { width: 8px; }
+  .dita-list::-webkit-scrollbar-thumb { background: #4a4a6a; border-radius: 4px; }
+  .dita-list::-webkit-scrollbar-thumb:hover { background: #5a5a7a; }
+  .dita-list::-webkit-scrollbar-track { background: transparent; }
 
   .dita-entry {
     display: flex;
@@ -132,11 +144,13 @@ export class PronunciationManager {
   private newWordInput!: HTMLInputElement;
   private newSpokenInput!: HTMLInputElement;
   private addBtn!: HTMLButtonElement;
+  private searchInput!: HTMLInputElement;
   private listEl: HTMLElement;
   private toggleEl!: HTMLInputElement;
   private readonly options: PronunciationManagerOptions;
   private entries: PronunciationManagerEntry[];
   private enabled: boolean;
+  private query = '';
 
   constructor(options: PronunciationManagerOptions) {
     this.options = options;
@@ -154,21 +168,35 @@ export class PronunciationManager {
 
     const header = this.buildHeader();
     const addRow = this.buildAddRow();
+    const searchRow = this.buildSearchRow();
     this.listEl = this.buildList();
-    panel.append(header, addRow, this.listEl);
+    panel.append(header, addRow, searchRow, this.listEl);
     this.shadow.append(style, panel);
 
     this.updateAddEnabled();
   }
 
-  /** Re-render the list and toggle in place (no remount, no re-animation). */
+  /** Re-render the list and toggle in place (no remount, no re-animation).
+   * Preserves the active search query. */
   update(entries: PronunciationManagerEntry[], enabled: boolean): void {
     this.entries = entries;
     this.enabled = enabled;
+    this.rerenderList();
+    this.toggleEl.checked = enabled;
+  }
+
+  private filteredEntries(): PronunciationManagerEntry[] {
+    const q = this.query.trim().toLowerCase();
+    if (!q) return this.entries;
+    return this.entries.filter(
+      (e) => e.word.toLowerCase().includes(q) || e.spoken.toLowerCase().includes(q),
+    );
+  }
+
+  private rerenderList(): void {
     const fresh = this.buildList();
     this.listEl.replaceWith(fresh);
     this.listEl = fresh;
-    this.toggleEl.checked = enabled;
   }
 
   private buildHeader(): HTMLElement {
@@ -229,6 +257,18 @@ export class PronunciationManager {
     return row;
   }
 
+  private buildSearchRow(): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'dita-search';
+    this.searchInput = this.makeInput('search', 'Search…');
+    this.searchInput.addEventListener('input', () => {
+      this.query = this.searchInput.value;
+      this.rerenderList();
+    });
+    row.append(this.searchInput);
+    return row;
+  }
+
   private makeInput(field: string, placeholder: string): HTMLInputElement {
     const input = document.createElement('input');
     input.type = 'text';
@@ -244,19 +284,29 @@ export class PronunciationManager {
     list.className = 'dita-list';
 
     if (this.entries.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'dita-empty';
-      // biome-ignore lint/complexity/useLiteralKeys: TS index signature requires bracket notation
-      empty.dataset['empty'] = '';
-      empty.textContent = 'No substitutions yet.';
-      list.append(empty);
+      list.append(this.buildEmpty('No substitutions yet.'));
       return list;
     }
 
-    for (const entry of this.entries) {
+    const matches = this.filteredEntries();
+    if (matches.length === 0) {
+      list.append(this.buildEmpty('No matches.'));
+      return list;
+    }
+
+    for (const entry of matches) {
       list.append(this.buildEntry(entry));
     }
     return list;
+  }
+
+  private buildEmpty(message: string): HTMLElement {
+    const empty = document.createElement('div');
+    empty.className = 'dita-empty';
+    // biome-ignore lint/complexity/useLiteralKeys: TS index signature requires bracket notation
+    empty.dataset['empty'] = '';
+    empty.textContent = message;
+    return empty;
   }
 
   private buildEntry(entry: PronunciationManagerEntry): HTMLElement {

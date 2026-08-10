@@ -168,4 +168,22 @@ describe('PronunciationManager', () => {
     const toggle = shadow().querySelector('[data-toggle="enabled"]') as HTMLInputElement;
     expect(toggle.checked).toBe(false);
   });
+
+  it('filters the list by the search query (word or spoken)', () => {
+    make().mount();
+    const search = shadow().querySelector('[data-field="search"]') as HTMLInputElement;
+    search.value = 'seq';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(shadow().querySelectorAll('[data-entry]').length).toBe(1);
+    expect(shadow().querySelector('[data-entry="SQL"]')).not.toBeNull();
+  });
+
+  it('shows a no-matches state when the search matches nothing', () => {
+    make().mount();
+    const search = shadow().querySelector('[data-field="search"]') as HTMLInputElement;
+    search.value = 'nope';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(shadow().querySelectorAll('[data-entry]').length).toBe(0);
+    expect(shadow().querySelector('[data-empty]')?.textContent).toContain('No matches');
+  });
 });
