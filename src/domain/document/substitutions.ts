@@ -6,9 +6,11 @@
 
 export type Substitutions = Record<string, string>;
 
-/** Port: supplies the pronunciation substitution dictionary (global in v1). */
-export interface SubstitutionSource {
+/** Port: persists the pronunciation substitution dictionary (global in v1).
+ * Mirrors the DomainSelectorStore / VoiceSelectionStore pattern. */
+export interface SubstitutionStore {
   load(): Promise<Substitutions>;
+  save(dict: Substitutions): Promise<void>;
 }
 
 /** Coerce untrusted stored data into a valid Substitutions map. Drops

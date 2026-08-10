@@ -1,18 +1,22 @@
-// chrome.storage.local adapter for SubstitutionSource.
+// chrome.storage.local adapter for SubstitutionStore.
 // Persists the user's pronunciation dictionary (global in v1). Raw stored data
 // is sanitized at the boundary so malformed entries never reach the matcher.
 
 import {
-  type SubstitutionSource,
+  type SubstitutionStore,
   type Substitutions,
   sanitizeSubstitutions,
 } from '../../domain/document/substitutions';
 
 export const SUBSTITUTIONS_KEY = 'pronunciations';
 
-export class ChromeSubstitutionStorage implements SubstitutionSource {
+export class ChromeSubstitutionStorage implements SubstitutionStore {
   async load(): Promise<Substitutions> {
     const stored = await chrome.storage.local.get(SUBSTITUTIONS_KEY);
     return sanitizeSubstitutions(stored[SUBSTITUTIONS_KEY]);
+  }
+
+  async save(dict: Substitutions): Promise<void> {
+    await chrome.storage.local.set({ [SUBSTITUTIONS_KEY]: dict });
   }
 }

@@ -110,6 +110,29 @@ export default defineBackground(() => {
     }
   });
 
+  // Context menu: right-click selected text → open the pronunciation popover in
+  // the content tab. removeAll on install keeps the item idempotent across
+  // updates (context menus persist, so a bare create would throw on duplicate).
+  chrome.runtime.onInstalled.addListener(() => {
+    chrome.contextMenus.removeAll(() => {
+      chrome.contextMenus.create({
+        id: 'pronounce-selection',
+        title: 'Pronounce "%s" as...',
+        contexts: ['selection'],
+      });
+    });
+  });
+  chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId !== 'pronounce-selection' || !tab?.id || !info.selectionText) return;
+    chrome.tabs
+      .sendMessage(tab.id, {
+        dest: 'contentScript',
+        method: 'pronounceSelection',
+        args: [info.selectionText],
+      })
+      .catch(() => {});
+  });
+
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.dest === 'background' && msg.method === 'openVoicesPage') {
       const url = chrome.runtime.getURL('voices.html');

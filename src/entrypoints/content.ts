@@ -14,11 +14,16 @@ import {
 import { extractParagraphs } from '../content/paragraph-extractor';
 import { ParagraphStartAffordance } from '../content/paragraph-start-affordance';
 import { Picker } from '../content/picker/picker';
+import { PronunciationPopover } from '../content/pronunciation-popover';
 import { ShortcutController } from '../content/shortcuts';
 import { DitaWidget } from '../content/widget';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
-import { type Substitutions, applySubstitutions } from '../domain/document/substitutions';
+import {
+  type Substitutions,
+  applySubstitutions,
+  sanitizeSubstitutions,
+} from '../domain/document/substitutions';
 import { collapseWhitespace, splitText } from '../domain/document/text-processor';
 import {
   type JumpDirection,
@@ -32,7 +37,7 @@ import { SpeechSynthesisReader } from '../infra/audio/speech-synthesis-reader';
 import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-storage';
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
 import { ChromeShortcutStorage } from '../infra/chrome/shortcut-storage';
-import { ChromeSubstitutionStorage } from '../infra/chrome/substitution-storage';
+import { ChromeSubstitutionStorage, SUBSTITUTIONS_KEY } from '../infra/chrome/substitution-storage';
 import type { ParagraphSegment } from '../lib/types';
 
 /** A spoken chunk and its source paragraph. `base` is the chunk's offset within
@@ -145,7 +150,7 @@ export default defineContentScript({
     let playbackVolume = 1;
     let substitutions: Substitutions = {};
     const selectorStore = new ChromeDomainSelectorStorage();
-    const substitutionSource = new ChromeSubstitutionStorage();
+    const substitutionStore = new ChromeSubstitutionStorage();
     const hostname = window.location.hostname;
     let activeSelector: string | null = null;
     let readableElements: Set<Element> = new Set();
@@ -170,8 +175,17 @@ export default defineContentScript({
         console.info(`[dita] restored selector for ${hostname}: ${selector}`);
       }
     });
-    void substitutionSource.load().then((dict) => {
+    void substitutionStore.load().then((dict) => {
       substitutions = dict;
+    });
+
+    // Keep the in-memory dict fresh when storage changes (this tab or another),
+    // so a substitution saved from the popover applies immediately.
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      if (changes[SUBSTITUTIONS_KEY]) {
+        substitutions = sanitizeSubstitutions(changes[SUBSTITUTIONS_KEY].newValue);
+      }
     });
 
     function clearAllHighlights(): void {
@@ -471,6 +485,30 @@ export default defineContentScript({
     const shortcutController = new ShortcutController(shortcutActions, DEFAULT_SHORTCUTS);
     void new ChromeShortcutStorage().load().then((map) => shortcutController.update(map));
 
+    let pronunciationPopover: PronunciationPopover | null = null;
+
+    function showPronunciationPopover(word: string): void {
+      pronunciationPopover?.unmount();
+      pronunciationPopover = new PronunciationPopover({
+        word,
+        spoken: substitutions[word] ?? undefined,
+        onPreview: (_word, spoken) => {
+          void reader.speak(spoken, { volume: playbackVolume });
+        },
+        onSave: (word, spoken) => {
+          substitutions = { ...substitutions, [word]: spoken };
+          void substitutionStore.save(substitutions);
+          pronunciationPopover?.unmount();
+          pronunciationPopover = null;
+        },
+        onCancel: () => {
+          pronunciationPopover?.unmount();
+          pronunciationPopover = null;
+        },
+      });
+      pronunciationPopover.mount();
+    }
+
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg?.dest !== 'contentScript') return false;
       if (msg.method === 'getText') {
@@ -480,6 +518,12 @@ export default defineContentScript({
       }
       if (msg.method === 'toggleWidget') {
         toggleWidget();
+        sendResponse({ ok: true });
+        return false;
+      }
+      if (msg.method === 'pronounceSelection') {
+        const word = typeof msg.args?.[0] === 'string' ? msg.args[0].trim() : '';
+        if (word) showPronunciationPopover(word);
         sendResponse({ ok: true });
         return false;
       }
