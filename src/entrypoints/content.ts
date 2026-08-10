@@ -11,6 +11,7 @@ import {
   highlightWord,
   markStartPoint,
 } from '../content/highlighter';
+import { nearestReadable } from '../content/nearest-readable';
 import { extractParagraphs } from '../content/paragraph-extractor';
 import { ParagraphStartAffordance } from '../content/paragraph-start-affordance';
 import { Picker } from '../content/picker/picker';
@@ -21,6 +22,7 @@ import {
 import { PronunciationPopover } from '../content/pronunciation-popover';
 import { ShortcutController } from '../content/shortcuts';
 import { DitaWidget } from '../content/widget';
+import { locateWord } from '../content/word-locator';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
 import {
@@ -186,7 +188,7 @@ export default defineContentScript({
     let markedStart: Element | null = null;
     const startAffordance = new ParagraphStartAffordance({
       isReadable: (el) => readableElements.has(el),
-      onStartFrom: startFromParagraph,
+      onStartFrom: startFromPosition,
     });
 
     void loadHighlightEnabled().then((value) => {
@@ -293,16 +295,31 @@ export default defineContentScript({
       }
     }
 
-    function playAction(fromElement?: Element | null): void {
+    function playAction(
+      fromElement?: Element | null,
+      word?: { index: number; char: number },
+    ): void {
       chunks = buildChunksFiltered(document);
       const texts = chunks.map((chunk) => chunk.text);
       if (texts.length === 0) return;
 
-      const foundIndex = fromElement
-        ? chunks.findIndex((chunk) => chunk.element === fromElement)
-        : -1;
-      const startIndex = Math.max(0, foundIndex);
-      setStartMarker(foundIndex >= 0 && fromElement ? fromElement : null);
+      // Start position: an explicit word (char-precise) wins over a paragraph.
+      let startIndex: number;
+      let startChar: number;
+      let marker: Element | null = null;
+      if (word) {
+        startIndex = Math.max(0, Math.min(word.index, texts.length - 1));
+        startChar = Math.max(0, word.char);
+        marker = chunks[startIndex]?.element ?? null;
+      } else {
+        const foundIndex = fromElement
+          ? chunks.findIndex((chunk) => chunk.element === fromElement)
+          : -1;
+        startIndex = Math.max(0, foundIndex);
+        startChar = 0;
+        marker = foundIndex >= 0 && fromElement ? fromElement : null;
+      }
+      setStartMarker(marker);
 
       console.info(
         `[dita] segments ${JSON.stringify({
@@ -312,7 +329,7 @@ export default defineContentScript({
         })}`,
       );
 
-      sequencer.load(texts, startIndex);
+      sequencer.load(texts, startIndex, startChar);
       paragraphJumper = createParagraphJumper(paragraphBreakpoints(chunks));
 
       sequencer.onSegmentChange = (index) => {
@@ -347,19 +364,26 @@ export default defineContentScript({
       });
     }
 
-    /** Begin (or restart) reading from a specific paragraph element. */
-    function startFromParagraph(element: Element): void {
+    /** Begin (or restart) reading from a paragraph, or a precise word within it. */
+    function startFromPosition(
+      element: Element | null,
+      word?: { index: number; char: number },
+    ): void {
       if (sequencer.getState().playing) {
-        const idx = chunks.findIndex((c) => c.element === element);
+        const idx = word
+          ? word.index
+          : element
+            ? chunks.findIndex((c) => c.element === element)
+            : -1;
         if (idx >= 0) {
-          setStartMarker(element);
+          setStartMarker(chunks[idx]?.element ?? element);
           sequencer.seek(idx);
         }
         return;
       }
       sequencer.stop();
       clearAllHighlights();
-      playAction(element);
+      playAction(element, word);
     }
 
     // ── Shared playback controls (widget buttons + keyboard shortcuts) ──────
@@ -618,6 +642,47 @@ export default defineContentScript({
       }
       if (msg.method === 'toggleWidget') {
         toggleWidget();
+        sendResponse({ ok: true });
+        return false;
+      }
+      if (msg.method === 'startFromContext') {
+        // Right-click "Listen from here". Resolve the paragraph from the live
+        // selection (reliable) or, when nothing is selected, from the
+        // right-clicked element via targetElementId. If text is selected, start
+        // at that word (char-precise) inside the paragraph; otherwise at the
+        // paragraph. Resolution is scoped by any active picker selector because
+        // buildChunksFiltered already filters to it.
+        if (!widget?.isMounted()) mountWidget();
+        const built = buildChunksFiltered(document);
+        const readable = built.map((c) => c.element);
+
+        let paragraph: Element | null = null;
+        let selectionText = '';
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+          selectionText = sel.toString();
+          const node = sel.getRangeAt(0).startContainer;
+          const startEl =
+            node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+          if (startEl) paragraph = nearestReadable(startEl, readable);
+        }
+        if (!paragraph) {
+          const targetElementId = msg.args?.[0];
+          const target =
+            typeof targetElementId === 'number'
+              ? (
+                  chrome.contextMenus as unknown as {
+                    getTargetElement(id: number): Element | null;
+                  }
+                ).getTargetElement(targetElementId)
+              : null;
+          if (target) paragraph = nearestReadable(target, readable);
+          if (typeof msg.args?.[1] === 'string') selectionText = msg.args[1];
+        }
+
+        const word =
+          paragraph && selectionText.trim() ? locateWord(built, selectionText, paragraph) : null;
+        startFromPosition(paragraph, word ?? undefined);
         sendResponse({ ok: true });
         return false;
       }

@@ -42,15 +42,15 @@ export class SegmentSequencer {
 
   constructor(private reader: TextReader) {}
 
-  load(segments: string[], startIndex = 0): void {
+  load(segments: string[], startIndex = 0, startChar = 0): void {
     this.segments = segments;
     this.index = segments.length === 0 ? 0 : Math.max(0, Math.min(startIndex, segments.length - 1));
     this.playing = false;
     this.stopped = false;
     this.paused = false;
     this.seeking = false;
-    this.lastCharIndex = 0;
-    this.resumeCharIndex = 0;
+    this.resumeCharIndex = Math.max(0, startChar);
+    this.lastCharIndex = this.resumeCharIndex;
     this.rate = undefined;
     this.volume = undefined;
     this.restarting = false;

@@ -106,17 +106,35 @@ export default defineBackground(() => {
         title: 'Pronounce "%s" as...',
         contexts: ['selection'],
       });
+      chrome.contextMenus.create({
+        id: 'start-from-here',
+        title: '▶ Listen from here',
+        contexts: ['page', 'frame', 'selection', 'link', 'image', 'video', 'audio'],
+      });
     });
   });
   chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId !== 'pronounce-selection' || !tab?.id || !info.selectionText) return;
-    chrome.tabs
-      .sendMessage(tab.id, {
-        dest: 'contentScript',
-        method: 'pronounceSelection',
-        args: [info.selectionText],
-      })
-      .catch(() => {});
+    if (!tab?.id) return;
+    if (info.menuItemId === 'pronounce-selection') {
+      if (!info.selectionText) return;
+      chrome.tabs
+        .sendMessage(tab.id, {
+          dest: 'contentScript',
+          method: 'pronounceSelection',
+          args: [info.selectionText],
+        })
+        .catch(() => {});
+      return;
+    }
+    if (info.menuItemId === 'start-from-here') {
+      chrome.tabs
+        .sendMessage(tab.id, {
+          dest: 'contentScript',
+          method: 'startFromContext',
+          args: [(info as { targetElementId?: number }).targetElementId, info.selectionText],
+        })
+        .catch(() => {});
+    }
   });
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
