@@ -18,6 +18,7 @@ import { ShortcutController } from '../content/shortcuts';
 import { DitaWidget } from '../content/widget';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
+import { type Substitutions, applySubstitutions } from '../domain/document/substitutions';
 import { collapseWhitespace, splitText } from '../domain/document/text-processor';
 import {
   type JumpDirection,
@@ -31,6 +32,7 @@ import { SpeechSynthesisReader } from '../infra/audio/speech-synthesis-reader';
 import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-storage';
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
 import { ChromeShortcutStorage } from '../infra/chrome/shortcut-storage';
+import { ChromeSubstitutionStorage } from '../infra/chrome/substitution-storage';
 import type { ParagraphSegment } from '../lib/types';
 
 /** A spoken chunk and its source paragraph. `base` is the chunk's offset within
@@ -43,7 +45,7 @@ interface Chunk {
   base: number;
 }
 
-function buildChunks(doc: Document): Chunk[] {
+function buildChunks(doc: Document, substitutions: Substitutions = {}): Chunk[] {
   const paragraphs: ParagraphSegment[] = extractParagraphs(doc);
   const chunks: Chunk[] = [];
   for (const paragraph of paragraphs) {
@@ -53,7 +55,11 @@ function buildChunks(doc: Document): Chunk[] {
     for (const text of splitText(cleaned)) {
       const found = cleaned.indexOf(text, searchFrom);
       const base = found === -1 ? searchFrom : found;
-      chunks.push({ text, element: paragraph.element, base });
+      chunks.push({
+        text: applySubstitutions(text, substitutions),
+        element: paragraph.element,
+        base,
+      });
       searchFrom = base + text.length;
     }
   }
@@ -137,7 +143,9 @@ export default defineContentScript({
     let highlightWordsEnabled = true;
     let playbackRate = 1;
     let playbackVolume = 1;
+    let substitutions: Substitutions = {};
     const selectorStore = new ChromeDomainSelectorStorage();
+    const substitutionSource = new ChromeSubstitutionStorage();
     const hostname = window.location.hostname;
     let activeSelector: string | null = null;
     let readableElements: Set<Element> = new Set();
@@ -161,6 +169,9 @@ export default defineContentScript({
         activeSelector = selector;
         console.info(`[dita] restored selector for ${hostname}: ${selector}`);
       }
+    });
+    void substitutionSource.load().then((dict) => {
+      substitutions = dict;
     });
 
     function clearAllHighlights(): void {
@@ -186,7 +197,7 @@ export default defineContentScript({
     }
 
     function buildChunksFiltered(doc: Document): Chunk[] {
-      const allChunks = buildChunks(doc);
+      const allChunks = buildChunks(doc, substitutions);
       if (!activeSelector) return allChunks;
 
       // First try: filter paragraphs that match the selector.
@@ -209,7 +220,7 @@ export default defineContentScript({
           for (const text of splitText(cleaned)) {
             const found = cleaned.indexOf(text, searchFrom);
             const base = found === -1 ? searchFrom : found;
-            chunks.push({ text, element: el, base });
+            chunks.push({ text: applySubstitutions(text, substitutions), element: el, base });
             searchFrom = base + text.length;
           }
         }
