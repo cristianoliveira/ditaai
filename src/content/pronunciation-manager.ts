@@ -25,7 +25,7 @@ const STYLES = `
 
   .dita-manager {
     position: fixed;
-    bottom: 24px;
+    bottom: 84px; /* clear the 52px widget pill (24 + 52 + gap) */
     left: 50%;
     transform: translateX(-50%);
     z-index: 2147483647;
