@@ -409,6 +409,63 @@ describe('DitaWidget Select button', () => {
   });
 });
 
+describe('DitaWidget selection chip', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function chip(): HTMLElement | null {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    return root?.querySelector<HTMLElement>('.dita-selection-chip') ?? null;
+  }
+
+  function chipLabel(): HTMLElement | null {
+    return chip()?.querySelector<HTMLElement>('.dita-selection-chip-label') ?? null;
+  }
+
+  function removeButton(): HTMLButtonElement | null {
+    return chip()?.querySelector<HTMLButtonElement>('.dita-selection-chip-remove') ?? null;
+  }
+
+  it('is hidden when no selection is active', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    expect(chip()?.hidden).toBe(true);
+  });
+
+  it('shows the active selector text when a selection is given', () => {
+    const widget = new DitaWidget(noopCallbacks, { selection: 'article.post' });
+    widget.mount();
+    expect(chip()?.hidden).toBe(false);
+    expect(chipLabel()?.textContent).toBe('article.post');
+    expect(removeButton()?.getAttribute('aria-label')).toBe('Clear read selection');
+  });
+
+  it('remove control fires onClearSelection', () => {
+    const onClearSelection = vi.fn();
+    const widget = new DitaWidget(
+      { ...noopCallbacks, onClearSelection },
+      { selection: 'article.post' },
+    );
+    widget.mount();
+    removeButton()?.click();
+    expect(onClearSelection).toHaveBeenCalled();
+  });
+
+  it('setSelection updates the label and visibility at runtime', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    expect(chip()?.hidden).toBe(true);
+
+    widget.setSelection('main > div');
+    expect(chip()?.hidden).toBe(false);
+    expect(chipLabel()?.textContent).toBe('main > div');
+
+    widget.setSelection(null);
+    expect(chip()?.hidden).toBe(true);
+  });
+});
+
 describe('DitaWidget Dictionary button', () => {
   afterEach(() => {
     document.body.innerHTML = '';

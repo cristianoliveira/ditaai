@@ -17,6 +17,7 @@ export interface WidgetCallbacks {
   onSettings?(): void;
   onToggleHighlight?(enabled: boolean): void;
   onSelect?(): void;
+  onClearSelection?(): void;
   onDictionary?(): void;
   onChangeRate?(rate: number): void;
   onChangeVolume?(volume: number): void;
@@ -106,6 +107,37 @@ const STYLES = `
   }
   .dita-btn-select:hover { background: #2a2a4a; color: #fff; }
 
+  .dita-selection-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 180px;
+    padding: 3px 4px 3px 10px;
+    border-radius: 999px;
+    background: ${theme.accent};
+    color: #fff;
+    font-size: 12px;
+  }
+  .dita-selection-chip[hidden] { display: none; }
+  .dita-selection-chip-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  .dita-selection-chip-remove {
+    flex: 0 0 auto;
+    width: 18px; height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.25);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .dita-selection-chip-remove:hover { background: rgba(0,0,0,0.45); }
+
   .dita-btn-dict {
     width: 28px; height: 28px;
     background: transparent;
@@ -178,6 +210,8 @@ export class DitaWidget {
   private host: HTMLDivElement;
   private shadow: ShadowRoot;
   private playBtn: HTMLButtonElement;
+  private selectionChip: HTMLDivElement;
+  private selectionLabel: HTMLSpanElement;
   private highlightBtn: HTMLButtonElement;
   private rateInput: HTMLInputElement;
   private rateLabel: HTMLSpanElement;
@@ -189,9 +223,15 @@ export class DitaWidget {
 
   constructor(
     callbacks: WidgetCallbacks,
-    options?: { highlightEnabled?: boolean; rate?: number; volume?: number },
+    options?: {
+      highlightEnabled?: boolean;
+      rate?: number;
+      volume?: number;
+      selection?: string | null;
+    },
   ) {
     this.highlightEnabled = options?.highlightEnabled ?? true;
+    const initialSelection = options?.selection ?? null;
     const initialRate = options?.rate ?? 1;
     const initialVolume = options?.volume ?? 1;
     this.host = document.createElement('div');
@@ -250,6 +290,22 @@ export class DitaWidget {
     selectBtn.textContent = '🔍';
     selectBtn.setAttribute('aria-label', 'Select what to read');
     selectBtn.addEventListener('click', () => callbacks.onSelect?.());
+
+    this.selectionChip = document.createElement('div');
+    this.selectionChip.className = 'dita-selection-chip';
+    this.selectionChip.hidden = true;
+
+    this.selectionLabel = document.createElement('span');
+    this.selectionLabel.className = 'dita-selection-chip-label';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'dita-selection-chip-remove';
+    removeBtn.textContent = '✕';
+    removeBtn.setAttribute('aria-label', 'Clear read selection');
+    removeBtn.addEventListener('click', () => callbacks.onClearSelection?.());
+
+    this.selectionChip.append(this.selectionLabel, removeBtn);
+    if (initialSelection) this.setSelection(initialSelection);
 
     const dictBtn = document.createElement('button');
     dictBtn.className = 'dita-btn dita-btn-dict';
@@ -329,6 +385,7 @@ export class DitaWidget {
       this.volumeLabel,
       stopBtn,
       selectBtn,
+      this.selectionChip,
       dictBtn,
       this.highlightBtn,
       settingsBtn,
@@ -408,5 +465,17 @@ export class DitaWidget {
 
   private applyHighlightVisual(): void {
     this.highlightBtn.setAttribute('aria-pressed', String(this.highlightEnabled));
+  }
+
+  /** Show the active read selector as a removable chip, or hide it when null.
+   * Removing the chip is the explicit way to clear a saved selection. */
+  setSelection(selector: string | null): void {
+    if (selector) {
+      this.selectionLabel.textContent = selector;
+      this.selectionChip.hidden = false;
+    } else {
+      this.selectionChip.hidden = true;
+      this.selectionLabel.textContent = '';
+    }
   }
 }

@@ -457,14 +457,20 @@ export default defineContentScript({
             unmountWidget();
             const picker = new Picker();
             const selector = await picker.enter(activeSelector ?? undefined);
+            // Cancel/Esc/✕ resolve to null — leave any existing selection
+            // intact. The Clear-selection control is the explicit way to
+            // remove a saved selector.
             if (selector) {
               activeSelector = selector;
               void selectorStore.save(hostname, selector);
-            } else {
-              activeSelector = null;
-              void selectorStore.clear(hostname);
             }
             mountWidget();
+          },
+          onClearSelection: () => {
+            void selectorStore.clear(hostname);
+            activeSelector = null;
+            widget?.setSelection(null);
+            refreshReadable();
           },
           onToggleHighlight: (enabled) => {
             highlightWordsEnabled = enabled;
@@ -474,7 +480,12 @@ export default defineContentScript({
           onChangeRate: (rate) => applyRate(rate),
           onChangeVolume: (volume) => applyVolume(volume),
         },
-        { highlightEnabled: highlightWordsEnabled, rate: playbackRate, volume: playbackVolume },
+        {
+          highlightEnabled: highlightWordsEnabled,
+          rate: playbackRate,
+          volume: playbackVolume,
+          selection: activeSelector,
+        },
       );
     }
 
