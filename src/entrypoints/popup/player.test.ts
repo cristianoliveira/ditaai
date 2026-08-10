@@ -44,6 +44,17 @@ describe('PopupPlayer', () => {
     await vi.waitFor(() => expect(send).toHaveBeenLastCalledWith('resumePlayback'));
   });
 
+  it('opens configuration in the voices page', async () => {
+    const send = vi.fn();
+    const openConfiguration = vi.fn().mockResolvedValue(undefined);
+    const player = new PopupPlayer(send, openConfiguration);
+    document.body.append(player.mount());
+
+    player.element.querySelector<HTMLButtonElement>('[data-action="configuration"]')?.click();
+
+    await vi.waitFor(() => expect(openConfiguration).toHaveBeenCalledOnce());
+  });
+
   it('stops page narration', async () => {
     const send = vi.fn().mockResolvedValue({ ok: true });
     const player = new PopupPlayer(send);
@@ -51,5 +62,27 @@ describe('PopupPlayer', () => {
 
     player.element.querySelector<HTMLButtonElement>('[data-action="stop"]')?.click();
     await vi.waitFor(() => expect(send).toHaveBeenCalledWith('stopPlayback'));
+  });
+
+  it('opens the on-page player bar alongside the popup', async () => {
+    const send = vi.fn().mockResolvedValue({ ok: true });
+    const player = new PopupPlayer(send);
+    document.body.append(player.mount());
+
+    await player.openPlayerBar();
+
+    expect(send).toHaveBeenCalledWith('openWidget');
+  });
+
+  it('does not throw when the page cannot receive the open request', async () => {
+    const send = vi
+      .fn()
+      .mockRejectedValue(
+        new Error('Could not establish connection. Receiving end does not exist.'),
+      );
+    const player = new PopupPlayer(send);
+    document.body.append(player.mount());
+
+    await expect(player.openPlayerBar()).resolves.toBeUndefined();
   });
 });

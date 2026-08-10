@@ -29,6 +29,17 @@
       <p>Control narration from anywhere on the page. Click Change, then press the new keys.</p>
       <div id="shortcuts-list"></div>
     </section>
+
+    <section id="configuration-section">
+      <h2>Configuration</h2>
+      <p>Back up or restore shortcuts, pronunciations, reading preferences, voice selection, and page scopes. Downloaded voice models are not included.</p>
+      <div class="configuration-actions">
+        <button id="export-configuration" class="btn btn-configuration" type="button">Export configuration</button>
+        <button id="import-configuration" class="btn btn-configuration" type="button">Import configuration</button>
+        <input id="import-configuration-file" type="file" accept="application/json,.json" hidden />
+      </div>
+      <p id="configuration-status" class="configuration-status" aria-live="polite"></p>
+    </section>
   </main>
 
   <style>
@@ -229,6 +240,25 @@
       border: 1px solid #4a4a6a;
     }
     .shortcut-reset:hover { color: #fff; }
+
+    #configuration-section > p {
+      color: #8b8ba7;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .configuration-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .btn-configuration {
+      background: #2a2a4a;
+      color: #fff;
+      border: 1px solid #4a4a6a;
+    }
+    .btn-configuration:hover { background: #3a3a5a; }
+    .configuration-status { min-height: 20px; margin-top: 8px; }
+    .configuration-status.error { color: #f2994a; }
   </style>
 
   <script type="module" src="./main.ts"></script>

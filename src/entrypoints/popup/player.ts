@@ -4,6 +4,7 @@ export interface PagePlaybackState {
 }
 
 export type SendToPage = (method: string) => Promise<unknown>;
+export type OpenConfiguration = () => Promise<void>;
 
 /** Small extension-popup player, backed by the active page's sequencer. */
 export class PopupPlayer {
@@ -12,7 +13,10 @@ export class PopupPlayer {
   private readonly status: HTMLElement;
   private state: PagePlaybackState = { playing: false, paused: false };
 
-  constructor(private readonly send: SendToPage) {
+  constructor(
+    private readonly send: SendToPage,
+    private readonly openConfiguration: OpenConfiguration = async () => {},
+  ) {
     this.element = document.createElement('main');
     this.element.className = 'player';
     this.element.innerHTML = `
@@ -21,16 +25,23 @@ export class PopupPlayer {
       <div class="controls">
         <button class="primary" data-action="play" type="button">Play</button>
         <button class="secondary" data-action="stop" type="button">Stop</button>
-      </div>`;
+      </div>
+      <button class="configuration" data-action="configuration" type="button">Configuration</button>`;
     const playButton = this.element.querySelector<HTMLButtonElement>('[data-action="play"]');
     const status = this.element.querySelector<HTMLElement>('.status');
     const stopButton = this.element.querySelector<HTMLButtonElement>('[data-action="stop"]');
-    if (!playButton || !status || !stopButton) throw new Error('Popup player markup is incomplete');
+    const configurationButton = this.element.querySelector<HTMLButtonElement>(
+      '[data-action="configuration"]',
+    );
+    if (!playButton || !status || !stopButton || !configurationButton) {
+      throw new Error('Popup player markup is incomplete');
+    }
 
     this.playButton = playButton;
     this.status = status;
     this.playButton.addEventListener('click', () => void this.toggle());
     stopButton.addEventListener('click', () => void this.stop());
+    configurationButton.addEventListener('click', () => void this.openConfiguration());
   }
 
   mount(): HTMLElement {
@@ -39,6 +50,15 @@ export class PopupPlayer {
 
   async refresh(): Promise<void> {
     await this.request('getPlaybackState');
+  }
+
+  /**
+   * Open the on-page player bar so the popup and the floating widget coexist.
+   * Best-effort: on pages without a content script the popup falls back to the
+   * existing "cannot be read" state via request()'s error handling.
+   */
+  async openPlayerBar(): Promise<void> {
+    await this.request('openWidget');
   }
 
   private async toggle(): Promise<void> {

@@ -9,6 +9,7 @@ import { DEFAULT_SHORTCUTS } from '../../domain/shortcuts/shortcuts';
 import { SUPERTONIC_ENGINE_ASSETS, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
 import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
+import { ChromeConfigurationTransfer } from '../../infra/chrome/configuration-transfer';
 import { ChromeShortcutStorage } from '../../infra/chrome/shortcut-storage';
 import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
@@ -228,4 +229,58 @@ const shortcutsPanel = new ShortcutsPanel(
 
 shortcutsList.append(shortcutsPanel.mount());
 void shortcutStorage.load().then((map) => shortcutsPanel.update(map));
+
+// ── Configuration backup ─────────────────────────────────────────────
+
+const configurationTransfer = new ChromeConfigurationTransfer();
+const exportConfigurationButton = document.getElementById(
+  'export-configuration',
+) as HTMLButtonElement;
+const importConfigurationButton = document.getElementById(
+  'import-configuration',
+) as HTMLButtonElement;
+const importConfigurationFile = document.getElementById(
+  'import-configuration-file',
+) as HTMLInputElement;
+const configurationStatus = document.getElementById('configuration-status')!;
+
+function showConfigurationStatus(message: string, isError = false): void {
+  configurationStatus.textContent = message;
+  configurationStatus.className = isError ? 'configuration-status error' : 'configuration-status';
+}
+
+exportConfigurationButton.addEventListener('click', async () => {
+  try {
+    const text = await configurationTransfer.export();
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const download = document.createElement('a');
+    download.href = url;
+    download.download = 'ditaai-configuration.json';
+    download.click();
+    URL.revokeObjectURL(url);
+    showConfigurationStatus('Configuration exported.');
+  } catch (error) {
+    console.error('[dita][configuration] export failed', error);
+    showConfigurationStatus('Could not export configuration.', true);
+  }
+});
+
+importConfigurationButton.addEventListener('click', () => importConfigurationFile.click());
+importConfigurationFile.addEventListener('change', async () => {
+  const file = importConfigurationFile.files?.[0];
+  importConfigurationFile.value = '';
+  if (!file) return;
+
+  try {
+    await configurationTransfer.import(await file.text());
+    const shortcuts = await shortcutStorage.load();
+    shortcutsPanel.update(shortcuts);
+    await refresh();
+    showConfigurationStatus('Configuration imported. Reopen existing pages to apply all settings.');
+  } catch (error) {
+    console.error('[dita][configuration] import failed', error);
+    showConfigurationStatus('Invalid configuration file. Nothing was imported.', true);
+  }
+});
+
 refresh();
