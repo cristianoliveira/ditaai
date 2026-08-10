@@ -20,6 +20,10 @@ export interface SpeakOptions {
   pitch?: number;
   /** 0 (mute) to 1 (full). Applied per segment; the next segment picks it up. */
   volume?: number;
+  /** Denoising steps for neural synthesis; more is cleaner but slower. */
+  quality?: number;
+  /** Narration language code (e.g. 'pt'). Falls back to the reader default. */
+  language?: string;
   voiceUri?: string;
   /** Fired for each word boundary (charIndex/charLength within the text). */
   onBoundary?: (event: BoundaryEvent) => void;

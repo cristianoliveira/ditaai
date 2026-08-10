@@ -94,6 +94,59 @@ describe('SupertonicOnnxReader preparation', () => {
     expect(helper.infer).toHaveBeenCalledTimes(2);
   });
 
+  it('passes per-utterance quality and language to inference', async () => {
+    const audio = audioContext();
+    const subject = new SupertonicOnnxReader({
+      modelAssets: {},
+      voiceStyle: new ArrayBuffer(1),
+      audioContextFactory: () => audio.context as unknown as AudioContext,
+    });
+
+    await subject.speak('next paragraph', { quality: 16, language: 'pt' });
+
+    expect(helper.infer).toHaveBeenCalledWith(
+      ['next paragraph'],
+      ['pt'],
+      expect.anything(),
+      16,
+      1.05,
+    );
+  });
+
+  it('falls back to constructor quality and language defaults', async () => {
+    const audio = audioContext();
+    const subject = new SupertonicOnnxReader({
+      modelAssets: {},
+      voiceStyle: new ArrayBuffer(1),
+      audioContextFactory: () => audio.context as unknown as AudioContext,
+    });
+
+    await subject.speak('next paragraph');
+
+    expect(helper.infer).toHaveBeenCalledWith(
+      ['next paragraph'],
+      ['en'],
+      expect.anything(),
+      8,
+      1.05,
+    );
+  });
+
+  it('re-infers when quality or language changes between utterances', async () => {
+    const audio = audioContext();
+    const subject = new SupertonicOnnxReader({
+      modelAssets: {},
+      voiceStyle: new ArrayBuffer(1),
+      audioContextFactory: () => audio.context as unknown as AudioContext,
+    });
+
+    await subject.speak('next paragraph', { quality: 8, language: 'en' });
+    await subject.speak('next paragraph', { quality: 16, language: 'en' });
+    await subject.speak('next paragraph', { quality: 16, language: 'ja' });
+
+    expect(helper.infer).toHaveBeenCalledTimes(3);
+  });
+
   it('applies volume through a gain node', async () => {
     const audio = audioContext();
     const subject = new SupertonicOnnxReader({

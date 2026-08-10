@@ -102,7 +102,7 @@ export class SupertonicOnnxReader implements TextReader {
     const existing = this.preparations.get(key);
     if (existing) return existing;
 
-    const preparation = this.generateSpeech(textToSpeak, offset, options?.rate ?? this.speed);
+    const preparation = this.generateSpeech(textToSpeak, offset, options);
     this.preparations.set(key, preparation);
     void preparation.catch(() => {
       if (this.preparations.get(key) === preparation) this.preparations.delete(key);
@@ -118,20 +118,24 @@ export class SupertonicOnnxReader implements TextReader {
   private async generateSpeech(
     text: string,
     offset: number,
-    speed: number,
+    options?: SpeakOptions,
   ): Promise<PreparedSpeech> {
     const preparationId = ++this.preparationCount;
     const [tts, style] = await Promise.all([
       this.getTextToSpeech(preparationId),
       this.getVoiceStyle(),
     ]);
+    const speed = options?.rate ?? this.speed;
+    const quality = options?.quality ?? this.totalSteps;
+    const language = options?.language ?? this.language;
     const inferenceStartedAt = Date.now();
     console.info(`[dita][supertonic:prepare:${preparationId}] inference:start`, {
       textLength: text.length,
-      totalSteps: this.totalSteps,
+      totalSteps: quality,
       speed,
+      language,
     });
-    const { wav } = await tts.infer([text], [this.language], style, this.totalSteps, speed);
+    const { wav } = await tts.infer([text], [language], style, quality, speed);
     console.info(`[dita][supertonic:prepare:${preparationId}] inference:complete`, {
       durationMs: Date.now() - inferenceStartedAt,
       sampleCount: wav.length,
@@ -181,7 +185,13 @@ export class SupertonicOnnxReader implements TextReader {
   }
 
   private preparationKey(text: string, options?: SpeakOptions): string {
-    return JSON.stringify([text, options?.resumeFromChar ?? 0, options?.rate ?? this.speed]);
+    return JSON.stringify([
+      text,
+      options?.resumeFromChar ?? 0,
+      options?.rate ?? this.speed,
+      options?.quality ?? this.totalSteps,
+      options?.language ?? this.language,
+    ]);
   }
 
   stop(): void {

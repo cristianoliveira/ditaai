@@ -15,6 +15,8 @@ export const CONFIGURATION_STORAGE_KEYS = [
   'playbackRate',
   'playbackVolume',
   'pronunciationsEnabled',
+  'synthesisQuality',
+  'narrationLanguage',
 ] as const;
 
 export class ChromeConfigurationTransfer {

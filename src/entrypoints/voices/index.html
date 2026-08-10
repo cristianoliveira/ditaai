@@ -24,8 +24,37 @@
       <div id="voices-grid"></div>
       <label class="voice-rotation" for="rotate-voices">
         <input id="rotate-voices" type="checkbox" />
-        Randomly rotate installed voices between paragraphs
+        Choose a random installed voice for each page visit
       </label>
+      <p class="voice-rotation-hint" id="rotate-voices-hint">
+        Adds variety: every new page picks a different installed voice, so long
+        reading sessions do not sound monotonous. Off keeps your selected voice.
+      </p>
+    </section>
+
+    <section id="synthesis-section">
+      <h2>Synthesis</h2>
+      <div class="synthesis-field">
+        <label for="synthesis-quality">Quality</label>
+        <select id="synthesis-quality" aria-describedby="synthesis-quality-hint"></select>
+        <p class="synthesis-hint" id="synthesis-quality-hint">
+          How carefully DitaAi narrates each sentence. Quality is the number of
+          denoising steps used to synthesize the voice: more steps sound
+          cleaner and more natural but take longer to generate. Balanced (8
+          steps) is a good default; use Fast (4) for long pages and Best
+          quality (16) when you want the most polished audio. Takes effect on
+          the next utterance.
+        </p>
+      </div>
+      <div class="synthesis-field">
+        <label for="narration-language">Language</label>
+        <select id="narration-language" aria-describedby="narration-language-hint"></select>
+        <p class="synthesis-hint" id="narration-language-hint">
+          The language DitaAi narrates in. Voices are multilingual, so pick the
+          language of the page you are reading (English by default). Takes
+          effect on the next utterance.
+        </p>
+      </div>
     </section>
 
     <section id="shortcuts-section">
@@ -189,6 +218,44 @@
       margin-top: 16px;
       color: #e0e0f0;
       font-size: 13px;
+    }
+    .voice-rotation-hint {
+      margin-top: 6px;
+      color: #8b8ba7;
+      font-size: 12px;
+      line-height: 1.5;
+      max-width: 420px;
+    }
+
+    .synthesis-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .synthesis-field label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e0e0f0;
+    }
+    .synthesis-field select {
+      background: #1a1a2e;
+      color: #e0e0f0;
+      border: 1px solid #4a4a6a;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      max-width: 260px;
+    }
+    .synthesis-field select:focus-visible {
+      outline: 2px solid var(--dita-accent);
+      outline-offset: 1px;
+    }
+    .synthesis-hint {
+      color: #8b8ba7;
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     .progress-bar {

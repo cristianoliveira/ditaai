@@ -5,12 +5,16 @@
  * and provides download/install functionality via Cache Storage.
  */
 
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, languageLabel } from '../../domain/audio/languages';
+import { DEFAULT_SYNTHESIS_QUALITY, SYNTHESIS_QUALITY_OPTIONS } from '../../domain/audio/quality';
 import { DEFAULT_SHORTCUTS } from '../../domain/shortcuts/shortcuts';
 import { SUPERTONIC_ENGINE_ASSETS, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
 import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import { ChromeConfigurationTransfer } from '../../infra/chrome/configuration-transfer';
+import { ChromeLanguageStorage } from '../../infra/chrome/language-storage';
 import { ChromeShortcutStorage } from '../../infra/chrome/shortcut-storage';
+import { ChromeSynthesisQualityStorage } from '../../infra/chrome/synthesis-quality-storage';
 import { ChromeVoiceRotationStorage } from '../../infra/chrome/voice-rotation-storage';
 import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
@@ -25,6 +29,8 @@ const engineStatus = document.getElementById('engine-status')!;
 const voicesGrid = document.getElementById('voices-grid')!;
 const statusBar = document.getElementById('status-bar')!;
 const rotateVoicesInput = document.getElementById('rotate-voices') as HTMLInputElement;
+const synthesisQualitySelect = document.getElementById('synthesis-quality') as HTMLSelectElement;
+const narrationLanguageSelect = document.getElementById('narration-language') as HTMLSelectElement;
 
 // ── Cache helpers ────────────────────────────────────────────────────
 
@@ -42,8 +48,38 @@ async function isInCache(url: string): Promise<boolean> {
 const state = new Map<string, VoiceCardState>();
 const selectionStore = new ChromeVoiceSelectionStorage();
 const rotationStore = new ChromeVoiceRotationStorage();
+const qualityStore = new ChromeSynthesisQualityStorage();
+const languageStore = new ChromeLanguageStorage();
 let selectedVoiceId: string | null = null;
 let rotateVoices = false;
+
+// ── Synthesis settings ───────────────────────────────────────────────
+
+for (const option of SYNTHESIS_QUALITY_OPTIONS) {
+  const element = document.createElement('option');
+  element.value = String(option.steps);
+  element.textContent = option.label;
+  synthesisQualitySelect.append(element);
+}
+
+for (const entry of SUPPORTED_LANGUAGES) {
+  const element = document.createElement('option');
+  element.value = entry.code;
+  element.textContent = languageLabel(entry.code);
+  narrationLanguageSelect.append(element);
+}
+
+synthesisQualitySelect.addEventListener('change', () => {
+  const steps = Number(synthesisQualitySelect.value);
+  void qualityStore.save(steps);
+  console.info('[dita][synthesis-quality][page] saved', { steps });
+});
+
+narrationLanguageSelect.addEventListener('change', () => {
+  const code = narrationLanguageSelect.value;
+  void languageStore.save(code);
+  console.info('[dita][narration-language][page] saved', { code });
+});
 
 // ── Render ───────────────────────────────────────────────────────────
 
@@ -85,6 +121,18 @@ async function refresh(): Promise<void> {
   const storedVoiceId = await selectionStore.load();
   rotateVoices = await rotationStore.load();
   rotateVoicesInput.checked = rotateVoices;
+  const [synthesisQuality, narrationLanguage] = await Promise.all([
+    qualityStore.load(),
+    languageStore.load(),
+  ]);
+  synthesisQualitySelect.value = String(synthesisQuality);
+  narrationLanguageSelect.value = narrationLanguage;
+  console.info('[dita][synthesis-settings][page] loaded', {
+    synthesisQuality,
+    narrationLanguage,
+    defaultQuality: DEFAULT_SYNTHESIS_QUALITY,
+    defaultLanguage: DEFAULT_LANGUAGE,
+  });
   const installedVoiceIds = SUPERTONIC_VOICES.filter((voice) => state.get(voice.id)?.installed).map(
     (voice) => voice.id,
   );

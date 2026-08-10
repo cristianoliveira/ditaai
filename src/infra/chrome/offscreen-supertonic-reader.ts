@@ -1,10 +1,20 @@
 import type { AvailableTextReader, SpeakOptions } from '../../domain/audio/text-reader';
 import type { VoiceSelectionStore } from '../../domain/voices/selection';
+import { ChromeLanguageStorage } from './language-storage';
+import { ChromeSynthesisQualityStorage } from './synthesis-quality-storage';
 import { ChromeVoiceRotationStorage } from './voice-rotation-storage';
 import { ChromeVoiceSelectionStorage } from './voice-selection-storage';
 
 interface VoiceRotationStore {
   load(): Promise<boolean>;
+}
+
+interface SynthesisQualityStore {
+  load(): Promise<number>;
+}
+
+interface NarrationLanguageStore {
+  load(): Promise<string>;
 }
 
 interface OffscreenResponse {
@@ -39,6 +49,8 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
     private readonly chromeApi: OffscreenChromeApi = chrome,
     private readonly selectionStore: VoiceSelectionStore = new ChromeVoiceSelectionStorage(),
     private readonly rotationStore: VoiceRotationStore = new ChromeVoiceRotationStorage(),
+    private readonly qualityStore: SynthesisQualityStore = new ChromeSynthesisQualityStorage(),
+    private readonly languageStore: NarrationLanguageStore = new ChromeLanguageStorage(),
   ) {}
 
   setPageVisitId(pageVisitId: string): void {
@@ -51,20 +63,27 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
   }
 
   async prepare(text: string, options?: SpeakOptions): Promise<void> {
-    await this.sendWithSelectedVoice('prepare', [text, this.serializableOptions(options)]);
+    await this.sendWithSelectedVoice('prepare', [text, await this.serializableOptions(options)]);
   }
 
   async speak(text: string, options?: SpeakOptions): Promise<void> {
-    await this.sendWithSelectedVoice('speak', [text, this.serializableOptions(options)]);
+    await this.sendWithSelectedVoice('speak', [text, await this.serializableOptions(options)]);
   }
 
-  private serializableOptions(options?: SpeakOptions): SpeakOptions | undefined {
-    if (!options) return undefined;
+  private async serializableOptions(options?: SpeakOptions): Promise<SpeakOptions | undefined> {
+    // Persisted settings are injected here so every call path (keyboard
+    // shortcut, widget, popup) narrates with the configured quality/language.
+    const [quality, language] = await Promise.all([
+      this.qualityStore.load(),
+      this.languageStore.load(),
+    ]);
     return {
-      rate: options.rate,
-      pitch: options.pitch,
-      volume: options.volume,
-      resumeFromChar: options.resumeFromChar,
+      rate: options?.rate,
+      pitch: options?.pitch,
+      volume: options?.volume,
+      quality: options?.quality ?? quality,
+      language: options?.language ?? language,
+      resumeFromChar: options?.resumeFromChar,
     };
   }
 

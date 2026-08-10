@@ -1,3 +1,5 @@
+import { isSupportedLanguage } from './audio/languages';
+import { isSynthesisQuality } from './audio/quality';
 import { type Substitutions, sanitizeSubstitutions } from './document/substitutions';
 import { type ShortcutMap, mergeShortcuts } from './shortcuts/shortcuts';
 
@@ -14,6 +16,8 @@ export interface ConfigurationSettings {
   playbackRate?: number;
   playbackVolume?: number;
   pronunciationsEnabled?: boolean;
+  synthesisQuality?: number;
+  narrationLanguage?: string;
 }
 
 export interface ConfigurationBackup {
@@ -70,6 +74,12 @@ export function parseConfigurationBackup(text: string): ConfigurationSettings {
   if (typeof settings.pronunciationsEnabled === 'boolean') {
     result.pronunciationsEnabled = settings.pronunciationsEnabled;
   }
+  if (isSynthesisQuality(settings.synthesisQuality)) {
+    result.synthesisQuality = settings.synthesisQuality;
+  }
+  if (isSupportedLanguage(settings.narrationLanguage)) {
+    result.narrationLanguage = settings.narrationLanguage;
+  }
   return result;
 }
 
@@ -89,6 +99,8 @@ interface UnknownConfigurationSettings {
   playbackRate?: unknown;
   playbackVolume?: unknown;
   pronunciationsEnabled?: unknown;
+  synthesisQuality?: unknown;
+  narrationLanguage?: unknown;
 }
 
 function invalidBackup(): Error {

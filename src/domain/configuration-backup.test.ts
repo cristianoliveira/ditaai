@@ -18,6 +18,8 @@ describe('configuration backup', () => {
         playbackRate: 1.5,
         playbackVolume: 0.4,
         pronunciationsEnabled: false,
+        synthesisQuality: 16,
+        narrationLanguage: 'pt',
       }),
     ).toEqual({
       format: BACKUP_FORMAT,
@@ -32,6 +34,8 @@ describe('configuration backup', () => {
         playbackRate: 1.5,
         playbackVolume: 0.4,
         pronunciationsEnabled: false,
+        synthesisQuality: 16,
+        narrationLanguage: 'pt',
       },
     });
   });
@@ -51,6 +55,8 @@ describe('configuration backup', () => {
             playbackRate: 7,
             playbackVolume: -1,
             pronunciationsEnabled: false,
+            synthesisQuality: 7,
+            narrationLanguage: 'xx',
           },
         }),
       ),
@@ -59,6 +65,19 @@ describe('configuration backup', () => {
       pronunciations: { Dita: 'dee ta' },
       domainSelectors: { 'example.com': 'main' },
       pronunciationsEnabled: false,
+    });
+  });
+
+  it('round-trips valid synthesis quality and narration language', () => {
+    const input = JSON.stringify({
+      format: BACKUP_FORMAT,
+      version: 1,
+      settings: { synthesisQuality: 12, narrationLanguage: 'ja' },
+    });
+
+    expect(parseConfigurationBackup(input)).toEqual({
+      synthesisQuality: 12,
+      narrationLanguage: 'ja',
     });
   });
 
