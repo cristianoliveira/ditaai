@@ -13,6 +13,10 @@ WebAssembly; browser speech is the built-in fallback.
 
 See [product direction](docs/PRODUCT.md) for promises and boundaries.
 
+## Demo
+
+https://github.com/user-attachments/assets/37b8bd1d-18eb-4536-b43f-5e22f6b254f2
+
 ## Why
 
 - **Listen instead of read.** DitaAi extracts page content and gives it familiar
