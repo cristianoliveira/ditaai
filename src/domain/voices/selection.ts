@@ -11,3 +11,17 @@ export function resolveSelectedVoiceId(
   if (selectedVoiceId && installedVoiceIds.includes(selectedVoiceId)) return selectedVoiceId;
   return installedVoiceIds[0] ?? null;
 }
+
+/** Select an installed voice randomly when rotation is configured. */
+export function resolveRotatingVoiceId(
+  selectedVoiceId: string | null,
+  installedVoiceIds: string[],
+  random?: () => number,
+): string | null {
+  if (!random) return resolveSelectedVoiceId(selectedVoiceId, installedVoiceIds);
+  const index = Math.min(
+    installedVoiceIds.length - 1,
+    Math.floor(random() * installedVoiceIds.length),
+  );
+  return installedVoiceIds[index] ?? null;
+}

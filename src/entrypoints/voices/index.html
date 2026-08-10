@@ -22,6 +22,10 @@
     <section id="voices-section">
       <h2>Voices</h2>
       <div id="voices-grid"></div>
+      <label class="voice-rotation" for="rotate-voices">
+        <input id="rotate-voices" type="checkbox" />
+        Randomly rotate installed voices between paragraphs
+      </label>
     </section>
 
     <section id="shortcuts-section">
@@ -177,6 +181,15 @@
       margin-top: 8px;
     }
     .btn-download-all:hover:not(:disabled) { background: var(--dita-accent-hover); }
+
+    .voice-rotation {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 16px;
+      color: #e0e0f0;
+      font-size: 13px;
+    }
 
     .progress-bar {
       height: 4px;

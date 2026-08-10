@@ -9,6 +9,7 @@ export interface ConfigurationSettings {
   pronunciations?: Substitutions;
   domainSelectors?: Record<string, string>;
   selectedVoiceId?: string;
+  rotateVoices?: boolean;
   highlightWords?: boolean;
   playbackRate?: number;
   playbackVolume?: number;
@@ -62,6 +63,7 @@ export function parseConfigurationBackup(text: string): ConfigurationSettings {
   if (typeof settings.selectedVoiceId === 'string' && settings.selectedVoiceId.length > 0) {
     result.selectedVoiceId = settings.selectedVoiceId;
   }
+  if (typeof settings.rotateVoices === 'boolean') result.rotateVoices = settings.rotateVoices;
   if (typeof settings.highlightWords === 'boolean') result.highlightWords = settings.highlightWords;
   if (isInRange(settings.playbackRate, 0.5, 2)) result.playbackRate = settings.playbackRate;
   if (isInRange(settings.playbackVolume, 0, 1)) result.playbackVolume = settings.playbackVolume;
@@ -82,6 +84,7 @@ interface UnknownConfigurationSettings {
   pronunciations?: unknown;
   domainSelectors?: unknown;
   selectedVoiceId?: unknown;
+  rotateVoices?: unknown;
   highlightWords?: unknown;
   playbackRate?: unknown;
   playbackVolume?: unknown;

@@ -8,6 +8,10 @@ function selectionStore(voiceId: string | null = 'F2') {
   };
 }
 
+function rotationStore(enabled = false) {
+  return { load: vi.fn().mockResolvedValue(enabled) };
+}
+
 function chromeApi() {
   return {
     runtime: {
@@ -26,7 +30,7 @@ describe('OffscreenSupertonicReader', () => {
   it('creates offscreen document before checking installed voices', async () => {
     const chrome = chromeApi();
     chrome.runtime.sendMessage.mockResolvedValue({ ok: true, available: true });
-    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(), rotationStore());
 
     await expect(subject.isAvailable()).resolves.toBe(true);
 
@@ -46,7 +50,7 @@ describe('OffscreenSupertonicReader', () => {
     const chrome = chromeApi();
     chrome.runtime.getContexts.mockResolvedValue([{}]);
     chrome.runtime.sendMessage.mockResolvedValue({ ok: true });
-    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(), rotationStore());
 
     await subject.prepare('next paragraph', {
       rate: 1.2,
@@ -67,7 +71,7 @@ describe('OffscreenSupertonicReader', () => {
     const chrome = chromeApi();
     chrome.runtime.getContexts.mockResolvedValue([{}]);
     chrome.runtime.sendMessage.mockResolvedValue({ ok: true });
-    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(), rotationStore());
 
     await subject.speak('hello', {
       rate: 1.2,
@@ -84,11 +88,26 @@ describe('OffscreenSupertonicReader', () => {
     });
   });
 
+  it('forwards enabled voice rotation to the offscreen document', async () => {
+    const chrome = chromeApi();
+    chrome.runtime.getContexts.mockResolvedValue([{}]);
+    chrome.runtime.sendMessage.mockResolvedValue({ ok: true });
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(), rotationStore(true));
+
+    await subject.speak('hello');
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      dest: 'offscreen',
+      method: 'speak',
+      args: ['F2', 'hello', undefined, true],
+    });
+  });
+
   it('surfaces offscreen playback errors', async () => {
     const chrome = chromeApi();
     chrome.runtime.getContexts.mockResolvedValue([{}]);
     chrome.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'Voice failed' });
-    const subject = new OffscreenSupertonicReader(chrome, selectionStore(null));
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(null), rotationStore());
 
     await expect(subject.speak('hello')).rejects.toThrow('Voice failed');
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
@@ -108,7 +127,7 @@ describe('OffscreenSupertonicReader', () => {
         error: 'memory access out of bounds',
       })
       .mockResolvedValueOnce({ ok: true });
-    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(), rotationStore());
 
     await expect(subject.speak('hello')).resolves.toBeUndefined();
 
@@ -124,7 +143,7 @@ describe('OffscreenSupertonicReader', () => {
       ok: false,
       error: 'No installed voice is ready',
     });
-    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(), rotationStore());
 
     await expect(subject.speak('hello')).rejects.toThrow('No installed voice is ready');
     expect(chrome.offscreen.closeDocument).not.toHaveBeenCalled();
@@ -139,7 +158,7 @@ describe('OffscreenSupertonicReader', () => {
       fatal: true,
       error: 'memory access out of bounds',
     });
-    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(), rotationStore());
 
     await expect(subject.speak('hello')).rejects.toThrow('memory access out of bounds');
     expect(chrome.offscreen.closeDocument).toHaveBeenCalledOnce();
@@ -154,7 +173,7 @@ describe('OffscreenSupertonicReader', () => {
         new Error('Could not establish connection. Receiving end does not exist.'),
       )
       .mockResolvedValueOnce({ ok: true });
-    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(), rotationStore());
 
     await expect(subject.speak('hello')).resolves.toBeUndefined();
 

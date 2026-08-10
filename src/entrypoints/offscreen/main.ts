@@ -1,6 +1,6 @@
 import type { SpeakOptions } from '../../domain/audio/text-reader';
 import { SUPERTONIC_VOICES } from '../../domain/voices/catalog';
-import { resolveSelectedVoiceId } from '../../domain/voices/selection';
+import { resolveRotatingVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import {
   areModelAssetsInstalled,
@@ -22,26 +22,39 @@ function log(event: string, details?: Record<string, unknown>): void {
   console.info(`[dita][installed-voice][offscreen] ${event}`, details ?? '');
 }
 
-async function findInstalledVoiceId(selectedVoiceId: string | null): Promise<string | null> {
+async function findInstalledVoiceId(
+  selectedVoiceId: string | null,
+  rotateVoices: boolean,
+): Promise<string | null> {
   const cache = await openCache();
   const installedVoiceIds: string[] = [];
   for (const voice of SUPERTONIC_VOICES) {
     if (await cache.match(sourceUrl(voice.source))) installedVoiceIds.push(voice.id);
   }
-  const resolvedVoiceId = resolveSelectedVoiceId(selectedVoiceId, installedVoiceIds);
-  log('selection:resolve', { selectedVoiceId, installedVoiceIds, resolvedVoiceId });
+  const resolvedVoiceId = resolveRotatingVoiceId(
+    selectedVoiceId,
+    installedVoiceIds,
+    rotateVoices ? Math.random : undefined,
+  );
+  log('selection:resolve', { selectedVoiceId, rotateVoices, installedVoiceIds, resolvedVoiceId });
   return resolvedVoiceId;
 }
 
-async function isAvailable(selectedVoiceId: string | null): Promise<boolean> {
+async function isAvailable(
+  selectedVoiceId: string | null,
+  rotateVoices: boolean,
+): Promise<boolean> {
   const modelAssetsInstalled = await areModelAssetsInstalled();
-  const voiceId = await findInstalledVoiceId(selectedVoiceId);
+  const voiceId = await findInstalledVoiceId(selectedVoiceId, rotateVoices);
   log('availability:resolved', { modelAssetsInstalled, voiceId });
   return modelAssetsInstalled && voiceId !== null;
 }
 
-async function getReader(selectedVoiceId: string | null): Promise<SupertonicOnnxReader> {
-  const voiceId = await findInstalledVoiceId(selectedVoiceId);
+async function getReader(
+  selectedVoiceId: string | null,
+  rotateVoices: boolean,
+): Promise<SupertonicOnnxReader> {
+  const voiceId = await findInstalledVoiceId(selectedVoiceId, rotateVoices);
   if (!voiceId || !(await areModelAssetsInstalled())) {
     throw new Error('No installed voice is ready');
   }
@@ -52,7 +65,7 @@ async function getReader(selectedVoiceId: string | null): Promise<SupertonicOnnx
   if (readerInitialization) {
     log('reader:await-initialization');
     await readerInitialization;
-    return getReader(selectedVoiceId);
+    return getReader(selectedVoiceId, rotateVoices);
   }
 
   reader?.stop();
@@ -84,8 +97,9 @@ async function createReader(voiceId: string): Promise<SupertonicOnnxReader> {
 
 async function handleMessage(method: string, args: unknown[]): Promise<unknown> {
   const selectedVoiceId = typeof args[0] === 'string' ? args[0] : null;
+  const rotateVoices = args.at(-1) === true;
   if (method === 'isAvailable') {
-    return { ok: true, available: await isAvailable(selectedVoiceId) };
+    return { ok: true, available: await isAvailable(selectedVoiceId, rotateVoices) };
   }
   if (method === 'prepare') {
     const [, text, options] = args as [string | null, string, SpeakOptions | undefined];
@@ -96,7 +110,7 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
       volume: options?.volume ?? null,
       resumeFromChar: options?.resumeFromChar ?? 0,
     });
-    const r = await getReader(selectedVoiceId);
+    const r = await getReader(selectedVoiceId, rotateVoices);
     await r.prepare(text, options);
     log('prepare:complete', { textLength: text.length });
     return { ok: true };
@@ -110,7 +124,7 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
       volume: options?.volume ?? null,
       resumeFromChar: options?.resumeFromChar ?? 0,
     });
-    const r = await getReader(selectedVoiceId);
+    const r = await getReader(selectedVoiceId, rotateVoices);
     r.onBoundary = (event) => {
       chrome.runtime.sendMessage({
         dest: 'serviceWorker',

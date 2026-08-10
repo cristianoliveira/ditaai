@@ -11,6 +11,7 @@ import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import { ChromeConfigurationTransfer } from '../../infra/chrome/configuration-transfer';
 import { ChromeShortcutStorage } from '../../infra/chrome/shortcut-storage';
+import { ChromeVoiceRotationStorage } from '../../infra/chrome/voice-rotation-storage';
 import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
 import { ShortcutsPanel } from './shortcuts-panel';
@@ -23,6 +24,7 @@ const CACHE_NAME = 'dita-voices';
 const engineStatus = document.getElementById('engine-status')!;
 const voicesGrid = document.getElementById('voices-grid')!;
 const statusBar = document.getElementById('status-bar')!;
+const rotateVoicesInput = document.getElementById('rotate-voices') as HTMLInputElement;
 
 // ── Cache helpers ────────────────────────────────────────────────────
 
@@ -39,7 +41,9 @@ async function isInCache(url: string): Promise<boolean> {
 
 const state = new Map<string, VoiceCardState>();
 const selectionStore = new ChromeVoiceSelectionStorage();
+const rotationStore = new ChromeVoiceRotationStorage();
 let selectedVoiceId: string | null = null;
+let rotateVoices = false;
 
 // ── Render ───────────────────────────────────────────────────────────
 
@@ -79,6 +83,8 @@ async function refresh(): Promise<void> {
   }
 
   const storedVoiceId = await selectionStore.load();
+  rotateVoices = await rotationStore.load();
+  rotateVoicesInput.checked = rotateVoices;
   const installedVoiceIds = SUPERTONIC_VOICES.filter((voice) => state.get(voice.id)?.installed).map(
     (voice) => voice.id,
   );
@@ -229,6 +235,10 @@ const shortcutsPanel = new ShortcutsPanel(
 
 shortcutsList.append(shortcutsPanel.mount());
 void shortcutStorage.load().then((map) => shortcutsPanel.update(map));
+rotateVoicesInput.addEventListener('change', () => {
+  rotateVoices = rotateVoicesInput.checked;
+  void rotationStore.save(rotateVoices);
+});
 
 // ── Configuration backup ─────────────────────────────────────────────
 

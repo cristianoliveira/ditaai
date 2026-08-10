@@ -10,6 +10,7 @@ export const CONFIGURATION_STORAGE_KEYS = [
   'pronunciations',
   'domainSelectors',
   'selectedVoiceId',
+  'rotateVoices',
   'highlightWords',
   'playbackRate',
   'playbackVolume',

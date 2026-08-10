@@ -1,6 +1,11 @@
 import type { AvailableTextReader, SpeakOptions } from '../../domain/audio/text-reader';
 import type { VoiceSelectionStore } from '../../domain/voices/selection';
+import { ChromeVoiceRotationStorage } from './voice-rotation-storage';
 import { ChromeVoiceSelectionStorage } from './voice-selection-storage';
+
+interface VoiceRotationStore {
+  load(): Promise<boolean>;
+}
 
 interface OffscreenResponse {
   ok: boolean;
@@ -32,6 +37,7 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
   constructor(
     private readonly chromeApi: OffscreenChromeApi = chrome,
     private readonly selectionStore: VoiceSelectionStore = new ChromeVoiceSelectionStorage(),
+    private readonly rotationStore: VoiceRotationStore = new ChromeVoiceRotationStorage(),
   ) {}
 
   async isAvailable(): Promise<boolean> {
@@ -61,12 +67,19 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
     method: string,
     args: unknown[] = [],
   ): Promise<OffscreenResponse> {
-    const selectedVoiceId = await this.selectionStore.load();
+    const [selectedVoiceId, rotateVoices] = await Promise.all([
+      this.selectionStore.load(),
+      this.rotationStore.load(),
+    ]);
     console.info('[dita][voice-selection][service-worker] forward', {
       method,
       selectedVoiceId,
+      rotateVoices,
     });
-    return this.send(method, [selectedVoiceId, ...args]);
+    return this.send(
+      method,
+      rotateVoices ? [selectedVoiceId, ...args, true] : [selectedVoiceId, ...args],
+    );
   }
 
   pause(): void {
