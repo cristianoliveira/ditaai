@@ -83,6 +83,22 @@ describe('ParagraphStartAffordance', () => {
     expect(startButton()?.hidden).toBe(true);
   });
 
+  it('keeps the page selection when pressing the start button', () => {
+    const para = document.createElement('p');
+    document.body.appendChild(para);
+    const aff = new ParagraphStartAffordance({
+      isReadable: (el) => el === para,
+      onStartFrom: () => {},
+    });
+    aff.enable();
+    para.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    startButton()?.dispatchEvent(press);
+
+    expect(press.defaultPrevented).toBe(true);
+  });
+
   it('clicking the button fires onStartFrom with the paragraph', () => {
     const para = document.createElement('p');
     para.textContent = 'read me';

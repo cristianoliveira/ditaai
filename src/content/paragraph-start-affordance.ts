@@ -81,6 +81,9 @@ export class ParagraphStartAffordance {
     this.button.textContent = '▶';
     this.button.hidden = true;
     this.button.setAttribute('aria-label', 'Start reading from this paragraph');
+    // Do not let pressing the control collapse the page's text selection
+    // before the click starts playback from that paragraph.
+    this.button.addEventListener('mousedown', (event) => event.preventDefault());
     this.button.addEventListener('click', () => this.onClick());
 
     shadow.append(style, this.button);
