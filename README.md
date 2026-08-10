@@ -21,8 +21,6 @@ See [product direction](docs/PRODUCT.md) for promises and boundaries.
   offscreen document. Page text is not sent to a DitaAi server.
 - **Ports and adapters.** Domain logic knows nothing about Chrome APIs, network,
   or the DOM. Every seam is testable.
-- **Testable by construction.** Unit tests in Node against fakes. E2E tests load
-  the real extension in Chromium with a deterministic fake TTS engine.
 - **No lock-in.** No account required.
 
 ## Voices
@@ -38,13 +36,11 @@ DitaAi ships with 10 Supertonic presets (M1–M5, F1–F5) from
 
 ## Inspirations
 
-Studied, not copied. These projects shaped our thinking:
+These projects inspired us:
 
 - [read-aloud](https://github.com/ken107/read-aloud) — ports & adapters layout,
   deterministic fake-TTS E2E harness, messaging contract.
-- Local TTS engines — `speechSynthesis` bridge patterns and word-boundary
-  timing from generated audio duration.
-
+  
 ## Getting started
 
 ```sh
