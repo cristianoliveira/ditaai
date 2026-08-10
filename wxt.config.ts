@@ -8,7 +8,7 @@ export default defineConfig({
   manifest: {
     name: 'DitaAi',
     version: '0.3.0',
-    version_name: '0.3.0-8c1626e-1786373525',
+    version_name: '0.3.0-14ff7d6-1786373652',
     description: 'Turn web pages into private, local audio',
     permissions: ['storage', 'tabs', 'offscreen'],
     host_permissions: ['<all_urls>'],
