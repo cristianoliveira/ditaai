@@ -103,6 +103,10 @@
     .voice-card:hover {
       box-shadow: 0 4px 16px rgba(245, 158, 11, 0.15);
     }
+    .voice-card.selected {
+      outline: 2px solid var(--dita-accent);
+      box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2);
+    }
     .voice-card .name {
       font-size: 15px;
       font-weight: 600;
@@ -135,11 +139,17 @@
     .btn-download:hover:not(:disabled) { background: var(--dita-accent-hover); }
     .btn-download.loading { background: #6b4d12; }
 
-    .btn-installed {
+    .btn-selected {
       background: #1a3a2a;
       color: #6fcf97;
       cursor: default;
     }
+    .btn-select-voice {
+      background: #2a2a4a;
+      color: var(--dita-accent-hover);
+      border: 1px solid #4a4a6a;
+    }
+    .btn-select-voice:hover { background: #3a3a5a; }
 
     .btn-download-all {
       background: var(--dita-accent);

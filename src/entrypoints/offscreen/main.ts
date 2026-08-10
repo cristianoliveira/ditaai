@@ -1,5 +1,6 @@
 import type { SpeakOptions } from '../../domain/audio/text-reader';
 import { SUPERTONIC_VOICES } from '../../domain/voices/catalog';
+import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import {
   areModelAssetsInstalled,
@@ -13,49 +14,60 @@ import { SupertonicOnnxReader } from '../../infra/audio/supertonic-onnx-reader';
 configureOnnxRuntime((path) => chrome.runtime.getURL(path));
 
 let reader: SupertonicOnnxReader | null = null;
+let readerVoiceId: string | null = null;
 let readerInitialization: Promise<SupertonicOnnxReader> | null = null;
 
 function log(event: string, details?: Record<string, unknown>): void {
   console.info(`[dita][installed-voice][offscreen] ${event}`, details ?? '');
 }
 
-async function findInstalledVoiceId(): Promise<string | null> {
+async function findInstalledVoiceId(selectedVoiceId: string | null): Promise<string | null> {
   const cache = await openCache();
+  const installedVoiceIds: string[] = [];
   for (const voice of SUPERTONIC_VOICES) {
-    if (await cache.match(sourceUrl(voice.source))) return voice.id;
+    if (await cache.match(sourceUrl(voice.source))) installedVoiceIds.push(voice.id);
   }
-  return null;
+  const resolvedVoiceId = resolveSelectedVoiceId(selectedVoiceId, installedVoiceIds);
+  log('selection:resolve', { selectedVoiceId, installedVoiceIds, resolvedVoiceId });
+  return resolvedVoiceId;
 }
 
-async function isAvailable(): Promise<boolean> {
-  return (await areModelAssetsInstalled()) && (await findInstalledVoiceId()) !== null;
+async function isAvailable(selectedVoiceId: string | null): Promise<boolean> {
+  const modelAssetsInstalled = await areModelAssetsInstalled();
+  const voiceId = await findInstalledVoiceId(selectedVoiceId);
+  log('availability:resolved', { modelAssetsInstalled, voiceId });
+  return modelAssetsInstalled && voiceId !== null;
 }
 
-async function getReader(): Promise<SupertonicOnnxReader> {
-  if (reader) {
-    log('reader:reuse');
+async function getReader(selectedVoiceId: string | null): Promise<SupertonicOnnxReader> {
+  const voiceId = await findInstalledVoiceId(selectedVoiceId);
+  if (!voiceId || !(await areModelAssetsInstalled())) {
+    throw new Error('No installed voice is ready');
+  }
+  if (reader && readerVoiceId === voiceId) {
+    log('reader:reuse', { voiceId });
     return reader;
   }
   if (readerInitialization) {
     log('reader:await-initialization');
-    return readerInitialization;
+    await readerInitialization;
+    return getReader(selectedVoiceId);
   }
 
-  log('reader:initialize');
-  readerInitialization = createReader().finally(() => {
+  reader?.stop();
+  reader = null;
+  readerVoiceId = null;
+  log('reader:initialize', { voiceId });
+  readerInitialization = createReader(voiceId).finally(() => {
     readerInitialization = null;
   });
   reader = await readerInitialization;
-  log('reader:ready');
+  readerVoiceId = voiceId;
+  log('reader:ready', { voiceId });
   return reader;
 }
 
-async function createReader(): Promise<SupertonicOnnxReader> {
-  const voiceId = await findInstalledVoiceId();
-  if (!voiceId || !(await areModelAssetsInstalled())) {
-    throw new Error('No installed voice is ready');
-  }
-
+async function createReader(voiceId: string): Promise<SupertonicOnnxReader> {
   log('cache:load', { voiceId });
   const cache = await openCache();
   const [modelAssets, voiceStyle] = await Promise.all([
@@ -70,21 +82,22 @@ async function createReader(): Promise<SupertonicOnnxReader> {
 }
 
 async function handleMessage(method: string, args: unknown[]): Promise<unknown> {
+  const selectedVoiceId = typeof args[0] === 'string' ? args[0] : null;
   if (method === 'isAvailable') {
-    return { ok: true, available: await isAvailable() };
+    return { ok: true, available: await isAvailable(selectedVoiceId) };
   }
   if (method === 'prepare') {
-    const [text, options] = args as [string, SpeakOptions | undefined];
-    log('prepare:start', { textLength: text.length });
-    const r = await getReader();
+    const [, text, options] = args as [string | null, string, SpeakOptions | undefined];
+    log('prepare:start', { selectedVoiceId, textLength: text.length });
+    const r = await getReader(selectedVoiceId);
     await r.prepare(text, options);
     log('prepare:complete', { textLength: text.length });
     return { ok: true };
   }
   if (method === 'speak') {
-    const [text, options] = args as [string, SpeakOptions | undefined];
-    log('speak:start', { textLength: text.length });
-    const r = await getReader();
+    const [, text, options] = args as [string | null, string, SpeakOptions | undefined];
+    log('speak:start', { selectedVoiceId, textLength: text.length });
+    const r = await getReader(selectedVoiceId);
     r.onBoundary = (event) => {
       chrome.runtime.sendMessage({
         dest: 'serviceWorker',

@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { OffscreenSupertonicReader } from './offscreen-supertonic-reader';
 
+function selectionStore(voiceId: string | null = 'F2') {
+  return {
+    load: vi.fn().mockResolvedValue(voiceId),
+    save: vi.fn(),
+  };
+}
+
 function chromeApi() {
   return {
     runtime: {
@@ -18,7 +25,7 @@ describe('OffscreenSupertonicReader', () => {
   it('creates offscreen document before checking installed voices', async () => {
     const chrome = chromeApi();
     chrome.runtime.sendMessage.mockResolvedValue({ ok: true, available: true });
-    const subject = new OffscreenSupertonicReader(chrome);
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
 
     await expect(subject.isAvailable()).resolves.toBe(true);
 
@@ -30,7 +37,7 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'isAvailable',
-      args: [],
+      args: ['F2'],
     });
   });
 
@@ -38,7 +45,7 @@ describe('OffscreenSupertonicReader', () => {
     const chrome = chromeApi();
     chrome.runtime.getContexts.mockResolvedValue([{}]);
     chrome.runtime.sendMessage.mockResolvedValue({ ok: true });
-    const subject = new OffscreenSupertonicReader(chrome);
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
 
     await subject.prepare('next paragraph', {
       rate: 1.2,
@@ -50,7 +57,7 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'prepare',
-      args: ['next paragraph', { rate: 1.2, pitch: 0.8, resumeFromChar: 3 }],
+      args: ['F2', 'next paragraph', { rate: 1.2, pitch: 0.8, resumeFromChar: 3 }],
     });
   });
 
@@ -58,7 +65,7 @@ describe('OffscreenSupertonicReader', () => {
     const chrome = chromeApi();
     chrome.runtime.getContexts.mockResolvedValue([{}]);
     chrome.runtime.sendMessage.mockResolvedValue({ ok: true });
-    const subject = new OffscreenSupertonicReader(chrome);
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
 
     await subject.speak('hello', {
       rate: 1.2,
@@ -70,7 +77,7 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'speak',
-      args: ['hello', { rate: 1.2, pitch: 0.8, resumeFromChar: 3 }],
+      args: ['F2', 'hello', { rate: 1.2, pitch: 0.8, resumeFromChar: 3 }],
     });
   });
 
@@ -78,8 +85,13 @@ describe('OffscreenSupertonicReader', () => {
     const chrome = chromeApi();
     chrome.runtime.getContexts.mockResolvedValue([{}]);
     chrome.runtime.sendMessage.mockResolvedValue({ ok: false, error: 'Voice failed' });
-    const subject = new OffscreenSupertonicReader(chrome);
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore(null));
 
     await expect(subject.speak('hello')).rejects.toThrow('Voice failed');
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      dest: 'offscreen',
+      method: 'speak',
+      args: [null, 'hello', undefined],
+    });
   });
 });

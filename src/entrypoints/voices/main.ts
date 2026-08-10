@@ -6,8 +6,11 @@
  */
 
 import { SUPERTONIC_ENGINE_ASSETS, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
+import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
+import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
+import { type VoiceCardState, renderVoiceCard } from './voice-card';
 
 const CACHE_NAME = 'dita-voices';
 
@@ -30,14 +33,9 @@ async function isInCache(url: string): Promise<boolean> {
 
 // ── State ────────────────────────────────────────────────────────────
 
-interface VoiceState {
-  voiceId: string;
-  installed: boolean;
-  downloading: boolean;
-  progress: number;
-}
-
-const state = new Map<string, VoiceState>();
+const state = new Map<string, VoiceCardState>();
+const selectionStore = new ChromeVoiceSelectionStorage();
+let selectedVoiceId: string | null = null;
 
 // ── Render ───────────────────────────────────────────────────────────
 
@@ -76,6 +74,20 @@ async function refresh(): Promise<void> {
     });
   }
 
+  const storedVoiceId = await selectionStore.load();
+  const installedVoiceIds = SUPERTONIC_VOICES.filter((voice) => state.get(voice.id)?.installed).map(
+    (voice) => voice.id,
+  );
+  selectedVoiceId = resolveSelectedVoiceId(storedVoiceId, installedVoiceIds);
+  console.info('[dita][voice-selection][page] loaded', {
+    storedVoiceId,
+    installedVoiceIds,
+    resolvedVoiceId: selectedVoiceId,
+  });
+  if (selectedVoiceId && selectedVoiceId !== storedVoiceId) {
+    await selectionStore.save(selectedVoiceId);
+  }
+
   renderVoices();
   updateStatusBar();
 }
@@ -107,52 +119,9 @@ function renderVoices(): void {
     const s = state.get(voice.id);
     if (!s) continue;
 
-    const card = document.createElement('div');
-    card.className = 'voice-card';
-
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = `${voice.gender === 'male' ? '♂' : '♀'} ${voice.name}`;
-
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.textContent = `Supertonic · ${voice.language}`;
-
-    const size = document.createElement('div');
-    size.className = 'size';
-    size.textContent = '~300 KB';
-
-    card.append(name, meta, size);
-
-    if (s.installed) {
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-installed';
-      btn.textContent = '✓ Installed';
-      btn.disabled = true;
-      card.append(btn);
-    } else if (s.downloading) {
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-download loading';
-      btn.textContent = `Downloading ${s.progress}%`;
-      btn.disabled = true;
-      card.append(btn);
-
-      const bar = document.createElement('div');
-      bar.className = 'progress-bar';
-      const fill = document.createElement('div');
-      fill.className = 'fill';
-      fill.style.width = `${s.progress}%`;
-      bar.append(fill);
-      card.append(bar);
-    } else {
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-download';
-      btn.textContent = 'Download';
-      btn.addEventListener('click', () => downloadVoice(voice.id));
-      card.append(btn);
-    }
-
-    voicesGrid.append(card);
+    voicesGrid.append(
+      renderVoiceCard(voice, s, voice.id === selectedVoiceId, downloadVoice, selectVoice),
+    );
   }
 
   // Download all button
@@ -166,7 +135,21 @@ function renderVoices(): void {
   }
 }
 
-// ── Download logic ───────────────────────────────────────────────────
+// ── Selection and download logic ────────────────────────────────────
+
+function selectVoice(voiceId: string): void {
+  if (!state.get(voiceId)?.installed) {
+    console.warn('[dita][voice-selection][page] rejected unavailable voice', { voiceId });
+    return;
+  }
+  const previousVoiceId = selectedVoiceId;
+  selectedVoiceId = voiceId;
+  console.info('[dita][voice-selection][page] selected', { previousVoiceId, voiceId });
+  renderVoices();
+  void selectionStore.save(voiceId).then(() => {
+    console.info('[dita][voice-selection][page] persisted', { voiceId });
+  });
+}
 
 async function downloadVoice(voiceId: string): Promise<void> {
   const voice = SUPERTONIC_VOICES.find((v) => v.id === voiceId);
@@ -197,6 +180,7 @@ async function downloadVoice(voiceId: string): Promise<void> {
     });
 
     state.set(voiceId, { voiceId, installed: true, downloading: false, progress: 100 });
+    if (!selectedVoiceId) selectVoice(voiceId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error(`Download failed for ${voiceId}:`, msg);

@@ -1,4 +1,6 @@
 import type { AvailableTextReader, SpeakOptions } from '../../domain/audio/text-reader';
+import type { VoiceSelectionStore } from '../../domain/voices/selection';
+import { ChromeVoiceSelectionStorage } from './voice-selection-storage';
 
 interface OffscreenResponse {
   ok: boolean;
@@ -23,24 +25,39 @@ interface OffscreenChromeApi {
 export class OffscreenSupertonicReader implements AvailableTextReader {
   private creation: Promise<void> | null = null;
 
-  constructor(private readonly chromeApi: OffscreenChromeApi = chrome) {}
+  constructor(
+    private readonly chromeApi: OffscreenChromeApi = chrome,
+    private readonly selectionStore: VoiceSelectionStore = new ChromeVoiceSelectionStorage(),
+  ) {}
 
   async isAvailable(): Promise<boolean> {
-    const response = await this.send('isAvailable');
+    const response = await this.sendWithSelectedVoice('isAvailable');
     return response.available === true;
   }
 
   async prepare(text: string, options?: SpeakOptions): Promise<void> {
-    await this.send('prepare', [text, this.serializableOptions(options)]);
+    await this.sendWithSelectedVoice('prepare', [text, this.serializableOptions(options)]);
   }
 
   async speak(text: string, options?: SpeakOptions): Promise<void> {
-    await this.send('speak', [text, this.serializableOptions(options)]);
+    await this.sendWithSelectedVoice('speak', [text, this.serializableOptions(options)]);
   }
 
   private serializableOptions(options?: SpeakOptions): SpeakOptions | undefined {
     if (!options) return undefined;
     return { rate: options.rate, pitch: options.pitch, resumeFromChar: options.resumeFromChar };
+  }
+
+  private async sendWithSelectedVoice(
+    method: string,
+    args: unknown[] = [],
+  ): Promise<OffscreenResponse> {
+    const selectedVoiceId = await this.selectionStore.load();
+    console.info('[dita][voice-selection][service-worker] forward', {
+      method,
+      selectedVoiceId,
+    });
+    return this.send(method, [selectedVoiceId, ...args]);
   }
 
   pause(): void {
