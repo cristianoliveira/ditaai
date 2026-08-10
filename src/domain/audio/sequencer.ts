@@ -27,9 +27,9 @@ export class SegmentSequencer {
 
   constructor(private reader: TextReader) {}
 
-  load(segments: string[]): void {
+  load(segments: string[], startIndex = 0): void {
     this.segments = segments;
-    this.index = 0;
+    this.index = segments.length === 0 ? 0 : Math.max(0, Math.min(startIndex, segments.length - 1));
     this.playing = false;
     this.stopped = false;
     this.paused = false;

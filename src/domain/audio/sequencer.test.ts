@@ -329,6 +329,26 @@ describe('SegmentSequencer', () => {
     });
   });
 
+  it('load with startIndex begins playback from that segment', async () => {
+    const reader = makeFakeReader();
+    const seq = new SegmentSequencer(reader);
+    seq.load(['a', 'b', 'c', 'd'], 2);
+
+    await seq.play();
+
+    expect(reader.calls).toEqual(['c', 'd']);
+  });
+
+  it('load clamps startIndex to the last segment', async () => {
+    const reader = makeFakeReader();
+    const seq = new SegmentSequencer(reader);
+    seq.load(['a', 'b'], 99);
+
+    await seq.play();
+
+    expect(reader.calls).toEqual(['b']);
+  });
+
   it('empty segments does nothing', async () => {
     const reader = makeFakeReader();
     const seq = new SegmentSequencer(reader);

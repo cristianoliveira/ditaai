@@ -6,10 +6,13 @@ import { FakeBoundaryReader } from '../content/fake-reader';
 import {
   clearHighlight,
   clearParagraph,
+  clearStartPoint,
   highlightParagraph,
   highlightWord,
+  markStartPoint,
 } from '../content/highlighter';
 import { type ParagraphSegment, extractParagraphs } from '../content/paragraph-extractor';
+import { ParagraphStartAffordance } from '../content/paragraph-start-affordance';
 import { Picker } from '../content/picker/picker';
 import { DitaWidget } from '../content/widget';
 import { SegmentSequencer } from '../domain/audio/sequencer';
@@ -109,6 +112,12 @@ export default defineContentScript({
     const selectorStore = new ChromeDomainSelectorStorage();
     const hostname = window.location.hostname;
     let activeSelector: string | null = null;
+    let readableElements: Set<Element> = new Set();
+    let markedStart: Element | null = null;
+    const startAffordance = new ParagraphStartAffordance({
+      isReadable: (el) => readableElements.has(el),
+      onStartFrom: startFromParagraph,
+    });
 
     void loadHighlightEnabled().then((value) => {
       highlightWordsEnabled = value;
@@ -129,6 +138,20 @@ export default defineContentScript({
         clearParagraph(activeElement);
         activeElement = null;
       }
+    }
+
+    /** Recompute the set of readable paragraph elements (after selector changes). */
+    function refreshReadable(): void {
+      const paragraphs = extractParagraphs(document);
+      const filtered = activeSelector ? filterParagraphs(paragraphs, activeSelector) : paragraphs;
+      readableElements = new Set(filtered.map((p) => p.element));
+    }
+
+    /** Show/clear the persistent start-point marker. */
+    function setStartMarker(element: Element | null): void {
+      if (markedStart && markedStart !== element) clearStartPoint(markedStart);
+      if (element) markStartPoint(element);
+      markedStart = element;
     }
 
     function buildChunksFiltered(doc: Document): Chunk[] {
@@ -173,10 +196,16 @@ export default defineContentScript({
       }
     }
 
-    function playAction(): void {
+    function playAction(fromElement?: Element | null): void {
       chunks = buildChunksFiltered(document);
       const texts = chunks.map((chunk) => chunk.text);
       if (texts.length === 0) return;
+
+      const foundIndex = fromElement
+        ? chunks.findIndex((chunk) => chunk.element === fromElement)
+        : -1;
+      const startIndex = Math.max(0, foundIndex);
+      setStartMarker(foundIndex >= 0 && fromElement ? fromElement : null);
 
       console.info(
         `[dita] segments ${JSON.stringify({
@@ -186,7 +215,7 @@ export default defineContentScript({
         })}`,
       );
 
-      sequencer.load(texts);
+      sequencer.load(texts, startIndex);
       paragraphJumper = createParagraphJumper(paragraphBreakpoints(chunks));
 
       sequencer.onSegmentChange = (index) => {
@@ -217,8 +246,24 @@ export default defineContentScript({
         })
         .then(() => {
           clearAllHighlights();
+          setStartMarker(null);
           widget?.setState('idle');
         });
+    }
+
+    /** Begin (or restart) reading from a specific paragraph element. */
+    function startFromParagraph(element: Element): void {
+      if (sequencer.getState().playing) {
+        const idx = chunks.findIndex((c) => c.element === element);
+        if (idx >= 0) {
+          setStartMarker(element);
+          sequencer.seek(idx);
+        }
+        return;
+      }
+      sequencer.stop();
+      clearAllHighlights();
+      playAction(element);
     }
 
     /** Build a widget wired to the current-closure callbacks. */
@@ -241,13 +286,14 @@ export default defineContentScript({
           onStop: () => {
             sequencer.stop();
             clearAllHighlights();
+            setStartMarker(null);
             widget?.setState('idle');
           },
           onClose: () => {
             sequencer.stop();
             clearAllHighlights();
-            widget?.unmount();
-            widget = null;
+            setStartMarker(null);
+            unmountWidget();
           },
           onSettings: () => {
             chrome.runtime.sendMessage({
@@ -258,7 +304,7 @@ export default defineContentScript({
           },
           onSelect: async () => {
             if (!widget) return;
-            widget.unmount();
+            unmountWidget();
             const picker = new Picker();
             const selector = await picker.enter(activeSelector ?? undefined);
             if (selector) {
@@ -268,8 +314,7 @@ export default defineContentScript({
               activeSelector = null;
               void selectorStore.clear(hostname);
             }
-            widget = buildWidget();
-            widget.mount();
+            mountWidget();
           },
           onToggleHighlight: (enabled) => {
             highlightWordsEnabled = enabled;
@@ -293,17 +338,29 @@ export default defineContentScript({
       );
     }
 
+    function mountWidget(): void {
+      widget = buildWidget();
+      widget.mount();
+      refreshReadable();
+      startAffordance.enable();
+    }
+
+    function unmountWidget(): void {
+      widget?.unmount();
+      widget = null;
+      startAffordance.disable();
+    }
+
     function toggleWidget(): void {
       if (widget?.isMounted()) {
-        widget.unmount();
         reader.stop();
         clearAllHighlights();
-        widget = null;
+        setStartMarker(null);
+        unmountWidget();
         return;
       }
 
-      widget = buildWidget();
-      widget.mount();
+      mountWidget();
     }
 
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {

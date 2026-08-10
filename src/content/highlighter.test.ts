@@ -1,6 +1,13 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { clearHighlight, clearParagraph, highlightParagraph, highlightWord } from './highlighter';
+import {
+  clearHighlight,
+  clearParagraph,
+  clearStartPoint,
+  highlightParagraph,
+  highlightWord,
+  markStartPoint,
+} from './highlighter';
 
 describe('highlightWord', () => {
   afterEach(() => {
@@ -70,6 +77,25 @@ describe('highlightParagraph', () => {
     highlightParagraph(p);
     clearParagraph(p);
     expect(p.classList.contains('dita-sentence-highlight')).toBe(false);
+  });
+});
+
+describe('start-point marker', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('markStartPoint adds the start-point class', () => {
+    const p = html('<p>hi</p>');
+    markStartPoint(p);
+    expect(p.classList.contains('dita-start-point')).toBe(true);
+  });
+
+  it('clearStartPoint removes the start-point class', () => {
+    const p = html('<p>hi</p>');
+    markStartPoint(p);
+    clearStartPoint(p);
+    expect(p.classList.contains('dita-start-point')).toBe(false);
   });
 });
 

@@ -9,6 +9,7 @@
 
 const HIGHLIGHT_CLASS = 'dita-word-highlight';
 const SENTENCE_CLASS = 'dita-sentence-highlight';
+const START_CLASS = 'dita-start-point';
 
 const HIGHLIGHT_STYLE = `
   .${HIGHLIGHT_CLASS} {
@@ -20,6 +21,9 @@ const HIGHLIGHT_STYLE = `
   .${SENTENCE_CLASS} {
     background: rgba(108, 92, 231, 0.12);
     border-radius: 3px;
+  }
+  .${START_CLASS} {
+    box-shadow: inset 4px 0 0 #6c5ce7;
   }
 `;
 
@@ -142,4 +146,15 @@ export function highlightParagraph(element: Element): void {
 /** Remove the active-paragraph mark from an element. */
 export function clearParagraph(element: Element): void {
   element.classList.remove(SENTENCE_CLASS);
+}
+
+/** Mark the element as the chosen reading start point (persistent until cleared). */
+export function markStartPoint(element: Element): void {
+  injectStyle();
+  element.classList.add(START_CLASS);
+}
+
+/** Remove the start-point mark from an element. */
+export function clearStartPoint(element: Element): void {
+  element.classList.remove(START_CLASS);
 }
