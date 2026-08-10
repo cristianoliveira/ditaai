@@ -114,6 +114,48 @@ describe('InstalledVoiceReader', () => {
     expect(fallback.speak).toHaveBeenCalledWith('hello', undefined);
   });
 
+  it('latches to fallback after a fatal installed-voice error so later segments skip the dead runtime', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    vi.mocked(installed.speak).mockRejectedValueOnce(new Error('memory access out of bounds'));
+    const fallback = reader();
+    const subject = new InstalledVoiceReader(installed, fallback);
+
+    await subject.speak('hello'); // fatal -> fallback + latch
+    await subject.speak('world'); // latched -> fallback directly, no retry
+
+    expect(installed.speak).toHaveBeenCalledTimes(1);
+    expect(installed.isAvailable).toHaveBeenCalledTimes(1);
+    expect(fallback.speak).toHaveBeenCalledTimes(2);
+    expect(fallback.speak).toHaveBeenNthCalledWith(2, 'world', undefined);
+  });
+
+  it('skips installed-voice preparation once latched', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    installed.prepare = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(installed.speak).mockRejectedValueOnce(new Error('memory access out of bounds'));
+    const subject = new InstalledVoiceReader(installed, reader());
+
+    await subject.speak('hello'); // latches
+    await subject.prepare('world');
+
+    expect(installed.prepare).not.toHaveBeenCalled();
+  });
+
+  it('does not latch on a transient installed-voice error', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    vi.mocked(installed.speak).mockRejectedValueOnce(new Error('Voice failed'));
+    const fallback = reader();
+    const subject = new InstalledVoiceReader(installed, fallback);
+
+    await subject.speak('hello'); // transient -> fallback, no latch
+    await subject.speak('world'); // retries installed voice
+
+    expect(installed.speak).toHaveBeenCalledTimes(2);
+  });
+
   it('strips onBoundary from options passed to installed reader', async () => {
     vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
     const installed = installedReader(true);

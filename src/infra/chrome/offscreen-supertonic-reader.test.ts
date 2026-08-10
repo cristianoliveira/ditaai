@@ -17,6 +17,7 @@ function chromeApi() {
     },
     offscreen: {
       createDocument: vi.fn().mockResolvedValue(undefined),
+      closeDocument: vi.fn().mockResolvedValue(undefined),
     },
   };
 }
@@ -95,5 +96,69 @@ describe('OffscreenSupertonicReader', () => {
       method: 'speak',
       args: [null, 'hello', undefined],
     });
+  });
+
+  it('recreates the offscreen document and retries once after a fatal WASM error', async () => {
+    const chrome = chromeApi();
+    chrome.runtime.getContexts.mockResolvedValue([]);
+    chrome.runtime.sendMessage
+      .mockResolvedValueOnce({
+        ok: false,
+        fatal: true,
+        error: 'memory access out of bounds',
+      })
+      .mockResolvedValueOnce({ ok: true });
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+
+    await expect(subject.speak('hello')).resolves.toBeUndefined();
+
+    // Fresh WASM heap comes from closing + recreating the offscreen document.
+    expect(chrome.offscreen.closeDocument).toHaveBeenCalledOnce();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not recreate the document for a non-fatal error', async () => {
+    const chrome = chromeApi();
+    chrome.runtime.getContexts.mockResolvedValue([{}]);
+    chrome.runtime.sendMessage.mockResolvedValue({
+      ok: false,
+      error: 'No installed voice is ready',
+    });
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+
+    await expect(subject.speak('hello')).rejects.toThrow('No installed voice is ready');
+    expect(chrome.offscreen.closeDocument).not.toHaveBeenCalled();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledOnce();
+  });
+
+  it('gives up after recreating once if the fatal error persists', async () => {
+    const chrome = chromeApi();
+    chrome.runtime.getContexts.mockResolvedValue([{}]);
+    chrome.runtime.sendMessage.mockResolvedValue({
+      ok: false,
+      fatal: true,
+      error: 'memory access out of bounds',
+    });
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+
+    await expect(subject.speak('hello')).rejects.toThrow('memory access out of bounds');
+    expect(chrome.offscreen.closeDocument).toHaveBeenCalledOnce();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('recreates the document when the offscreen channel is lost (sendMessage rejects)', async () => {
+    const chrome = chromeApi();
+    chrome.runtime.getContexts.mockResolvedValue([{}]);
+    chrome.runtime.sendMessage
+      .mockRejectedValueOnce(
+        new Error('Could not establish connection. Receiving end does not exist.'),
+      )
+      .mockResolvedValueOnce({ ok: true });
+    const subject = new OffscreenSupertonicReader(chrome, selectionStore());
+
+    await expect(subject.speak('hello')).resolves.toBeUndefined();
+
+    expect(chrome.offscreen.closeDocument).toHaveBeenCalledOnce();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(2);
   });
 });

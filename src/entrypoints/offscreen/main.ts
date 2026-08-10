@@ -8,6 +8,7 @@ import {
   loadVoiceStyleBuffer,
   openCache,
 } from '../../infra/audio/cache-loader';
+import { isFatalOnnxError } from '../../infra/audio/onnx-errors';
 import { configureOnnxRuntime } from '../../infra/audio/onnx-runtime';
 import { SupertonicOnnxReader } from '../../infra/audio/supertonic-onnx-reader';
 
@@ -149,11 +150,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     },
     (error) => {
       const detail = error instanceof Error ? error.message : String(error);
+      // A fatal WASM/ONNX trap corrupts the runtime for this whole document, so
+      // flag it and let the service worker recreate the document (the only
+      // reliable WASM-heap reset) and retry once.
+      //
+      // Deliberately do NOT dispose/null the reader here: the offscreen handles
+      // prepare (lookahead) and speak concurrently on the SAME reader instance.
+      // Releasing its sessions or closing its AudioContext from one handler's
+      // error path would pull the rug from under a still-live inference in
+      // another handler (`Cannot read properties of null (reading '…')`). When
+      // the service worker closes this document, Chrome tears the whole context
+      // down atomically — reader, sessions, audio and WASM heap included — so
+      // cleanup is both safe and automatic.
+      const fatal = isFatalOnnxError(error);
       console.error(`[dita][installed-voice][offscreen] ${method}:failed`, {
         durationMs: Date.now() - startedAt,
         error: detail,
       });
-      sendResponse({ ok: false, error: detail });
+      sendResponse({ ok: false, error: detail, fatal });
     },
   );
   return true;

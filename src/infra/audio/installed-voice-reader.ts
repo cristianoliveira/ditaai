@@ -5,6 +5,7 @@ import type {
   SpeakOptions,
   TextReader,
 } from '../../domain/audio/text-reader';
+import { isFatalOnnxError } from './onnx-errors';
 
 /** Prefers an installed extension voice and reliably falls back to browser speech. */
 export class InstalledVoiceReader implements TextReader {
@@ -12,6 +13,9 @@ export class InstalledVoiceReader implements TextReader {
   private boundaryCallback?: (event: BoundaryEvent) => void;
   private readonly preparedInstalledSpeech = new Set<string>();
   private readonly boundaryTimers = new Set<ReturnType<typeof setTimeout>>();
+  /** Latched true after a fatal ONNX/WASM error: the runtime is unrecoverable
+   * for this content-script lifetime, so stop probing it every segment. */
+  private poisoned = false;
 
   constructor(
     private readonly installedReader: AvailableTextReader,
@@ -36,6 +40,7 @@ export class InstalledVoiceReader implements TextReader {
   }
 
   async prepare(text: string, options?: SpeakOptions): Promise<void> {
+    if (this.poisoned) return; // installed runtime is dead for this session
     if (!this.installedReader.prepare) return;
 
     try {
@@ -57,18 +62,32 @@ export class InstalledVoiceReader implements TextReader {
     this.clearBoundarySchedule();
     this.boundaryCallback = options?.onBoundary;
 
-    try {
-      const prepared = this.preparedInstalledSpeech.delete(this.preparationKey(text, options));
-      if (prepared || (await this.installedReader.isAvailable())) {
-        this.activeReader = this.installedReader;
-        // Strip onBoundary — it can't cross chrome.runtime.sendMessage.
-        // The installed reader will use the boundary listener above instead.
-        await this.installedReader.speak(text, this.serializableOptions(options));
-        this.boundaryCallback = undefined;
-        return;
+    if (!this.poisoned) {
+      try {
+        const prepared = this.preparedInstalledSpeech.delete(this.preparationKey(text, options));
+        if (prepared || (await this.installedReader.isAvailable())) {
+          this.activeReader = this.installedReader;
+          // Strip onBoundary — it can't cross chrome.runtime.sendMessage.
+          // The installed reader will use the boundary listener above instead.
+          await this.installedReader.speak(text, this.serializableOptions(options));
+          this.boundaryCallback = undefined;
+          return;
+        }
+      } catch (error) {
+        // A fatal WASM trap corrupts the ONNX runtime for the whole offscreen
+        // document. The service worker already attempted a document recreation
+        // + retry before this throw surfaced, so a fatal error here means the
+        // installed voice is genuinely unusable: latch and stop probing it.
+        if (isFatalOnnxError(error)) {
+          this.poisoned = true;
+          console.warn(
+            '[dita] installed voice suffered a fatal error; using browser speech for the rest of this page:',
+            error,
+          );
+        } else {
+          console.warn('[dita] installed voice failed, falling back to browser speech:', error);
+        }
       }
-    } catch (error) {
-      console.warn('[dita] installed voice failed, falling back to browser speech:', error);
     }
 
     this.boundaryCallback = undefined;
