@@ -538,4 +538,50 @@ describe('SegmentSequencer', () => {
 
     expect(reader.stop).not.toHaveBeenCalled();
   });
+
+  it('never runs two play loops concurrently (re-entrant play)', async () => {
+    // Reproduces the installed-voice "Session already started" crash: when
+    // play() is invoked again before the previous loop has unwound (the content
+    // script's playAction runs load → play on a second click), two loops must
+    // not call reader.speak() at the same time. Here speak hangs until released
+    // so an overlap is detectable as `overlapped`.
+    let active = false;
+    let overlapped = false;
+    let resolveFn: (() => void) | null = null;
+    const reader: TextReader & { calls: string[]; resolveSpeak: () => void } = {
+      calls: [],
+      resolveSpeak: () => resolveFn?.(),
+      prepare: vi.fn(() => Promise.resolve()),
+      speak: vi.fn((text: string) => {
+        reader.calls.push(text);
+        if (active) overlapped = true;
+        active = true;
+        return new Promise<void>((resolve) => {
+          resolveFn = () => {
+            active = false;
+            resolve();
+          };
+        });
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(() => resolveFn?.()),
+    };
+
+    const seq = new SegmentSequencer(reader);
+
+    seq.load(['a']);
+    void seq.play(); // loop A — speak('a') now in flight, never released by hand
+    await vi.waitFor(() => expect(reader.calls).toEqual(['a']));
+
+    // Re-enter exactly like playAction does: load → play, while loop A lives.
+    seq.load(['x']);
+    const second = seq.play();
+
+    await vi.waitFor(() => expect(reader.calls).toEqual(['a', 'x']));
+    expect(overlapped).toBe(false); // the fix: no two speaks overlap
+
+    reader.resolveSpeak(); // release 'x' → loop B exits
+    await second;
+  });
 });

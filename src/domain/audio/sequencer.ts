@@ -24,6 +24,11 @@ export class SegmentSequencer {
   private rate: number | undefined;
   private volume: number | undefined;
   private restarting = false;
+  /** Promise of the currently running play loop, or null when idle. Used by the
+   * re-entrancy guard so a second play() (e.g. a repeated click before the
+   * prior loop unwound) never runs concurrently with the first — two loops
+   * would race reader.speak() on the same segment ("Session already started"). */
+  private currentPlay: Promise<void> | null = null;
 
   /** Called when the active segment changes. */
   onSegmentChange?: (index: number) => void;
@@ -54,6 +59,30 @@ export class SegmentSequencer {
   }
 
   async play(options?: SpeakOptions): Promise<void> {
+    // Re-entrancy guard. play() can be invoked again while a previous loop is
+    // still in flight (the content script's playAction runs load → play on a
+    // second click before the first stop()/speak resolved). Two concurrent
+    // loops would both read this.index and call reader.speak() on the same
+    // segment, racing the installed voice ("Session already started"). Tear
+    // the prior loop down and await its exit before starting a new one.
+    while (this.currentPlay) {
+      this.stopped = true;
+      this.reader.stop();
+      this.resolveResume?.();
+      this.resolveResume = null;
+      await this.currentPlay.catch(() => {});
+    }
+
+    const done = this.runLoop(options);
+    this.currentPlay = done;
+    try {
+      await done;
+    } finally {
+      if (this.currentPlay === done) this.currentPlay = null;
+    }
+  }
+
+  private async runLoop(options?: SpeakOptions): Promise<void> {
     this.stopped = false;
     this.paused = false;
     this.playing = true;

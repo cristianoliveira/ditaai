@@ -1,6 +1,6 @@
 {
   "name": "ditaai",
-  "version": "0.3.0-9b3a147-1786379248",
+  "version": "0.3.0-5acc656-1786379941",
   "private": true,
   "description": "Turn web pages into private, local audio",
   "type": "module",
