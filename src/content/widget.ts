@@ -17,6 +17,7 @@ export interface WidgetCallbacks {
   onToggleHighlight?(enabled: boolean): void;
   onSelect?(): void;
   onChangeRate?(rate: number): void;
+  onChangeVolume?(volume: number): void;
 }
 
 const STYLES = `
@@ -136,6 +137,18 @@ const STYLES = `
     min-width: 28px;
     text-align: center;
   }
+
+  .dita-volume {
+    width: 70px;
+    accent-color: ${theme.accent};
+    cursor: pointer;
+  }
+  .dita-volume-label {
+    font-size: 11px;
+    color: #8b8ba7;
+    min-width: 36px;
+    text-align: center;
+  }
 `;
 
 /** Inline SVG icons — deterministic and flex-centerable, unlike the ▶/⏸
@@ -152,13 +165,19 @@ export class DitaWidget {
   private highlightBtn: HTMLButtonElement;
   private rateInput: HTMLInputElement;
   private rateLabel: HTMLSpanElement;
+  private volumeInput: HTMLInputElement;
+  private volumeLabel: HTMLSpanElement;
   private progressEl: HTMLSpanElement;
   private state: WidgetState = 'idle';
   private highlightEnabled = true;
 
-  constructor(callbacks: WidgetCallbacks, options?: { highlightEnabled?: boolean; rate?: number }) {
+  constructor(
+    callbacks: WidgetCallbacks,
+    options?: { highlightEnabled?: boolean; rate?: number; volume?: number },
+  ) {
     this.highlightEnabled = options?.highlightEnabled ?? true;
     const initialRate = options?.rate ?? 1;
+    const initialVolume = options?.volume ?? 1;
     this.host = document.createElement('div');
     this.host.id = 'dita-widget-host';
     this.shadow = this.host.attachShadow({ mode: 'open' });
@@ -256,6 +275,24 @@ export class DitaWidget {
     this.rateLabel.className = 'dita-rate-label';
     this.rateLabel.textContent = `${initialRate}×`;
 
+    this.volumeInput = document.createElement('input');
+    this.volumeInput.type = 'range';
+    this.volumeInput.min = '0';
+    this.volumeInput.max = '100';
+    this.volumeInput.step = '1';
+    this.volumeInput.value = String(Math.round(initialVolume * 100));
+    this.volumeInput.className = 'dita-volume';
+    this.volumeInput.setAttribute('aria-label', 'Volume');
+    this.volumeInput.addEventListener('input', () => {
+      const percent = Number(this.volumeInput.value);
+      this.volumeLabel.textContent = `${percent}%`;
+      callbacks.onChangeVolume?.(percent / 100);
+    });
+
+    this.volumeLabel = document.createElement('span');
+    this.volumeLabel.className = 'dita-volume-label';
+    this.volumeLabel.textContent = `${Math.round(initialVolume * 100)}%`;
+
     widget.append(
       label,
       prevBtn,
@@ -264,6 +301,8 @@ export class DitaWidget {
       this.progressEl,
       this.rateInput,
       this.rateLabel,
+      this.volumeInput,
+      this.volumeLabel,
       stopBtn,
       selectBtn,
       this.highlightBtn,

@@ -28,14 +28,19 @@ function audioContext() {
     start: vi.fn(() => ended?.()),
     stop: vi.fn(),
   };
+  const gain = {
+    gain: { value: 0 },
+    connect: vi.fn(),
+  };
   const context = {
     state: 'running',
     currentTime: 0,
     destination: {},
     decodeAudioData: vi.fn().mockResolvedValue({ duration: 1 }),
     createBufferSource: vi.fn(() => source),
+    createGain: vi.fn(() => gain),
   };
-  return { context, source };
+  return { context, source, gain };
 }
 
 describe('SupertonicOnnxReader preparation', () => {
@@ -87,5 +92,21 @@ describe('SupertonicOnnxReader preparation', () => {
     await expect(subject.speak('next paragraph')).resolves.toBeUndefined();
 
     expect(helper.infer).toHaveBeenCalledTimes(2);
+  });
+
+  it('applies volume through a gain node', async () => {
+    const audio = audioContext();
+    const subject = new SupertonicOnnxReader({
+      modelAssets: {},
+      voiceStyle: new ArrayBuffer(1),
+      audioContextFactory: () => audio.context as unknown as AudioContext,
+    });
+
+    await subject.speak('next paragraph', { volume: 0.4 });
+
+    expect(audio.context.createGain).toHaveBeenCalledOnce();
+    expect(audio.gain.gain.value).toBe(0.4);
+    expect(audio.source.connect).toHaveBeenCalledWith(audio.gain);
+    expect(audio.gain.connect).toHaveBeenCalledWith(audio.context.destination);
   });
 });

@@ -82,7 +82,7 @@ export class SupertonicOnnxReader implements TextReader {
 
     const playbackStartedAt = Date.now();
     console.info(`[dita][supertonic:${speechId}] playback:start`);
-    await this.playAudioWithBoundaries(prepared);
+    await this.playAudioWithBoundaries(prepared, options?.volume);
     console.info(`[dita][supertonic:${speechId}] playback:complete`, {
       durationMs: Date.now() - playbackStartedAt,
     });
@@ -202,14 +202,17 @@ export class SupertonicOnnxReader implements TextReader {
     }
   }
 
-  private playAudioWithBoundaries(prepared: PreparedSpeech): Promise<void> {
+  private playAudioWithBoundaries(prepared: PreparedSpeech, volume?: number): Promise<void> {
     const ctx = this.getAudioContext();
     const { audioBuffer, words } = prepared;
     const audioDuration = audioBuffer.duration;
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
     source.playbackRate.value = 1;
-    source.connect(ctx.destination);
+    const gain = ctx.createGain();
+    gain.gain.value = volume ?? 1;
+    source.connect(gain);
+    gain.connect(ctx.destination);
     this.sourceNode = source;
 
     this.onBoundarySchedule?.({ durationMs: audioDuration * 1_000, boundaries: words });

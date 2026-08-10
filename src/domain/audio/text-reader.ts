@@ -18,6 +18,8 @@ export interface BoundarySchedule {
 export interface SpeakOptions {
   rate?: number;
   pitch?: number;
+  /** 0 (mute) to 1 (full). Applied per segment; the next segment picks it up. */
+  volume?: number;
   voiceUri?: string;
   /** Fired for each word boundary (charIndex/charLength within the text). */
   onBoundary?: (event: BoundaryEvent) => void;

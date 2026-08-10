@@ -25,6 +25,16 @@ function rateLabel(): HTMLElement | null {
   return root?.querySelector<HTMLElement>('.dita-rate-label') ?? null;
 }
 
+function volumeSlider(): HTMLInputElement | null {
+  const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+  return root?.querySelector<HTMLInputElement>('.dita-volume') ?? null;
+}
+
+function volumeLabel(): HTMLElement | null {
+  const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+  return root?.querySelector<HTMLElement>('.dita-volume-label') ?? null;
+}
+
 describe('DitaWidget highlight toggle', () => {
   afterEach(() => {
     document.body.innerHTML = '';
@@ -103,6 +113,41 @@ describe('DitaWidget rate slider', () => {
     widget.mount();
     expect(rateSlider()?.value).toBe('1.5');
     expect(rateLabel()?.textContent).toBe('1.5×');
+  });
+});
+
+describe('DitaWidget volume slider', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('renders a volume slider defaulting to 100%', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    expect(volumeSlider()?.value).toBe('100');
+    expect(volumeSlider()?.getAttribute('aria-label')).toBe('Volume');
+    expect(volumeLabel()?.textContent).toBe('100%');
+  });
+
+  it('changing the slider notifies the new volume and updates the label', () => {
+    const onChangeVolume = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onChangeVolume });
+    widget.mount();
+    const slider = volumeSlider();
+    if (!slider) throw new Error('slider missing');
+
+    slider.value = '40';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(onChangeVolume).toHaveBeenCalledWith(0.4);
+    expect(volumeLabel()?.textContent).toBe('40%');
+  });
+
+  it('accepts an initial volume', () => {
+    const widget = new DitaWidget(noopCallbacks, { volume: 0.4 });
+    widget.mount();
+    expect(volumeSlider()?.value).toBe('40');
+    expect(volumeLabel()?.textContent).toBe('40%');
   });
 });
 

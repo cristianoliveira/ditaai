@@ -59,11 +59,11 @@ describe('InstalledVoiceReader', () => {
     const fallback = reader();
     const subject = new InstalledVoiceReader(installed, fallback);
 
-    await subject.prepare('next paragraph', { rate: 1.2 });
-    await subject.speak('next paragraph', { rate: 1.2 });
+    await subject.prepare('next paragraph', { rate: 1.2, volume: 0.4 });
+    await subject.speak('next paragraph', { rate: 1.2, volume: 0.4 });
 
     expect(installed.isAvailable).toHaveBeenCalledOnce();
-    expect(installed.speak).toHaveBeenCalledWith('next paragraph', { rate: 1.2 });
+    expect(installed.speak).toHaveBeenCalledWith('next paragraph', { rate: 1.2, volume: 0.4 });
     expect(fallback.speak).not.toHaveBeenCalled();
   });
 
@@ -121,9 +121,24 @@ describe('InstalledVoiceReader', () => {
     const onBoundary = vi.fn();
     const subject = new InstalledVoiceReader(installed, fallback);
 
-    await subject.speak('hello', { rate: 1.2, onBoundary });
+    await subject.speak('hello', { rate: 1.2, volume: 0.4, onBoundary });
 
-    expect(installed.speak).toHaveBeenCalledWith('hello', { rate: 1.2 });
+    expect(installed.speak).toHaveBeenCalledWith('hello', { rate: 1.2, volume: 0.4 });
+  });
+
+  it('does not reuse prepared speech prepared at a different volume', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    installed.prepare = vi.fn().mockResolvedValue(undefined);
+    const fallback = reader();
+    const subject = new InstalledVoiceReader(installed, fallback);
+
+    await subject.prepare('next paragraph', { rate: 1.2, volume: 0.4 });
+    await subject.speak('next paragraph', { rate: 1.2, volume: 0.8 });
+
+    // Key mismatch → availability must be rechecked instead of trusting stale speech.
+    expect(installed.isAvailable).toHaveBeenCalledTimes(2);
+    expect(installed.speak).toHaveBeenCalledWith('next paragraph', { rate: 1.2, volume: 0.8 });
   });
 
   it('forwards boundary events to the stored onBoundary callback', async () => {

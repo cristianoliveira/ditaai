@@ -50,6 +50,7 @@ describe('OffscreenSupertonicReader', () => {
     await subject.prepare('next paragraph', {
       rate: 1.2,
       pitch: 0.8,
+      volume: 0.4,
       resumeFromChar: 3,
       onBoundary: vi.fn(),
     });
@@ -57,7 +58,7 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'prepare',
-      args: ['F2', 'next paragraph', { rate: 1.2, pitch: 0.8, resumeFromChar: 3 }],
+      args: ['F2', 'next paragraph', { rate: 1.2, pitch: 0.8, volume: 0.4, resumeFromChar: 3 }],
     });
   });
 
@@ -70,6 +71,7 @@ describe('OffscreenSupertonicReader', () => {
     await subject.speak('hello', {
       rate: 1.2,
       pitch: 0.8,
+      volume: 0.4,
       resumeFromChar: 3,
       onBoundary: vi.fn(),
     });
@@ -77,7 +79,7 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'speak',
-      args: ['F2', 'hello', { rate: 1.2, pitch: 0.8, resumeFromChar: 3 }],
+      args: ['F2', 'hello', { rate: 1.2, pitch: 0.8, volume: 0.4, resumeFromChar: 3 }],
     });
   });
 

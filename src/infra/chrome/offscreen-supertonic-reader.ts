@@ -45,7 +45,12 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
 
   private serializableOptions(options?: SpeakOptions): SpeakOptions | undefined {
     if (!options) return undefined;
-    return { rate: options.rate, pitch: options.pitch, resumeFromChar: options.resumeFromChar };
+    return {
+      rate: options.rate,
+      pitch: options.pitch,
+      volume: options.volume,
+      resumeFromChar: options.resumeFromChar,
+    };
   }
 
   private async sendWithSelectedVoice(

@@ -100,13 +100,19 @@ export class InstalledVoiceReader implements TextReader {
       text,
       options?.rate ?? null,
       options?.pitch ?? null,
+      options?.volume ?? null,
       options?.resumeFromChar ?? 0,
     ]);
   }
 
   private serializableOptions(options?: SpeakOptions): SpeakOptions | undefined {
     if (!options) return undefined;
-    return { rate: options.rate, pitch: options.pitch, resumeFromChar: options.resumeFromChar };
+    return {
+      rate: options.rate,
+      pitch: options.pitch,
+      volume: options.volume,
+      resumeFromChar: options.resumeFromChar,
+    };
   }
 
   pause(): void {

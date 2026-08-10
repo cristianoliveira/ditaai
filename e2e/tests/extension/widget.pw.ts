@@ -41,6 +41,11 @@ test.describe('widget injection', () => {
       // Playwright CSS pierces open shadow roots — the widget should be visible
       await expect(page.locator('.dita-widget')).toBeVisible({ timeout: 5_000 });
 
+      // Volume slider renders inside the widget, defaulting to full volume
+      const volume = page.locator('.dita-volume');
+      await expect(volume).toBeVisible();
+      await expect(volume).toHaveValue('100');
+
       expect(errors).toEqual([]);
     } finally {
       await harness.close();

@@ -92,6 +92,22 @@ async function savePlaybackRate(rate: number): Promise<void> {
   await chrome.storage.local.set({ [RATE_PREF]: clampRate(rate) });
 }
 
+const VOLUME_PREF = 'playbackVolume';
+
+function clampVolume(volume: number): number {
+  return Math.min(1, Math.max(0, volume));
+}
+
+async function loadPlaybackVolume(): Promise<number> {
+  const stored = await chrome.storage.local.get(VOLUME_PREF);
+  const value = stored[VOLUME_PREF];
+  return typeof value === 'number' ? clampVolume(value) : 1;
+}
+
+async function savePlaybackVolume(volume: number): Promise<void> {
+  await chrome.storage.local.set({ [VOLUME_PREF]: clampVolume(volume) });
+}
+
 export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
@@ -110,6 +126,7 @@ export default defineContentScript({
     let paragraphJumper: JumpStrategy = createParagraphJumper([]);
     let highlightWordsEnabled = true;
     let playbackRate = 1;
+    let playbackVolume = 1;
     const selectorStore = new ChromeDomainSelectorStorage();
     const hostname = window.location.hostname;
     let activeSelector: string | null = null;
@@ -125,6 +142,9 @@ export default defineContentScript({
     });
     void loadPlaybackRate().then((value) => {
       playbackRate = value;
+    });
+    void loadPlaybackVolume().then((value) => {
+      playbackVolume = value;
     });
     void selectorStore.load(hostname).then((selector) => {
       if (selector) {
@@ -233,6 +253,7 @@ export default defineContentScript({
       void sequencer
         .play({
           rate: playbackRate,
+          volume: playbackVolume,
           onBoundary: (event) => {
             const chunk = chunks[currentIndex];
             console.info(
@@ -334,8 +355,14 @@ export default defineContentScript({
               widget?.setState('idle');
             }
           },
+          onChangeVolume: (volume) => {
+            playbackVolume = volume;
+            void savePlaybackVolume(volume);
+            // Volume applies from the next segment — no need to interrupt playback.
+            sequencer.setVolume(volume);
+          },
         },
-        { highlightEnabled: highlightWordsEnabled, rate: playbackRate },
+        { highlightEnabled: highlightWordsEnabled, rate: playbackRate, volume: playbackVolume },
       );
     }
 

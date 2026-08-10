@@ -13,6 +13,7 @@ export class SpeechSynthesisReader implements TextReader {
       const utterance = new SpeechSynthesisUtterance(speakText);
       if (options?.rate) utterance.rate = options.rate;
       if (options?.pitch) utterance.pitch = options.pitch;
+      if (options?.volume != null) utterance.volume = options.volume;
 
       // Native boundary events give precise word-level charIndex/charLength.
       // Offset back to absolute position when resuming mid-segment.

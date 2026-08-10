@@ -38,12 +38,12 @@ describe('RuntimeInstalledVoiceReader', () => {
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
     const subject = new RuntimeInstalledVoiceReader();
 
-    await subject.prepare('next paragraph', { rate: 1.2, onBoundary: vi.fn() });
+    await subject.prepare('next paragraph', { rate: 1.2, volume: 0.4, onBoundary: vi.fn() });
 
     expect(sendMessage).toHaveBeenCalledWith({
       dest: 'serviceWorker',
       method: 'prepareInstalledVoice',
-      args: ['next paragraph', { rate: 1.2 }],
+      args: ['next paragraph', { rate: 1.2, volume: 0.4 }],
     });
   });
 

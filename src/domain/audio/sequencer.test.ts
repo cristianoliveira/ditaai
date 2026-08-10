@@ -389,4 +389,35 @@ describe('SegmentSequencer', () => {
     reader.resolveSpeak(); // finish 'two'
     await promise;
   });
+
+  it('applies setVolume to the next segment while playing', async () => {
+    const volumes: (number | undefined)[] = [];
+    let resolveFn: (() => void) | null = null;
+    const reader: TextReader & { resolveSpeak: () => void } = {
+      resolveSpeak: () => resolveFn?.(),
+      speak: vi.fn((_text: string, options?: SpeakOptions) => {
+        volumes.push(options?.volume);
+        return new Promise<void>((resolve) => {
+          resolveFn = resolve;
+        });
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(() => resolveFn?.()),
+    };
+
+    const seq = new SegmentSequencer(reader);
+    seq.load(['one', 'two']);
+
+    const promise = seq.play({ volume: 1 });
+    await vi.waitFor(() => expect(volumes).toEqual([1]));
+
+    seq.setVolume(0.5);
+    reader.resolveSpeak(); // finish 'one'; the loop rebuilds speakOptions with the new volume
+
+    await vi.waitFor(() => expect(volumes).toEqual([1, 0.5]));
+
+    reader.resolveSpeak(); // finish 'two'
+    await promise;
+  });
 });
