@@ -42,7 +42,7 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'isAvailable',
-      args: ['F2'],
+      args: ['F2', { pageVisitId: 'unknown-page-visit', rotateVoices: false }],
     });
   });
 
@@ -63,7 +63,12 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'prepare',
-      args: ['F2', 'next paragraph', { rate: 1.2, pitch: 0.8, volume: 0.4, resumeFromChar: 3 }],
+      args: [
+        'F2',
+        'next paragraph',
+        { rate: 1.2, pitch: 0.8, volume: 0.4, resumeFromChar: 3 },
+        { pageVisitId: 'unknown-page-visit', rotateVoices: false },
+      ],
     });
   });
 
@@ -84,7 +89,12 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'speak',
-      args: ['F2', 'hello', { rate: 1.2, pitch: 0.8, volume: 0.4, resumeFromChar: 3 }],
+      args: [
+        'F2',
+        'hello',
+        { rate: 1.2, pitch: 0.8, volume: 0.4, resumeFromChar: 3 },
+        { pageVisitId: 'unknown-page-visit', rotateVoices: false },
+      ],
     });
   });
 
@@ -99,7 +109,7 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'speak',
-      args: ['F2', 'hello', undefined, true],
+      args: ['F2', 'hello', undefined, { pageVisitId: 'unknown-page-visit', rotateVoices: true }],
     });
   });
 
@@ -113,7 +123,7 @@ describe('OffscreenSupertonicReader', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'speak',
-      args: [null, 'hello', undefined],
+      args: [null, 'hello', undefined, { pageVisitId: 'unknown-page-visit', rotateVoices: false }],
     });
   });
 

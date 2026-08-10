@@ -10,13 +10,13 @@ describe('RuntimeInstalledVoiceReader', () => {
   it('asks service worker whether installed voice is available', async () => {
     const sendMessage = vi.fn().mockResolvedValue({ ok: true, available: true });
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    const subject = new RuntimeInstalledVoiceReader();
+    const subject = new RuntimeInstalledVoiceReader('page-visit');
 
     await expect(subject.isAvailable()).resolves.toBe(true);
     expect(sendMessage).toHaveBeenCalledWith({
       dest: 'serviceWorker',
       method: 'isInstalledVoiceAvailable',
-      args: [],
+      args: ['page-visit'],
     });
   });
 
@@ -27,7 +27,7 @@ describe('RuntimeInstalledVoiceReader', () => {
     const sendMessage = vi.fn().mockRejectedValue(connectionError);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    const subject = new RuntimeInstalledVoiceReader();
+    const subject = new RuntimeInstalledVoiceReader('page-visit');
 
     await expect(subject.isAvailable()).resolves.toBe(false);
     expect(consoleError).not.toHaveBeenCalled();
@@ -36,14 +36,14 @@ describe('RuntimeInstalledVoiceReader', () => {
   it('asks service worker to prepare installed speech', async () => {
     const sendMessage = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    const subject = new RuntimeInstalledVoiceReader();
+    const subject = new RuntimeInstalledVoiceReader('page-visit');
 
     await subject.prepare('next paragraph', { rate: 1.2, volume: 0.4, onBoundary: vi.fn() });
 
     expect(sendMessage).toHaveBeenCalledWith({
       dest: 'serviceWorker',
       method: 'prepareInstalledVoice',
-      args: ['next paragraph', { rate: 1.2, volume: 0.4 }],
+      args: ['next paragraph', { rate: 1.2, volume: 0.4 }, 'page-visit'],
     });
   });
 
@@ -54,7 +54,7 @@ describe('RuntimeInstalledVoiceReader', () => {
     });
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    const subject = new RuntimeInstalledVoiceReader();
+    const subject = new RuntimeInstalledVoiceReader('page-visit');
 
     await expect(subject.prepare('next paragraph')).rejects.toThrow(
       'Unknown method: prepareInstalledVoice',
@@ -65,14 +65,14 @@ describe('RuntimeInstalledVoiceReader', () => {
   it('sends serializable speech options through service worker', async () => {
     const sendMessage = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('chrome', { runtime: { sendMessage } });
-    const subject = new RuntimeInstalledVoiceReader();
+    const subject = new RuntimeInstalledVoiceReader('page-visit');
 
     await subject.speak('hello', { rate: 1.2, onBoundary: vi.fn() });
 
     expect(sendMessage).toHaveBeenCalledWith({
       dest: 'serviceWorker',
       method: 'speakWithInstalledVoice',
-      args: ['hello', { rate: 1.2 }],
+      args: ['hello', { rate: 1.2 }, 'page-visit'],
     });
   });
 
@@ -80,7 +80,7 @@ describe('RuntimeInstalledVoiceReader', () => {
     vi.stubGlobal('chrome', {
       runtime: { sendMessage: vi.fn().mockResolvedValue({ ok: false, error: 'Voice failed' }) },
     });
-    const subject = new RuntimeInstalledVoiceReader();
+    const subject = new RuntimeInstalledVoiceReader('page-visit');
 
     await expect(subject.speak('hello')).rejects.toThrow('Voice failed');
   });

@@ -27,6 +27,18 @@ export function createMessageRouter(
     installedReader?: AvailableTextReader;
   },
 ): MessageHandler {
+  const setVoiceVisit = (args: unknown[]): void => {
+    const pageVisitId = args.at(-1);
+    if (
+      typeof pageVisitId === 'string' &&
+      deps.installedReader &&
+      'setPageVisitId' in deps.installedReader &&
+      typeof deps.installedReader.setPageVisitId === 'function'
+    ) {
+      deps.installedReader.setPageVisitId(pageVisitId);
+    }
+  };
+
   const handlers: Record<string, (args: unknown[]) => unknown | Promise<unknown>> = {
     playTab: async ([tabId]) => {
       const id = (tabId as number | undefined) ?? (await deps.resolveActiveTab());
@@ -56,28 +68,33 @@ export function createMessageRouter(
       return { ok: true };
     },
     getPlaybackState: () => controller.getState(),
-    isInstalledVoiceAvailable: async () => ({
-      ok: true,
-      available: (await deps.installedReader?.isAvailable()) ?? false,
-    }),
-    prepareInstalledVoice: async ([text, options]) => {
+    isInstalledVoiceAvailable: async (args) => {
+      setVoiceVisit(args);
+      return { ok: true, available: (await deps.installedReader?.isAvailable()) ?? false };
+    },
+    prepareInstalledVoice: async ([text, options, ...rest]) => {
+      setVoiceVisit(rest);
       await deps.installedReader?.prepare?.(text as string, options as SpeakOptions | undefined);
       return { ok: true };
     },
-    speakWithInstalledVoice: async ([text, options]) => {
+    speakWithInstalledVoice: async ([text, options, ...rest]) => {
+      setVoiceVisit(rest);
       if (!deps.installedReader) return { ok: false, error: 'Installed voice unavailable' };
       await deps.installedReader.speak(text as string, options as SpeakOptions | undefined);
       return { ok: true };
     },
-    pauseInstalledVoice: () => {
+    pauseInstalledVoice: (args) => {
+      setVoiceVisit(args);
       deps.installedReader?.pause();
       return { ok: true };
     },
-    resumeInstalledVoice: () => {
+    resumeInstalledVoice: (args) => {
+      setVoiceVisit(args);
       deps.installedReader?.resume();
       return { ok: true };
     },
-    stopInstalledVoice: () => {
+    stopInstalledVoice: (args) => {
+      setVoiceVisit(args);
       deps.installedReader?.stop();
       return { ok: true };
     },

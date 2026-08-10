@@ -33,12 +33,17 @@ interface OffscreenChromeApi {
 
 export class OffscreenSupertonicReader implements AvailableTextReader {
   private creation: Promise<void> | null = null;
+  private pageVisitId = 'unknown-page-visit';
 
   constructor(
     private readonly chromeApi: OffscreenChromeApi = chrome,
     private readonly selectionStore: VoiceSelectionStore = new ChromeVoiceSelectionStorage(),
     private readonly rotationStore: VoiceRotationStore = new ChromeVoiceRotationStorage(),
   ) {}
+
+  setPageVisitId(pageVisitId: string): void {
+    this.pageVisitId = pageVisitId;
+  }
 
   async isAvailable(): Promise<boolean> {
     const response = await this.sendWithSelectedVoice('isAvailable');
@@ -73,13 +78,15 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
     ]);
     console.info('[dita][voice-selection][service-worker] forward', {
       method,
+      pageVisitId: this.pageVisitId,
       selectedVoiceId,
       rotateVoices,
     });
-    return this.send(
-      method,
-      rotateVoices ? [selectedVoiceId, ...args, true] : [selectedVoiceId, ...args],
-    );
+    return this.send(method, [
+      selectedVoiceId,
+      ...args,
+      { pageVisitId: this.pageVisitId, rotateVoices },
+    ]);
   }
 
   pause(): void {
@@ -91,7 +98,7 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
   }
 
   stop(): void {
-    void this.send('stop');
+    void this.send('stop', [{ pageVisitId: this.pageVisitId }]);
   }
 
   private async send(

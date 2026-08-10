@@ -7,9 +7,11 @@ interface RuntimeResponse {
 }
 
 export class RuntimeInstalledVoiceReader implements AvailableTextReader {
+  constructor(private readonly pageVisitId: string = crypto.randomUUID()) {}
+
   async isAvailable(): Promise<boolean> {
     try {
-      const response = await this.send('isInstalledVoiceAvailable', [], false);
+      const response = await this.send('isInstalledVoiceAvailable', [this.pageVisitId], false);
       return response.available === true;
     } catch {
       return false;
@@ -17,11 +19,19 @@ export class RuntimeInstalledVoiceReader implements AvailableTextReader {
   }
 
   async prepare(text: string, options?: SpeakOptions): Promise<void> {
-    await this.send('prepareInstalledVoice', [text, this.serializableOptions(options)], false);
+    await this.send(
+      'prepareInstalledVoice',
+      [text, this.serializableOptions(options), this.pageVisitId],
+      false,
+    );
   }
 
   async speak(text: string, options?: SpeakOptions): Promise<void> {
-    await this.send('speakWithInstalledVoice', [text, this.serializableOptions(options)]);
+    await this.send('speakWithInstalledVoice', [
+      text,
+      this.serializableOptions(options),
+      this.pageVisitId,
+    ]);
   }
 
   private serializableOptions(options?: SpeakOptions): SpeakOptions | undefined {
@@ -35,15 +45,15 @@ export class RuntimeInstalledVoiceReader implements AvailableTextReader {
   }
 
   pause(): void {
-    void this.send('pauseInstalledVoice');
+    void this.send('pauseInstalledVoice', [this.pageVisitId]);
   }
 
   resume(): void {
-    void this.send('resumeInstalledVoice');
+    void this.send('resumeInstalledVoice', [this.pageVisitId]);
   }
 
   stop(): void {
-    void this.send('stopInstalledVoice');
+    void this.send('stopInstalledVoice', [this.pageVisitId]);
   }
 
   private async send(method: string, args: unknown[] = [], trace = true): Promise<RuntimeResponse> {

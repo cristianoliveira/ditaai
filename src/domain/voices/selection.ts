@@ -12,6 +12,31 @@ export function resolveSelectedVoiceId(
   return installedVoiceIds[0] ?? null;
 }
 
+/** Keeps the randomly selected voice stable for one page visit. */
+export class PageVoiceRotation {
+  private voiceId: string | null = null;
+
+  constructor(private readonly random: () => number = Math.random) {}
+
+  resolve(
+    selectedVoiceId: string | null,
+    installedVoiceIds: string[],
+    enabled: boolean,
+  ): string | null {
+    if (!enabled) {
+      this.reset();
+      return resolveSelectedVoiceId(selectedVoiceId, installedVoiceIds);
+    }
+    if (this.voiceId && installedVoiceIds.includes(this.voiceId)) return this.voiceId;
+    this.voiceId = resolveRotatingVoiceId(selectedVoiceId, installedVoiceIds, this.random);
+    return this.voiceId;
+  }
+
+  reset(): void {
+    this.voiceId = null;
+  }
+}
+
 /** Select an installed voice randomly when rotation is configured. */
 export function resolveRotatingVoiceId(
   selectedVoiceId: string | null,
