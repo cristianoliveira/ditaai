@@ -3,13 +3,22 @@
 // from the exact word position (tracked via boundary events).
 
 import { logger } from '../../lib/logger';
+import { audioBufferDurationMs, clampAudioBufferSeconds } from './buffer';
 import type { BoundaryEvent, SpeakOptions, TextReader } from './text-reader';
+
+const MAX_BUFFERED_SEGMENTS = 8;
 
 export interface SequencerState {
   current: number;
   total: number;
   playing: boolean;
   paused: boolean;
+}
+
+export interface AudioBufferState {
+  loading: boolean;
+  bufferedSeconds: number;
+  targetSeconds: number;
 }
 
 export class SegmentSequencer {
@@ -25,6 +34,7 @@ export class SegmentSequencer {
   private rate: number | undefined;
   private volume: number | undefined;
   private restarting = false;
+  private bufferSeconds = 0;
   /** Promise of the currently running play loop, or null when idle. Used by the
    * re-entrancy guard so a second play() (e.g. a repeated click before the
    * prior loop unwound) never runs concurrently with the first — two loops
@@ -40,6 +50,8 @@ export class SegmentSequencer {
    * newer play() is silent on completion (it no longer "owns" the state), so
    * idle fires exactly once per session even under re-entry. */
   onStateChange?: (state: SequencerState) => void;
+  /** Initial prebuffer progress. Refill stays silent so playback UI remains calm. */
+  onBufferChange?: (state: AudioBufferState) => void;
 
   constructor(private reader: TextReader) {}
 
@@ -55,6 +67,10 @@ export class SegmentSequencer {
     this.rate = undefined;
     this.volume = undefined;
     this.restarting = false;
+  }
+
+  setBufferSeconds(seconds: number): void {
+    this.bufferSeconds = clampAudioBufferSeconds(seconds);
   }
 
   getState(): SequencerState {
@@ -110,6 +126,7 @@ export class SegmentSequencer {
     this.rate = options?.rate;
     this.volume = options?.volume;
 
+    let initialBufferPending = this.bufferSeconds > 0;
     while (this.index < this.segments.length && !this.stopped) {
       const segment = this.segments[this.index];
       if (!segment) break;
@@ -129,7 +146,12 @@ export class SegmentSequencer {
         },
       };
 
-      await this.prepareSegment(segment, speakOptions);
+      if (initialBufferPending) {
+        initialBufferPending = false;
+        await this.prepareBuffer(this.index, speakOptions, true);
+      } else {
+        await this.prepareSegment(segment, speakOptions);
+      }
       if (this.stopped) break;
       if (this.seeking) {
         this.seeking = false;
@@ -151,10 +173,12 @@ export class SegmentSequencer {
       const speaking = this.reader.speak(segment, speakOptions);
       const nextSegment = this.segments[this.index + 1];
       if (nextSegment) {
-        void this.prepareSegment(nextSegment, {
-          ...speakOptions,
-          resumeFromChar: 0,
-        });
+        const nextOptions = { ...speakOptions, resumeFromChar: 0 };
+        if (this.bufferSeconds > 0) {
+          void this.prepareBuffer(this.index + 1, nextOptions);
+        } else {
+          void this.prepareSegment(nextSegment, nextOptions);
+        }
       }
       await speaking;
 
@@ -262,6 +286,53 @@ export class SegmentSequencer {
     }
     this.seeking = true;
     this.reader.stop(); // cancel current utterance → loop re-evaluates at the new index
+  }
+
+  private async prepareBuffer(
+    startIndex: number,
+    options: SpeakOptions,
+    announce = false,
+  ): Promise<void> {
+    const targetDurationMs = this.bufferSeconds * 1_000;
+    let bufferedDurationMs = 0;
+    let bufferedSegments = 0;
+    const emitProgress = (loading: boolean): void => {
+      if (!announce) return;
+      this.onBufferChange?.({
+        loading,
+        bufferedSeconds: Math.min(bufferedDurationMs, targetDurationMs) / 1_000,
+        targetSeconds: this.bufferSeconds,
+      });
+    };
+
+    emitProgress(true);
+    try {
+      for (let index = startIndex; index < this.segments.length; index++) {
+        if (
+          this.stopped ||
+          this.seeking ||
+          this.restarting ||
+          this.paused ||
+          bufferedDurationMs >= targetDurationMs ||
+          bufferedSegments >= MAX_BUFFERED_SEGMENTS
+        ) {
+          return;
+        }
+        const segment = this.segments[index];
+        if (!segment) return;
+        const segmentOptions = {
+          ...options,
+          resumeFromChar: index === startIndex ? options.resumeFromChar : 0,
+        };
+        await this.prepareSegment(segment, segmentOptions);
+        const offset = segmentOptions.resumeFromChar ?? 0;
+        bufferedDurationMs += audioBufferDurationMs(segment.slice(offset), this.rate ?? 1);
+        bufferedSegments++;
+        emitProgress(true);
+      }
+    } finally {
+      emitProgress(false);
+    }
   }
 
   private async prepareSegment(segment: string, options: SpeakOptions): Promise<void> {

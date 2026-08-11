@@ -141,7 +141,7 @@ export class SupertonicOnnxReader implements TextReader {
     void preparation.catch(() => {
       if (this.preparations.get(key) === preparation) this.preparations.delete(key);
     });
-    while (this.preparations.size > 2) {
+    while (this.preparations.size > 16) {
       const oldestKey = this.preparations.keys().next().value;
       if (oldestKey === undefined) break;
       this.preparations.delete(oldestKey);

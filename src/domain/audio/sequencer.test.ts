@@ -134,6 +134,76 @@ describe('SegmentSequencer', () => {
     await playback;
   });
 
+  it('prebuffers enough short paragraphs before starting playback', async () => {
+    const events: string[] = [];
+    const reader: TextReader = {
+      prepare: vi.fn(async (text: string) => {
+        events.push(`prepare:${text.length}`);
+      }),
+      speak: vi.fn(async (text: string) => {
+        events.push(`speak:${text.length}`);
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(),
+    };
+    const seq = new SegmentSequencer(reader);
+    seq.setBufferSeconds(5);
+    seq.load(['a'.repeat(30), 'b'.repeat(60), 'c'.repeat(150)]);
+
+    await seq.play({ rate: 1 });
+
+    expect(events.slice(0, 3)).toEqual(['prepare:30', 'prepare:60', 'speak:30']);
+  });
+
+  it('reports initial audio buffer progress before playback', async () => {
+    const reader = makeFakeReader();
+    reader.prepare = vi.fn().mockResolvedValue(undefined);
+    const seq = new SegmentSequencer(reader);
+    const progress: Array<{ loading: boolean; bufferedSeconds: number; targetSeconds: number }> =
+      [];
+    seq.onBufferChange = (state) => progress.push(state);
+    seq.setBufferSeconds(5);
+    seq.load(['a'.repeat(30), 'b'.repeat(60)]);
+
+    await seq.play({ rate: 1 });
+
+    expect(progress).toEqual([
+      { loading: true, bufferedSeconds: 0, targetSeconds: 5 },
+      { loading: true, bufferedSeconds: 2, targetSeconds: 5 },
+      { loading: true, bufferedSeconds: 5, targetSeconds: 5 },
+      { loading: false, bufferedSeconds: 5, targetSeconds: 5 },
+    ]);
+  });
+
+  it('stops filling the buffer when playback is cancelled', async () => {
+    let finishPreparation: (() => void) | undefined;
+    const reader: TextReader = {
+      prepare: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishPreparation = resolve;
+          }),
+      ),
+      speak: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(),
+    };
+    const seq = new SegmentSequencer(reader);
+    seq.setBufferSeconds(10);
+    seq.load(['first', 'second', 'third']);
+
+    const playback = seq.play();
+    await vi.waitFor(() => expect(reader.prepare).toHaveBeenCalledOnce());
+    seq.stop();
+    finishPreparation?.();
+    await playback;
+
+    expect(reader.prepare).toHaveBeenCalledOnce();
+    expect(reader.speak).not.toHaveBeenCalled();
+  });
+
   it('continues playback when preparation fails', async () => {
     const reader = makeFakeReader();
     reader.prepare = vi.fn().mockRejectedValue(new Error('preparation failed'));

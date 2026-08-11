@@ -47,6 +47,15 @@
         </p>
       </div>
       <div class="synthesis-field">
+        <label for="audio-buffer-seconds">Audio buffer</label>
+        <select id="audio-buffer-seconds" aria-describedby="audio-buffer-seconds-hint"></select>
+        <p class="synthesis-hint" id="audio-buffer-seconds-hint">
+          How much narration DitaAi prepares before playback. A larger buffer
+          reduces pauses after short paragraphs but takes longer to start.
+          Immediate start keeps current one-paragraph lookahead behavior.
+        </p>
+      </div>
+      <div class="synthesis-field">
         <label for="narration-language">Language</label>
         <select id="narration-language" aria-describedby="narration-language-hint"></select>
         <p class="synthesis-hint" id="narration-language-hint">

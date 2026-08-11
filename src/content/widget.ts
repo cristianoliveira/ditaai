@@ -59,6 +59,26 @@ const STYLES = `
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 
+  .dita-buffer-progress[hidden] { display: none; }
+  .dita-buffer-progress {
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    bottom: 3px;
+    height: 2px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: ${theme.accentTint(0.2)};
+  }
+  .dita-buffer-progress-fill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, ${theme.accent}, ${theme.accentHover});
+    box-shadow: 0 0 6px ${theme.accent};
+    transition: width 0.2s ease;
+  }
+
   .dita-label {
     font-size: 13px;
     font-weight: 600;
@@ -287,6 +307,8 @@ export class DitaWidget {
   private paragraphPos: HTMLSpanElement;
   private paragraphBtn: HTMLButtonElement;
   private paragraphPopover: HTMLDivElement;
+  private bufferProgress: HTMLDivElement;
+  private bufferProgressFill: HTMLDivElement;
   private paragraphOptions: ParagraphOption[] = [];
   private currentParagraph = 0;
   private state: WidgetState = 'idle';
@@ -323,6 +345,18 @@ export class DitaWidget {
     const label = document.createElement('span');
     label.className = 'dita-label';
     label.textContent = 'DitaAi';
+
+    this.bufferProgress = document.createElement('div');
+    this.bufferProgress.className = 'dita-buffer-progress';
+    this.bufferProgress.hidden = true;
+    this.bufferProgress.setAttribute('role', 'progressbar');
+    this.bufferProgress.setAttribute('aria-label', 'Preparing audio');
+    this.bufferProgress.setAttribute('aria-valuemin', '0');
+    this.bufferProgress.setAttribute('aria-valuemax', '100');
+
+    this.bufferProgressFill = document.createElement('div');
+    this.bufferProgressFill.className = 'dita-buffer-progress-fill';
+    this.bufferProgress.append(this.bufferProgressFill);
 
     this.playBtn = createIconButton({
       icon: PLAY_ICON,
@@ -494,6 +528,7 @@ export class DitaWidget {
       settingsBtn,
       closeBtn,
       this.paragraphPopover,
+      this.bufferProgress,
     );
     this.shadow.append(style, widget);
   }
@@ -545,6 +580,18 @@ export class DitaWidget {
     } else {
       this.setState('idle');
     }
+  }
+
+  /** Show initial audio preparation as a subtle line along the widget. */
+  setBufferProgress(progress: number | null): void {
+    if (progress === null) {
+      this.bufferProgress.hidden = true;
+      return;
+    }
+    const percent = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+    this.bufferProgress.hidden = false;
+    this.bufferProgress.setAttribute('aria-valuenow', String(percent));
+    this.bufferProgressFill.style.width = `${percent}%`;
   }
 
   setHighlightEnabled(enabled: boolean): void {

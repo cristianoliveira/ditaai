@@ -1,3 +1,4 @@
+import { isAudioBufferSeconds } from './audio/buffer';
 import { isSupportedLanguage } from './audio/languages';
 import { isSynthesisQuality } from './audio/quality';
 import { type Substitutions, sanitizeSubstitutions } from './document/substitutions';
@@ -18,6 +19,7 @@ export interface ConfigurationSettings {
   pronunciationsEnabled?: boolean;
   synthesisQuality?: number;
   narrationLanguage?: string;
+  audioBufferSeconds?: number;
 }
 
 export interface ConfigurationBackup {
@@ -80,6 +82,9 @@ export function parseConfigurationBackup(text: string): ConfigurationSettings {
   if (isSupportedLanguage(settings.narrationLanguage)) {
     result.narrationLanguage = settings.narrationLanguage;
   }
+  if (isAudioBufferSeconds(settings.audioBufferSeconds)) {
+    result.audioBufferSeconds = settings.audioBufferSeconds;
+  }
   return result;
 }
 
@@ -101,6 +106,7 @@ interface UnknownConfigurationSettings {
   pronunciationsEnabled?: unknown;
   synthesisQuality?: unknown;
   narrationLanguage?: unknown;
+  audioBufferSeconds?: unknown;
 }
 
 function invalidBackup(): Error {

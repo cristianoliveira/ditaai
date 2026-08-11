@@ -5,12 +5,14 @@
  * and provides download/install functionality via Cache Storage.
  */
 
+import { AUDIO_BUFFER_OPTIONS, DEFAULT_AUDIO_BUFFER_SECONDS } from '../../domain/audio/buffer';
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, languageLabel } from '../../domain/audio/languages';
 import { DEFAULT_SYNTHESIS_QUALITY, SYNTHESIS_QUALITY_OPTIONS } from '../../domain/audio/quality';
 import { DEFAULT_SHORTCUTS } from '../../domain/shortcuts/shortcuts';
 import { SUPERTONIC_ENGINE_ASSETS, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
 import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
+import { ChromeAudioBufferStorage } from '../../infra/chrome/audio-buffer-storage';
 import { ChromeConfigurationTransfer } from '../../infra/chrome/configuration-transfer';
 import { ChromeLanguageStorage } from '../../infra/chrome/language-storage';
 import { ChromeShortcutStorage } from '../../infra/chrome/shortcut-storage';
@@ -33,6 +35,7 @@ const statusBar = document.getElementById('status-bar')!;
 const rotateVoicesInput = document.getElementById('rotate-voices') as HTMLInputElement;
 const synthesisQualitySelect = document.getElementById('synthesis-quality') as HTMLSelectElement;
 const narrationLanguageSelect = document.getElementById('narration-language') as HTMLSelectElement;
+const audioBufferSelect = document.getElementById('audio-buffer-seconds') as HTMLSelectElement;
 
 // ── Cache helpers ────────────────────────────────────────────────────
 
@@ -52,6 +55,7 @@ const selectionStore = new ChromeVoiceSelectionStorage();
 const rotationStore = new ChromeVoiceRotationStorage();
 const qualityStore = new ChromeSynthesisQualityStorage();
 const languageStore = new ChromeLanguageStorage();
+const audioBufferStore = new ChromeAudioBufferStorage();
 let selectedVoiceId: string | null = null;
 let rotateVoices = false;
 
@@ -62,6 +66,13 @@ for (const option of SYNTHESIS_QUALITY_OPTIONS) {
   element.value = String(option.steps);
   element.textContent = option.label;
   synthesisQualitySelect.append(element);
+}
+
+for (const option of AUDIO_BUFFER_OPTIONS) {
+  const element = document.createElement('option');
+  element.value = String(option.seconds);
+  element.textContent = option.label;
+  audioBufferSelect.append(element);
 }
 
 for (const entry of SUPPORTED_LANGUAGES) {
@@ -75,6 +86,12 @@ synthesisQualitySelect.addEventListener('change', () => {
   const steps = Number(synthesisQualitySelect.value);
   void qualityStore.save(steps);
   logger.info('[synthesis-quality][page] saved', { steps });
+});
+
+audioBufferSelect.addEventListener('change', () => {
+  const seconds = Number(audioBufferSelect.value);
+  void audioBufferStore.save(seconds);
+  logger.info('[audio-buffer][page] saved', { seconds });
 });
 
 narrationLanguageSelect.addEventListener('change', () => {
@@ -123,17 +140,21 @@ async function refresh(): Promise<void> {
   const storedVoiceId = await selectionStore.load();
   rotateVoices = await rotationStore.load();
   rotateVoicesInput.checked = rotateVoices;
-  const [synthesisQuality, narrationLanguage] = await Promise.all([
+  const [synthesisQuality, narrationLanguage, audioBufferSeconds] = await Promise.all([
     qualityStore.load(),
     languageStore.load(),
+    audioBufferStore.load(),
   ]);
   synthesisQualitySelect.value = String(synthesisQuality);
   narrationLanguageSelect.value = narrationLanguage;
+  audioBufferSelect.value = String(audioBufferSeconds);
   logger.info('[synthesis-settings][page] loaded', {
     synthesisQuality,
     narrationLanguage,
+    audioBufferSeconds,
     defaultQuality: DEFAULT_SYNTHESIS_QUALITY,
     defaultLanguage: DEFAULT_LANGUAGE,
+    defaultAudioBufferSeconds: DEFAULT_AUDIO_BUFFER_SECONDS,
   });
   const installedVoiceIds = SUPERTONIC_VOICES.filter((voice) => state.get(voice.id)?.installed).map(
     (voice) => voice.id,

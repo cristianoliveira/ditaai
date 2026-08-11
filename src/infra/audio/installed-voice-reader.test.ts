@@ -67,6 +67,20 @@ describe('InstalledVoiceReader', () => {
     expect(fallback.speak).not.toHaveBeenCalled();
   });
 
+  it('retains several prepared segments for the audio buffer', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    installed.prepare = vi.fn().mockResolvedValue(undefined);
+    const subject = new InstalledVoiceReader(installed, reader());
+
+    await subject.prepare('first');
+    await subject.prepare('second');
+    await subject.prepare('third');
+    await subject.speak('first');
+
+    expect(installed.isAvailable).toHaveBeenCalledTimes(3);
+  });
+
   it('skips preparation when installed voice is unavailable', async () => {
     vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
     const installed = installedReader(false);

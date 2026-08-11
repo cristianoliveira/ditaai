@@ -37,6 +37,11 @@ function volumeLabel(): HTMLElement | null {
   return root?.querySelector<HTMLElement>('.dita-volume-label') ?? null;
 }
 
+function bufferProgress(): HTMLElement | null {
+  const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+  return root?.querySelector<HTMLElement>('.dita-buffer-progress') ?? null;
+}
+
 describe('DitaWidget highlight toggle', () => {
   afterEach(() => {
     document.body.innerHTML = '';
@@ -162,6 +167,35 @@ describe('DitaWidget volume slider', () => {
     expect(volumeSlider()?.value).toBe('25');
     expect(volumeLabel()?.textContent).toBe('25%');
     expect(onChangeVolume).not.toHaveBeenCalled();
+  });
+});
+
+describe('DitaWidget buffer progress', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('shows a compact accessible progress bar while audio is buffering', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+
+    widget.setBufferProgress(0.4);
+
+    expect(bufferProgress()?.hidden).toBe(false);
+    expect(bufferProgress()?.getAttribute('aria-valuenow')).toBe('40');
+    expect(
+      bufferProgress()?.querySelector<HTMLElement>('.dita-buffer-progress-fill')?.style.width,
+    ).toBe('40%');
+  });
+
+  it('hides buffer progress when loading completes', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    widget.setBufferProgress(0.4);
+
+    widget.setBufferProgress(null);
+
+    expect(bufferProgress()?.hidden).toBe(true);
   });
 });
 

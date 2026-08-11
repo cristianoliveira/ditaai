@@ -87,6 +87,22 @@ describe('SupertonicOnnxReader preparation', () => {
     );
   });
 
+  it('retains several generated segments for the audio buffer', async () => {
+    const audio = audioContext();
+    const subject = new SupertonicOnnxReader({
+      modelAssets: {},
+      voiceStyle: new ArrayBuffer(1),
+      audioContextFactory: () => audio.context as unknown as AudioContext,
+    });
+
+    await subject.prepare('first');
+    await subject.prepare('second');
+    await subject.prepare('third');
+    await subject.speak('first');
+
+    expect(helper.infer).toHaveBeenCalledTimes(3);
+  });
+
   it('serializes preparation because the ONNX session cannot infer concurrently', async () => {
     const audio = audioContext();
     let finishFirstInference: (() => void) | undefined;

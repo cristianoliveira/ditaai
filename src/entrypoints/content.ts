@@ -24,6 +24,7 @@ import { ShortcutController } from '../content/shortcuts';
 import { DitaWidget } from '../content/widget';
 import type { ParagraphOption } from '../content/widget';
 import { locateWord } from '../content/word-locator';
+import { DEFAULT_AUDIO_BUFFER_SECONDS } from '../domain/audio/buffer';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
 import {
@@ -42,6 +43,10 @@ import { filterParagraphs } from '../domain/selection/selection';
 import { DEFAULT_SHORTCUTS, type ShortcutAction } from '../domain/shortcuts/shortcuts';
 import { InstalledVoiceReader } from '../infra/audio/installed-voice-reader';
 import { SpeechSynthesisReader } from '../infra/audio/speech-synthesis-reader';
+import {
+  AUDIO_BUFFER_SECONDS_KEY,
+  ChromeAudioBufferStorage,
+} from '../infra/chrome/audio-buffer-storage';
 import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-storage';
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
 import { ChromeShortcutStorage } from '../infra/chrome/shortcut-storage';
@@ -170,6 +175,19 @@ export default defineContentScript({
       ? new FakeBoundaryReader()
       : new InstalledVoiceReader(new RuntimeInstalledVoiceReader(), new SpeechSynthesisReader());
     const sequencer = new SegmentSequencer(reader);
+    const audioBufferStore = new ChromeAudioBufferStorage();
+    sequencer.setBufferSeconds(DEFAULT_AUDIO_BUFFER_SECONDS);
+    void audioBufferStore.load().then((seconds) => {
+      sequencer.setBufferSeconds(seconds);
+      logger.info('audio-buffer:loaded', { seconds });
+    });
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'local') return;
+      const seconds = changes[AUDIO_BUFFER_SECONDS_KEY]?.newValue;
+      if (typeof seconds !== 'number') return;
+      sequencer.setBufferSeconds(seconds);
+      logger.info('audio-buffer:changed', { seconds });
+    });
     // Single source of truth for widget state. The sequencer emits every
     // observable transition here; this is the ONLY place that reflects playback
     // state into the widget. Driving the widget from anywhere else (a per-play
@@ -183,6 +201,14 @@ export default defineContentScript({
         clearAllHighlights();
         setStartMarker(null);
       }
+    };
+    sequencer.onBufferChange = (state) => {
+      logger.info('audio-buffer:progress', state);
+      widget?.setBufferProgress(
+        state.loading && state.targetSeconds > 0
+          ? state.bufferedSeconds / state.targetSeconds
+          : null,
+      );
     };
 
     let widget: DitaWidget | null = null;

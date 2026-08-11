@@ -52,7 +52,7 @@ export class InstalledVoiceReader implements TextReader {
     }
 
     this.preparedInstalledSpeech.add(this.preparationKey(text, options));
-    while (this.preparedInstalledSpeech.size > 2) {
+    while (this.preparedInstalledSpeech.size > 16) {
       const oldestKey = this.preparedInstalledSpeech.values().next().value;
       if (oldestKey === undefined) break;
       this.preparedInstalledSpeech.delete(oldestKey);

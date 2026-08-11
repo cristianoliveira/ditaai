@@ -20,6 +20,7 @@ describe('configuration backup', () => {
         pronunciationsEnabled: false,
         synthesisQuality: 16,
         narrationLanguage: 'pt',
+        audioBufferSeconds: 10,
       }),
     ).toEqual({
       format: BACKUP_FORMAT,
@@ -36,6 +37,7 @@ describe('configuration backup', () => {
         pronunciationsEnabled: false,
         synthesisQuality: 16,
         narrationLanguage: 'pt',
+        audioBufferSeconds: 10,
       },
     });
   });
@@ -57,6 +59,7 @@ describe('configuration backup', () => {
             pronunciationsEnabled: false,
             synthesisQuality: 7,
             narrationLanguage: 'xx',
+            audioBufferSeconds: 7,
           },
         }),
       ),
@@ -68,16 +71,17 @@ describe('configuration backup', () => {
     });
   });
 
-  it('round-trips valid synthesis quality and narration language', () => {
+  it('round-trips valid synthesis and audio buffer settings', () => {
     const input = JSON.stringify({
       format: BACKUP_FORMAT,
       version: 1,
-      settings: { synthesisQuality: 12, narrationLanguage: 'ja' },
+      settings: { synthesisQuality: 12, narrationLanguage: 'ja', audioBufferSeconds: 15 },
     });
 
     expect(parseConfigurationBackup(input)).toEqual({
       synthesisQuality: 12,
       narrationLanguage: 'ja',
+      audioBufferSeconds: 15,
     });
   });
 
