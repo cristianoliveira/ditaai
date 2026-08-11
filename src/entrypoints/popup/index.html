@@ -9,13 +9,21 @@
     * { box-sizing: border-box; }
     body { margin: 0; width: 250px; background: #0f0f1a; color: #e0e0f0; font-family: -apple-system, system-ui, sans-serif; }
     .player { padding: 18px; }
-    .eyebrow { margin: 0 0 7px; color: #f59e0b; font-size: 11px; font-weight: 700; letter-spacing: .12em; }
+    .eyebrow { margin: 0 0 7px; color: var(--dita-accent, #f59e0b); font-size: 11px; font-weight: 700; letter-spacing: .12em; }
     .status { margin: 0 0 16px; font-size: 14px; }
-    .controls { display: flex; gap: 8px; }
-    button { border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600; padding: 9px 14px; }
-    .primary { background: #f59e0b; color: #17100a; flex: 1; }
-    .secondary { background: #2a2a4a; color: #e0e0f0; }
-    .configuration { width: 100%; margin-top: 10px; background: transparent; border: 1px solid #4a4a6a; color: #e0e0f0; }
+    .controls { display: flex; gap: 12px; justify-content: center; }
+    .icon-btn {
+      width: 44px; height: 44px;
+      border: 0; border-radius: 50%;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .icon-btn svg { display: block; width: 18px; height: 18px; fill: #fff; }
+    .icon-play { background: var(--dita-accent, #f59e0b); }
+    .icon-play:hover { background: var(--dita-accent-hover, #fbbf24); }
+    .icon-stop { background: var(--dita-stop, #b91c1c); }
+    .icon-stop:hover { background: var(--dita-stop-hover, #dc2626); }
+    .configuration { width: 100%; margin-top: 12px; border: 1px solid #4a4a6a; border-radius: 8px; background: transparent; color: #e0e0f0; font: inherit; font-weight: 600; padding: 9px 14px; }
     .configuration:hover { background: #2a2a4a; }
     button:disabled { cursor: not-allowed; opacity: .55; }
   </style>

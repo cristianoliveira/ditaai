@@ -3,6 +3,7 @@
 
 import type { SequencerState } from '../domain/audio/sequencer';
 import type { JumpDirection } from '../domain/playback/jump';
+import { PAUSE_ICON, PLAY_ICON, STOP_ICON, createIconButton } from './icons';
 import { theme } from './theme';
 
 export type WidgetState = 'idle' | 'playing' | 'paused';
@@ -271,15 +272,6 @@ const STYLES = `
   }
 `;
 
-/** Inline SVG icons — deterministic and flex-centerable, unlike the ▶/⏸
- * glyphs whose ink sits off-center in the em box and shifts per font/platform. */
-const PLAY_ICON =
-  '<svg viewBox="0 0 24 24" data-icon="play" aria-hidden="true"><polygon points="5 3 19 12 5 21"/></svg>';
-const PAUSE_ICON =
-  '<svg viewBox="0 0 24 24" data-icon="pause" aria-hidden="true"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>';
-const STOP_ICON =
-  '<svg viewBox="0 0 24 24" data-icon="stop" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>';
-
 export class DitaWidget {
   private host: HTMLDivElement;
   private shadow: ShadowRoot;
@@ -332,25 +324,27 @@ export class DitaWidget {
     label.className = 'dita-label';
     label.textContent = 'DitaAi';
 
-    this.playBtn = document.createElement('button');
-    this.playBtn.className = 'dita-btn dita-btn-play';
-    this.playBtn.innerHTML = PLAY_ICON;
-    this.playBtn.setAttribute('aria-label', 'Play page audio');
-    this.playBtn.addEventListener('click', () => {
-      if (this.state === 'playing') {
-        callbacks.onPause();
-      } else if (this.state === 'paused') {
-        callbacks.onResume();
-      } else {
-        callbacks.onPlay();
-      }
+    this.playBtn = createIconButton({
+      icon: PLAY_ICON,
+      label: 'Play page audio',
+      className: 'dita-btn dita-btn-play',
+      onClick: () => {
+        if (this.state === 'playing') {
+          callbacks.onPause();
+        } else if (this.state === 'paused') {
+          callbacks.onResume();
+        } else {
+          callbacks.onPlay();
+        }
+      },
     });
 
-    const stopBtn = document.createElement('button');
-    stopBtn.className = 'dita-btn dita-btn-stop';
-    stopBtn.innerHTML = STOP_ICON;
-    stopBtn.setAttribute('aria-label', 'Stop page audio');
-    stopBtn.addEventListener('click', callbacks.onStop);
+    const stopBtn = createIconButton({
+      icon: STOP_ICON,
+      label: 'Stop page audio',
+      className: 'dita-btn dita-btn-stop',
+      onClick: callbacks.onStop,
+    });
 
     const prevBtn = document.createElement('button');
     prevBtn.className = 'dita-btn dita-btn-jump';

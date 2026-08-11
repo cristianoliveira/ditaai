@@ -1,3 +1,5 @@
+import { PAUSE_ICON, PLAY_ICON, STOP_ICON, createIconButton } from '../../content/icons';
+import { theme } from '../../content/theme';
 import { logInteraction } from '../../lib/interaction-logger';
 import { type Logger, logger } from '../../lib/logger';
 
@@ -23,32 +25,55 @@ export class PopupPlayer {
   ) {
     this.element = document.createElement('main');
     this.element.className = 'player';
-    this.element.innerHTML = `
-      <p class="eyebrow">DITAAI</p>
-      <p class="status" aria-live="polite">Ready to listen</p>
-      <div class="controls">
-        <button class="primary" data-action="play" type="button">Play</button>
-        <button class="secondary" data-action="stop" type="button">Stop</button>
-      </div>
-      <button class="configuration" data-action="configuration" type="button">Configuration</button>`;
-    const playButton = this.element.querySelector<HTMLButtonElement>('[data-action="play"]');
-    const status = this.element.querySelector<HTMLElement>('.status');
-    const stopButton = this.element.querySelector<HTMLButtonElement>('[data-action="stop"]');
-    const configurationButton = this.element.querySelector<HTMLButtonElement>(
-      '[data-action="configuration"]',
-    );
-    if (!playButton || !status || !stopButton || !configurationButton) {
-      throw new Error('Popup player markup is incomplete');
-    }
+    this.element.setAttribute('role', 'region');
+    this.element.setAttribute('aria-label', 'DitaAi playback controls');
+    // Same color source as the on-page player bar: transport buttons must not
+    // drift from the shared theme when it is recolored.
+    this.element.style.setProperty('--dita-accent', theme.accent);
+    this.element.style.setProperty('--dita-accent-hover', theme.accentHover);
+    this.element.style.setProperty('--dita-stop', theme.stop);
+    this.element.style.setProperty('--dita-stop-hover', theme.stopHover);
 
-    this.playButton = playButton;
-    this.status = status;
-    this.playButton.addEventListener('click', () => void this.toggle());
-    stopButton.addEventListener('click', () => void this.stop());
+    const eyebrow = document.createElement('p');
+    eyebrow.className = 'eyebrow';
+    eyebrow.textContent = 'DITAAI';
+
+    this.status = document.createElement('p');
+    this.status.className = 'status';
+    this.status.textContent = 'Ready to listen';
+    this.status.setAttribute('aria-live', 'polite');
+
+    const controls = document.createElement('div');
+    controls.className = 'controls';
+
+    this.playButton = createIconButton({
+      icon: PLAY_ICON,
+      label: 'Play page audio',
+      className: 'icon-btn icon-play',
+      onClick: () => void this.toggle(),
+    });
+    this.playButton.setAttribute('data-action', 'play');
+
+    const stopButton = createIconButton({
+      icon: STOP_ICON,
+      label: 'Stop page audio',
+      className: 'icon-btn icon-stop',
+      onClick: () => void this.stop(),
+    });
+    stopButton.setAttribute('data-action', 'stop');
+
+    const configurationButton = document.createElement('button');
+    configurationButton.className = 'configuration';
+    configurationButton.type = 'button';
+    configurationButton.setAttribute('data-action', 'configuration');
+    configurationButton.textContent = 'Configuration';
     configurationButton.addEventListener('click', () => {
       logInteraction(this.interactionLogger, 'popup', 'open-configuration');
       void this.openConfiguration();
     });
+
+    controls.append(this.playButton, stopButton);
+    this.element.append(eyebrow, this.status, controls, configurationButton);
   }
 
   mount(): HTMLElement {
@@ -108,16 +133,19 @@ export class PopupPlayer {
   private reflect(state: PagePlaybackState): void {
     this.state = state;
     if (state.playing) {
-      this.playButton.textContent = 'Pause';
+      this.playButton.innerHTML = PAUSE_ICON;
+      this.playButton.setAttribute('aria-label', 'Pause page audio');
       this.status.textContent = 'Reading this page';
       return;
     }
     if (state.paused) {
-      this.playButton.textContent = 'Resume';
+      this.playButton.innerHTML = PLAY_ICON;
+      this.playButton.setAttribute('aria-label', 'Resume page audio');
       this.status.textContent = 'Paused';
       return;
     }
-    this.playButton.textContent = 'Play';
+    this.playButton.innerHTML = PLAY_ICON;
+    this.playButton.setAttribute('aria-label', 'Play page audio');
     this.status.textContent = 'Ready to listen';
   }
 }
