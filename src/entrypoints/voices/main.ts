@@ -19,6 +19,7 @@ import { ChromeVoiceRotationStorage } from '../../infra/chrome/voice-rotation-st
 import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
 import { logger } from '../../lib/logger';
+import { overallDownloadPercentage } from './download-progress';
 import { ShortcutsPanel } from './shortcuts-panel';
 import { type VoiceCardState, renderVoiceCard } from './voice-card';
 
@@ -218,25 +219,30 @@ async function downloadVoice(voiceId: string): Promise<void> {
   const current = state.get(voiceId)!;
   state.set(voiceId, { ...current, downloading: true, progress: 0 });
   renderVoices();
+  updateStatusBar();
 
   try {
-    const _cache = await openCache();
-
-    // Download engine assets first if missing
+    const missingEngineUrls: string[] = [];
     for (const asset of SUPERTONIC_ENGINE_ASSETS.assets) {
       const assetUrl = sourceUrl(asset.source);
-      if (!(await isInCache(assetUrl))) {
-        await downloadToCache(assetUrl);
-      }
+      if (!(await isInCache(assetUrl))) missingEngineUrls.push(assetUrl);
     }
 
-    // Download voice style
-    const voiceUrl = sourceUrl(voice.source);
-    await downloadToCache(voiceUrl, (pct) => {
-      const s = state.get(voiceId);
-      if (s) state.set(voiceId, { ...s, progress: pct });
-      renderVoices();
-    });
+    const downloadUrls = [...missingEngineUrls, sourceUrl(voice.source)];
+    for (const [completedFiles, url] of downloadUrls.entries()) {
+      await downloadToCache(url, (filePercentage) => {
+        const currentState = state.get(voiceId);
+        if (!currentState) return;
+
+        const progress = overallDownloadPercentage(
+          completedFiles,
+          filePercentage,
+          downloadUrls.length,
+        );
+        state.set(voiceId, { ...currentState, progress });
+        renderVoices();
+      });
+    }
 
     state.set(voiceId, { voiceId, installed: true, downloading: false, progress: 100 });
     if (!selectedVoiceId) selectVoice(voiceId);
