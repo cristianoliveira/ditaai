@@ -217,11 +217,6 @@ describe('DitaWidget.reflect (sequencer → widget mapping)', () => {
     return root?.querySelector<HTMLButtonElement>('.dita-btn-play') ?? null;
   }
 
-  function progress(): HTMLElement | null {
-    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
-    return root?.querySelector<HTMLElement>('.dita-progress') ?? null;
-  }
-
   const idle = (over: Partial<SequencerState> = {}): SequencerState => ({
     current: 0,
     total: 10,
@@ -230,40 +225,37 @@ describe('DitaWidget.reflect (sequencer → widget mapping)', () => {
     ...over,
   });
 
-  it('idle → play icon, "Play page audio", no progress counter', () => {
+  it('idle → play icon, "Play page audio"', () => {
     const widget = new DitaWidget(noopCallbacks);
     widget.mount();
     widget.reflect(idle());
     expect(playButton()?.getAttribute('aria-label')).toBe('Play page audio');
     expect(playButton()?.querySelector('svg[data-icon="play"]')).not.toBeNull();
-    expect(progress()?.textContent).toBe('');
   });
 
-  it('playing → pause icon, "Pause page audio", counter shows current+1/total', () => {
+  it('playing → pause icon, "Pause page audio"', () => {
     const widget = new DitaWidget(noopCallbacks);
     widget.mount();
     widget.reflect(idle({ current: 2, total: 10, playing: true }));
     expect(playButton()?.getAttribute('aria-label')).toBe('Pause page audio');
     expect(playButton()?.querySelector('svg[data-icon="pause"]')).not.toBeNull();
-    expect(progress()?.textContent).toBe('3/10');
   });
 
-  it('paused → play icon, "Resume page audio", counter retained', () => {
+  it('paused → play icon, "Resume page audio"', () => {
     const widget = new DitaWidget(noopCallbacks);
     widget.mount();
     widget.reflect(idle({ current: 2, total: 10, playing: true }));
     widget.reflect(idle({ current: 2, total: 10, paused: true }));
     expect(playButton()?.getAttribute('aria-label')).toBe('Resume page audio');
     expect(playButton()?.querySelector('svg[data-icon="play"]')).not.toBeNull();
-    expect(progress()?.textContent).toBe('3/10');
   });
 
-  it('returning to idle clears the counter', () => {
+  it('returning to idle restores the play icon', () => {
     const widget = new DitaWidget(noopCallbacks);
     widget.mount();
     widget.reflect(idle({ current: 5, total: 10, playing: true }));
     widget.reflect(idle());
-    expect(progress()?.textContent).toBe('');
+    expect(playButton()?.querySelector('svg[data-icon="play"]')).not.toBeNull();
   });
 });
 
@@ -500,9 +492,22 @@ describe('DitaWidget paragraph picker', () => {
     document.body.innerHTML = '';
   });
 
-  function picker(): HTMLSelectElement | null {
+  function picker(): HTMLElement | null {
     const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
-    return root?.querySelector<HTMLSelectElement>('.dita-paragraphs') ?? null;
+    return root?.querySelector<HTMLElement>('.dita-paragraphs') ?? null;
+  }
+  function posText(): HTMLElement | null {
+    return picker()?.querySelector<HTMLElement>('.dita-paragraph-pos') ?? null;
+  }
+  function openButton(): HTMLButtonElement | null {
+    return picker()?.querySelector<HTMLButtonElement>('.dita-btn-paragraphs') ?? null;
+  }
+  function popover(): HTMLElement | null {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    return root?.querySelector<HTMLElement>('.dita-paragraph-popover') ?? null;
+  }
+  function popoverItems(): HTMLButtonElement[] {
+    return Array.from(popover()?.querySelectorAll<HTMLButtonElement>('.dita-paragraph-item') ?? []);
   }
 
   it('is hidden until paragraphs are provided', () => {
@@ -511,54 +516,101 @@ describe('DitaWidget paragraph picker', () => {
     expect(picker()?.hidden).toBe(true);
   });
 
-  it('renders one option per paragraph with an aria-label', () => {
-    const widget = new DitaWidget(noopCallbacks);
-    widget.mount();
-    widget.setParagraphs([
-      { value: 0, label: '¶ 1 — First paragraph' },
-      { value: 1, label: '¶ 2 — Second paragraph' },
-    ]);
-
-    const select = picker();
-    expect(select?.hidden).toBe(false);
-    expect(select?.getAttribute('aria-label')).toBe('Jump to paragraph');
-    expect(select?.options.length).toBe(2);
-    expect(select?.options[0]?.value).toBe('0');
-  });
-
-  it('shows current/total for the selected option while closed', () => {
+  it('renders a compact position readout and an open button', () => {
     const widget = new DitaWidget(noopCallbacks);
     widget.mount();
     widget.setParagraphs([
       { value: 0, label: '¶ 1 — First' },
       { value: 1, label: '¶ 2 — Second' },
-      { value: 2, label: '¶ 3 — Third' },
     ]);
 
-    // default selection (0) → "1/3"
-    expect(picker()?.selectedOptions[0]?.textContent).toBe('1/3');
+    expect(picker()?.hidden).toBe(false);
+    expect(posText()?.textContent).toBe('1/2');
+    expect(openButton()?.getAttribute('aria-label')).toBe('Jump to paragraph');
+    expect(openButton()?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('setCurrentParagraph updates the position readout without firing the callback', () => {
+    const onJumpToParagraph = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
+    widget.mount();
+    widget.setParagraphs([
+      { value: 0, label: '¶ 1' },
+      { value: 1, label: '¶ 2' },
+      { value: 2, label: '¶ 3' },
+    ]);
 
     widget.setCurrentParagraph(2);
-    expect(picker()?.selectedOptions[0]?.textContent).toBe('3/3');
+
+    expect(posText()?.textContent).toBe('3/3');
+    expect(onJumpToParagraph).not.toHaveBeenCalled();
   });
 
-  it('expands to full labels on focus and collapses back on blur', () => {
+  it('opens a popover listing full paragraph labels', () => {
     const widget = new DitaWidget(noopCallbacks);
     widget.mount();
     widget.setParagraphs([
       { value: 0, label: '¶ 1 — First' },
       { value: 1, label: '¶ 2 — Second' },
     ]);
-    const select = picker();
-    if (!select) throw new Error('picker missing');
 
-    select.dispatchEvent(new Event('focus'));
-    expect(select.options[0]?.textContent).toBe('¶ 1 — First');
-    expect(select.options[1]?.textContent).toBe('¶ 2 — Second');
+    openButton()?.click();
 
-    select.dispatchEvent(new Event('blur'));
-    // selection still 0 → collapses to "1/2"
-    expect(select.selectedOptions[0]?.textContent).toBe('1/2');
+    expect(popover()?.hidden).toBe(false);
+    expect(openButton()?.getAttribute('aria-expanded')).toBe('true');
+    expect(popoverItems().map((b) => b.textContent)).toEqual(['¶ 1 — First', '¶ 2 — Second']);
+  });
+
+  it('selecting an item fires onJumpToParagraph and closes the popover', () => {
+    const onJumpToParagraph = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
+    widget.mount();
+    widget.setParagraphs([
+      { value: 0, label: '¶ 1' },
+      { value: 1, label: '¶ 2' },
+      { value: 2, label: '¶ 3' },
+    ]);
+    openButton()?.click();
+
+    popoverItems()[2]?.click();
+
+    expect(onJumpToParagraph).toHaveBeenCalledWith(2);
+    expect(popover()?.hidden).toBe(true);
+    expect(openButton()?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('Escape closes the popover without selecting', () => {
+    const onJumpToParagraph = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
+    widget.mount();
+    widget.setParagraphs([
+      { value: 0, label: '¶ 1' },
+      { value: 1, label: '¶ 2' },
+    ]);
+    openButton()?.click();
+    expect(popover()?.hidden).toBe(false);
+
+    popover()?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(popover()?.hidden).toBe(true);
+    expect(onJumpToParagraph).not.toHaveBeenCalled();
+  });
+
+  it('clicking outside closes the popover without selecting', () => {
+    const onJumpToParagraph = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
+    widget.mount();
+    widget.setParagraphs([
+      { value: 0, label: '¶ 1' },
+      { value: 1, label: '¶ 2' },
+    ]);
+    openButton()?.click();
+    expect(popover()?.hidden).toBe(false);
+
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(popover()?.hidden).toBe(true);
+    expect(onJumpToParagraph).not.toHaveBeenCalled();
   });
 
   it('hides again when set to null', () => {
@@ -569,39 +621,5 @@ describe('DitaWidget paragraph picker', () => {
 
     widget.setParagraphs(null);
     expect(picker()?.hidden).toBe(true);
-  });
-
-  it('fires onJumpToParagraph with the numeric value on change', () => {
-    const onJumpToParagraph = vi.fn();
-    const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
-    widget.mount();
-    widget.setParagraphs([
-      { value: 0, label: '¶ 1' },
-      { value: 1, label: '¶ 2' },
-      { value: 2, label: '¶ 3' },
-    ]);
-    const select = picker();
-    if (!select) throw new Error('picker missing');
-
-    select.value = '2';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-
-    expect(onJumpToParagraph).toHaveBeenCalledWith(2);
-  });
-
-  it('setCurrentParagraph updates the selection without firing the callback', () => {
-    const onJumpToParagraph = vi.fn();
-    const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
-    widget.mount();
-    widget.setParagraphs([
-      { value: 0, label: '¶ 1' },
-      { value: 1, label: '¶ 2' },
-      { value: 2, label: '¶ 3' },
-    ]);
-
-    widget.setCurrentParagraph(2);
-
-    expect(picker()?.value).toBe('2');
-    expect(onJumpToParagraph).not.toHaveBeenCalled();
   });
 });

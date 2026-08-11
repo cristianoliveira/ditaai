@@ -175,31 +175,72 @@ const STYLES = `
     background: ${theme.accentTint(0.45)};
   }
 
-  .dita-progress {
-    font-size: 11px;
-    color: #8b8ba7;
-    min-width: 32px;
-    text-align: center;
-  }
-
   .dita-paragraphs[hidden] { display: none; }
   .dita-paragraphs {
-    max-width: 200px;
-    height: 28px;
-    padding: 0 6px;
-    border: 1px solid #2a2a4a;
-    border-radius: 999px;
-    background: #2a2a4a;
-    color: #fff;
-    font-family: inherit;
-    font-size: 12px;
-    cursor: pointer;
-    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    color: #8b8ba7;
+    font-size: 11px;
   }
-  .dita-paragraphs:hover { border-color: #4a4a6a; }
-  .dita-paragraphs:focus-visible {
+  .dita-paragraph-pos { min-width: 30px; text-align: center; }
+
+  .dita-btn-paragraphs {
+    width: 24px; height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #8b8ba7;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dita-btn-paragraphs:hover { background: #2a2a4a; color: #fff; }
+  .dita-btn-paragraphs:focus-visible {
     outline: 3px solid #fff;
     outline-offset: 3px;
+  }
+
+  .dita-paragraph-popover[hidden] { display: none; }
+  .dita-paragraph-popover {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 220px;
+    max-width: 360px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 6px;
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    z-index: 1;
+  }
+  .dita-paragraph-item {
+    display: block;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #c9c9d6;
+    font-family: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dita-paragraph-item:hover { background: #2a2a4a; color: #fff; }
+  .dita-paragraph-item[aria-current='true'] {
+    color: #fff;
+    background: ${theme.accentTint(0.45)};
   }
 
   .dita-rate {
@@ -245,11 +286,16 @@ export class DitaWidget {
   private rateLabel: HTMLSpanElement;
   private volumeInput: HTMLInputElement;
   private volumeLabel: HTMLSpanElement;
-  private paragraphSelect: HTMLSelectElement;
-  private paragraphLabels: string[] = [];
-  private progressEl: HTMLSpanElement;
+  private paragraphGroup: HTMLDivElement;
+  private paragraphPos: HTMLSpanElement;
+  private paragraphBtn: HTMLButtonElement;
+  private paragraphPopover: HTMLDivElement;
+  private paragraphOptions: ParagraphOption[] = [];
+  private currentParagraph = 0;
   private state: WidgetState = 'idle';
   private highlightEnabled = true;
+  private readonly callbacks: WidgetCallbacks;
+  private readonly onDocumentClick = (): void => this.closeParagraphPopover();
 
   constructor(
     callbacks: WidgetCallbacks,
@@ -260,6 +306,7 @@ export class DitaWidget {
       selection?: string | null;
     },
   ) {
+    this.callbacks = callbacks;
     this.highlightEnabled = options?.highlightEnabled ?? true;
     const initialSelection = options?.selection ?? null;
     const initialRate = options?.rate ?? 1;
@@ -279,9 +326,6 @@ export class DitaWidget {
     const label = document.createElement('span');
     label.className = 'dita-label';
     label.textContent = 'DitaAi';
-
-    this.progressEl = document.createElement('span');
-    this.progressEl.className = 'dita-progress';
 
     this.playBtn = document.createElement('button');
     this.playBtn.className = 'dita-btn dita-btn-play';
@@ -309,19 +353,34 @@ export class DitaWidget {
     nextBtn.setAttribute('aria-label', 'Next paragraph');
     nextBtn.addEventListener('click', () => callbacks.onJump?.('forward'));
 
-    this.paragraphSelect = document.createElement('select');
-    this.paragraphSelect.className = 'dita-paragraphs';
-    this.paragraphSelect.hidden = true;
-    this.paragraphSelect.setAttribute('aria-label', 'Jump to paragraph');
-    // Native <select> shows the selected option's text when closed and every
-    // option's text when open — there's no per-state label. So swap to full
-    // labels on focus (dropdown opening) and back to a compact "current/total"
-    // for the selected option on close. Only Chromium is targeted here.
-    this.paragraphSelect.addEventListener('focus', () => this.expandParagraphLabels());
-    this.paragraphSelect.addEventListener('blur', () => this.collapseParagraphLabel());
-    this.paragraphSelect.addEventListener('change', () => {
-      callbacks.onJumpToParagraph?.(Number(this.paragraphSelect.value));
-      this.collapseParagraphLabel();
+    this.paragraphGroup = document.createElement('div');
+    this.paragraphGroup.className = 'dita-paragraphs';
+    this.paragraphGroup.hidden = true;
+
+    this.paragraphPos = document.createElement('span');
+    this.paragraphPos.className = 'dita-paragraph-pos';
+
+    this.paragraphBtn = document.createElement('button');
+    this.paragraphBtn.className = 'dita-btn-paragraphs';
+    this.paragraphBtn.type = 'button';
+    this.paragraphBtn.textContent = '☰';
+    this.paragraphBtn.setAttribute('aria-label', 'Jump to paragraph');
+    this.paragraphBtn.setAttribute('aria-expanded', 'false');
+    this.paragraphBtn.setAttribute('aria-haspopup', 'listbox');
+    this.paragraphBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.toggleParagraphPopover();
+    });
+
+    this.paragraphGroup.append(this.paragraphPos, this.paragraphBtn);
+
+    this.paragraphPopover = document.createElement('div');
+    this.paragraphPopover.className = 'dita-paragraph-popover';
+    this.paragraphPopover.hidden = true;
+    this.paragraphPopover.setAttribute('role', 'listbox');
+    this.paragraphPopover.setAttribute('aria-label', 'Jump to paragraph');
+    this.paragraphPopover.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') this.closeParagraphPopover();
     });
 
     const stopBtn = document.createElement('button');
@@ -423,8 +482,7 @@ export class DitaWidget {
       prevBtn,
       this.playBtn,
       nextBtn,
-      this.paragraphSelect,
-      this.progressEl,
+      this.paragraphGroup,
       this.rateInput,
       this.rateLabel,
       this.volumeInput,
@@ -436,6 +494,7 @@ export class DitaWidget {
       this.highlightBtn,
       settingsBtn,
       closeBtn,
+      this.paragraphPopover,
     );
     this.shadow.append(style, widget);
   }
@@ -471,29 +530,22 @@ export class DitaWidget {
     } else {
       this.playBtn.innerHTML = PLAY_ICON;
       this.playBtn.setAttribute('aria-label', 'Play page audio');
-      this.progressEl.textContent = '';
     }
   }
 
   /** Single source of truth for playback reflection. Maps a sequencer state
-   * snapshot to the widget's icon, aria-label and progress counter. This is
-   * the ONLY method that should react to sequencer state — driving the widget
-   * from anywhere else risks the two drifting (e.g. a stale completion
+   * snapshot to the widget's play/pause/idle icon and aria-label. The paragraph
+   * position readout is driven separately by setCurrentParagraph, so this stays
+   * focused on transport state — the two must not race (e.g. a stale completion
    * clobbering a live session back to idle). */
   reflect(state: SequencerState): void {
     if (state.playing) {
       this.setState('playing');
-      this.setProgress(state.current + 1, state.total);
     } else if (state.paused) {
       this.setState('paused');
-      this.setProgress(state.current + 1, state.total);
     } else {
       this.setState('idle');
     }
-  }
-
-  setProgress(current: number, total: number): void {
-    this.progressEl.textContent = total > 0 ? `${current}/${total}` : '';
   }
 
   setHighlightEnabled(enabled: boolean): void {
@@ -525,47 +577,73 @@ export class DitaWidget {
     }
   }
 
-  /** Populate the paragraph dropdown. Pass null (or an empty list) to hide it.
-   * Each option's `value` is reported back via onJumpToParagraph; `label` is
-   * the full text shown only while the dropdown is open. */
+  /** Populate the paragraph list. Pass null (or an empty list) to hide the
+   * control. `label` is the full text shown for each entry in the popover;
+   * `value` is reported back via onJumpToParagraph. */
   setParagraphs(options: readonly ParagraphOption[] | null): void {
-    this.paragraphLabels = options ? options.map((o) => o.label) : [];
-    this.paragraphSelect.replaceChildren();
-    if (!options || options.length === 0) {
-      this.paragraphSelect.hidden = true;
+    this.paragraphOptions = options ? [...options] : [];
+    this.paragraphPopover.replaceChildren();
+    if (this.paragraphOptions.length === 0) {
+      this.paragraphGroup.hidden = true;
+      this.closeParagraphPopover();
       return;
     }
-    for (const opt of options) {
-      const option = document.createElement('option');
-      option.value = String(opt.value);
-      option.textContent = opt.label;
-      this.paragraphSelect.append(option);
+    for (const opt of this.paragraphOptions) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'dita-paragraph-item';
+      item.setAttribute('role', 'option');
+      item.setAttribute('data-value', String(opt.value));
+      item.textContent = opt.label;
+      item.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.callbacks.onJumpToParagraph?.(opt.value);
+        this.setCurrentParagraph(opt.value);
+        this.closeParagraphPopover();
+      });
+      this.paragraphPopover.append(item);
     }
-    this.paragraphSelect.hidden = false;
-    this.collapseParagraphLabel();
+    this.paragraphGroup.hidden = false;
+    this.setCurrentParagraph(this.currentParagraph);
   }
 
-  /** Reflect the paragraph currently being read. Updates the dropdown without
-   * firing onJumpToParagraph — programmatic value changes dispatch no event. */
+  /** Reflect the paragraph currently being read. Updates the compact readout
+   * and the highlighted popover entry without firing onJumpToParagraph. */
   setCurrentParagraph(paragraphIndex: number): void {
-    this.paragraphSelect.value = String(paragraphIndex);
-    this.collapseParagraphLabel();
+    this.currentParagraph = paragraphIndex;
+    const total = this.paragraphOptions.length;
+    this.paragraphPos.textContent = total > 0 ? `${paragraphIndex + 1}/${total}` : '';
+    this.markActiveParagraphItem();
   }
 
-  /** Closed state: show only "current/total" for the selected option. */
-  private collapseParagraphLabel(): void {
-    const total = this.paragraphLabels.length;
-    if (total === 0) return;
-    const idx = this.paragraphSelect.selectedIndex;
-    const option = idx >= 0 ? (this.paragraphSelect.options[idx] ?? null) : null;
-    if (option) option.textContent = `${idx + 1}/${total}`;
+  private toggleParagraphPopover(): void {
+    if (this.paragraphPopover.hidden) this.openParagraphPopover();
+    else this.closeParagraphPopover();
   }
 
-  /** Open state: restore the full per-paragraph labels. */
-  private expandParagraphLabels(): void {
-    this.paragraphLabels.forEach((label, i) => {
-      const option = this.paragraphSelect.options[i];
-      if (option) option.textContent = label;
-    });
+  private openParagraphPopover(): void {
+    this.paragraphPopover.hidden = false;
+    this.paragraphBtn.setAttribute('aria-expanded', 'true');
+    document.addEventListener('click', this.onDocumentClick);
+    this.markActiveParagraphItem();
+  }
+
+  private closeParagraphPopover(): void {
+    this.paragraphPopover.hidden = true;
+    this.paragraphBtn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', this.onDocumentClick);
+  }
+
+  /** Highlight the current paragraph in the popover and, while open, scroll it
+   * into view so the listener keeps their place in a long list. */
+  private markActiveParagraphItem(): void {
+    const items = this.paragraphPopover.querySelectorAll<HTMLButtonElement>('.dita-paragraph-item');
+    let active: HTMLButtonElement | null = null;
+    for (const item of items) {
+      const isActive = Number(item.getAttribute('data-value')) === this.currentParagraph;
+      item.setAttribute('aria-current', String(isActive));
+      if (isActive) active = item;
+    }
+    if (active && !this.paragraphPopover.hidden) active.scrollIntoView({ block: 'nearest' });
   }
 }
