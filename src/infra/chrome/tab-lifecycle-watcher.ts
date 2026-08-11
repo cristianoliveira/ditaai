@@ -1,14 +1,17 @@
-// Stops playback when the speaking tab is closed or navigates (refresh).
+// Stops playback when the speaking tab is closed.
 //
 // Installed-voice audio plays in the offscreen document, which outlives the
-// tab. When the content script that started playback is torn down (tab close
-// or refresh), nothing else tells the offscreen doc to stop — so audio keeps
-// playing. The service worker is the only context that both survives and
-// observes tab lifecycle events, so the wiring lives behind this adapter.
+// tab. When the content script that started playback is torn down, nothing
+// else tells the offscreen doc to stop — so audio keeps playing.
 //
-// Refresh/navigation is detected via changeInfo.status === 'loading', i.e. a
-// real document unload. In-page SPA navigations (History API) do not fire
-// 'loading', so playback is not interrupted while the content remains.
+// Unload (refresh / navigating away) is signaled by the content script's
+// `pagehide` handler, NOT by chrome.tabs.onUpdated here. `pagehide` fires only
+// on a real document unload, so same-document / SPA navigations (e.g. a
+// third-party widget thrashing the History API every few hundred ms) do NOT cut
+// playback. Listening to onUpdated 'loading' or onReplaced at this level can't
+// tell those churn events apart from a real unload, so it would race playback
+// through every segment on such pages. The service worker keeps onRemoved as a
+// backstop for tab close (covers a content crash that never fires pagehide).
 
 import { type SpeakingTabs, isSpeakingTab } from '../../domain/playback/speaking-tab';
 
@@ -23,7 +26,7 @@ export interface TabLifecycleEvents {
 /** Reads the current speaking-tab ids at event time (state may change between events). */
 export type SpeakingTabsProvider = () => SpeakingTabs;
 
-/** Invoked with the tab id that was closed/refreshed while speaking. */
+/** Invoked with the tab id that was closed while speaking. */
 export type StopPlayback = (tabId: number) => void;
 
 export function watchSpeakingTabLifecycle(
@@ -35,9 +38,7 @@ export function watchSpeakingTabLifecycle(
     if (isSpeakingTab(tabId, speaking())) onStop(tabId);
   };
 
+  // Tab close backstop. Refresh / navigation unload is handled by the content
+  // script's pagehide handler (see comment above).
   events.onRemoved.addListener((tabId) => maybeStop(tabId));
-  events.onUpdated.addListener((tabId, changeInfo) => {
-    if (changeInfo?.status === 'loading') maybeStop(tabId);
-  });
-  events.onReplaced.addListener((_addedTabId, removedTabId) => maybeStop(removedTabId));
 }

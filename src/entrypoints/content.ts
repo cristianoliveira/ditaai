@@ -416,6 +416,15 @@ export default defineContentScript({
       sequencer.stop();
     }
 
+    // Real document unload (refresh, navigating away, close). Same-document /
+    // SPA navigations do NOT fire pagehide, so a thrashing third-party widget
+    // won't cut playback here. This replaces the old chrome.tabs.onUpdated
+    // 'loading' stop, which couldn't tell churn from a real unload.
+    window.addEventListener('pagehide', () => {
+      const state = sequencer.getState();
+      if (state.playing || state.paused) stopPlayback();
+    });
+
     function jumpPlayback(direction: JumpDirection): void {
       const target = paragraphJumper.jump(currentIndex, direction, chunks.length);
       if (target !== currentIndex) sequencer.seek(target);

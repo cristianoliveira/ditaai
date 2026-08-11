@@ -52,7 +52,7 @@ describe('watchSpeakingTabLifecycle', () => {
     expect(onStop).not.toHaveBeenCalled();
   });
 
-  it('stops on refresh (onUpdated status loading) for the origin tab', () => {
+  it('does not stop on refresh (onUpdated loading) — content pagehide owns unload', () => {
     const events = makeEvents();
     const onStop = vi.fn();
     watchSpeakingTabLifecycle(
@@ -63,7 +63,10 @@ describe('watchSpeakingTabLifecycle', () => {
 
     events.fireUpdated(9, { status: 'loading' });
 
-    expect(onStop).toHaveBeenCalledWith(9);
+    // chrome.tabs.onUpdated 'loading' fires for same-document/prerender churn
+    // too, so it can't be trusted to mean "content gone". Real unload is
+    // signaled by the content script's pagehide handler instead.
+    expect(onStop).not.toHaveBeenCalled();
   });
 
   it('does not stop on onUpdated status complete', () => {
@@ -87,14 +90,14 @@ describe('watchSpeakingTabLifecycle', () => {
     expect(onStop).not.toHaveBeenCalled();
   });
 
-  it('stops when the speaking tab is replaced (removedTabId)', () => {
+  it('does not stop on tab replacement (content survives via pagehide)', () => {
     const events = makeEvents();
     const onStop = vi.fn();
     watchSpeakingTabLifecycle(events, () => ({ controllerTabId: 7, originTabId: null }), onStop);
 
     events.fireReplaced(123, 7);
 
-    expect(onStop).toHaveBeenCalledWith(7);
+    expect(onStop).not.toHaveBeenCalled();
   });
 
   it('re-evaluates the speaking tab at event time', () => {
