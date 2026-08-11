@@ -21,6 +21,8 @@ import { computeWordTimings } from './word-timing';
 interface PreparedSpeech {
   audioBuffer: AudioBuffer;
   words: ReturnType<typeof computeWordTimings>;
+  sampleCount: number;
+  durationSum: number;
 }
 
 /**
@@ -174,15 +176,21 @@ export class SupertonicOnnxReader implements TextReader {
       () => undefined,
       () => undefined,
     );
-    const { wav } = await inference;
+    const { wav, duration } = await inference;
     logger.info(`[supertonic:prepare:${preparationId}] inference:complete`, {
       durationMs: Date.now() - inferenceStartedAt,
       sampleCount: wav.length,
+      durationSum: duration.reduce((sum, d) => sum + d, 0),
     });
 
     const wavBuffer = writeWav(new Float32Array(wav), tts.sampleRate);
     const audioBuffer = await this.getAudioContext().decodeAudioData(wavBuffer);
-    return { audioBuffer, words: computeWordTimings(text, offset) };
+    return {
+      audioBuffer,
+      words: computeWordTimings(text, offset),
+      sampleCount: wav.length,
+      durationSum: duration.reduce((sum, d) => sum + d, 0),
+    };
   }
 
   private async getTextToSpeech(preparationId: number): Promise<TextToSpeech> {
@@ -270,7 +278,12 @@ export class SupertonicOnnxReader implements TextReader {
     gain.connect(ctx.destination);
     this.sourceNode = source;
 
-    this.onBoundarySchedule?.({ durationMs: audioDuration * 1_000, boundaries: words });
+    this.onBoundarySchedule?.({
+      durationMs: audioDuration * 1_000,
+      boundaries: words,
+      sampleCount: prepared.sampleCount,
+      durationSum: prepared.durationSum,
+    });
 
     const tickMs = 50;
     let boundaryIndex = 0;

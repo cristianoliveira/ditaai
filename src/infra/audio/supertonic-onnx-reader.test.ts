@@ -74,13 +74,17 @@ describe('SupertonicOnnxReader preparation', () => {
 
     expect(helper.infer).toHaveBeenCalledOnce();
     expect(audio.source.start).toHaveBeenCalledOnce();
-    expect(onBoundarySchedule).toHaveBeenCalledWith({
-      durationMs: 1_000,
-      boundaries: [
-        expect.objectContaining({ charIndex: 0, charLength: 4, startFraction: 0 }),
-        expect.objectContaining({ charIndex: 5, charLength: 9 }),
-      ],
-    });
+    expect(onBoundarySchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        durationMs: 1_000,
+        sampleCount: 2,
+        durationSum: 1,
+        boundaries: [
+          expect.objectContaining({ charIndex: 0, charLength: 4, startFraction: 0 }),
+          expect.objectContaining({ charIndex: 5, charLength: 9 }),
+        ],
+      }),
+    );
   });
 
   it('serializes preparation because the ONNX session cannot infer concurrently', async () => {

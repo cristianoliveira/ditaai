@@ -13,6 +13,9 @@ export interface ScheduledBoundary extends BoundaryEvent {
 export interface BoundarySchedule {
   durationMs: number;
   boundaries: ScheduledBoundary[];
+  /** Diagnostics relayed from the offscreen engine for observability. */
+  sampleCount?: number;
+  durationSum?: number;
 }
 
 export interface SpeakOptions {

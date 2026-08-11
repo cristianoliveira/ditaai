@@ -118,6 +118,12 @@ export class InstalledVoiceReader implements TextReader {
 
   private scheduleBoundaries(schedule: BoundarySchedule): void {
     this.clearBoundarySchedule();
+    logger.info('[installed-voice][content] boundary-schedule', {
+      audioDurationMs: schedule.durationMs,
+      sampleCount: schedule.sampleCount,
+      durationSum: schedule.durationSum,
+      boundaries: schedule.boundaries.length,
+    });
     for (const boundary of schedule.boundaries) {
       const timer = setTimeout(() => {
         this.boundaryTimers.delete(timer);
