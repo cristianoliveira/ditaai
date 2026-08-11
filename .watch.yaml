@@ -4,8 +4,12 @@
 # List here the tasks and the commands for this workflow
 # then run `fzz` to start to work.
 #
-control:
+on:
   socket: .pi/fzz.sock
+  change: '**/*.ts'
+  ignore:
+    - '**/*.js'
+    - '**/*.config.ts'
 
 tasks:
   - name: CI checks
@@ -13,10 +17,6 @@ tasks:
       - just check
       - just bump
       - just build
-    change: '**/*.ts'
-    ignore:
-      - '**/*.js'
-      - '**/*.config.ts'
     run_on_init: true
 
   - name: smoke test
@@ -24,8 +24,4 @@ tasks:
       - sleep 30
       - just observe-stop
       - just observe-start
-    change: '**/*.ts'
-    ignore:
-      - '**/*.js'
-      - '**/*.config.ts'
     run_on_init: true
