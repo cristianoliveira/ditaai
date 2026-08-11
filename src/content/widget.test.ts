@@ -207,6 +207,65 @@ describe('DitaWidget jump buttons', () => {
   });
 });
 
+describe('DitaWidget transport cluster', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function transportOrder(): string[] {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    const widget = root?.querySelector('.dita-widget') ?? null;
+    return Array.from(widget?.childNodes ?? [])
+      .filter((node): node is HTMLElement => node instanceof HTMLElement)
+      .map((node) => node.className);
+  }
+
+  it('keeps stop immediately after play, before next', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+
+    const order = transportOrder();
+    const playIndex = order.findIndex((c) => c.includes('dita-btn-play'));
+
+    expect(playIndex).toBeGreaterThanOrEqual(0);
+    expect(order[playIndex + 1]).toContain('dita-btn-stop');
+    expect(order[playIndex + 2]).toContain('dita-btn-jump');
+  });
+
+  it('places no slider between play and stop', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+
+    const order = transportOrder();
+    const playIndex = order.findIndex((c) => c.includes('dita-btn-play'));
+    const stopIndex = order.findIndex((c) => c.includes('dita-btn-stop'));
+    const between = order.slice(playIndex + 1, stopIndex);
+
+    expect(between).toEqual([]);
+  });
+
+  it('fires onStop when clicked', () => {
+    const onStop = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onStop });
+    widget.mount();
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+
+    root?.querySelector<HTMLButtonElement>('.dita-btn-stop')?.click();
+
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders stop as an inline SVG icon, not a text glyph', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    const stop = root?.querySelector<HTMLButtonElement>('.dita-btn-stop');
+
+    expect(stop?.querySelector('svg[data-icon="stop"]')).not.toBeNull();
+    expect(stop?.textContent?.trim()).toBe('');
+  });
+});
+
 describe('DitaWidget.reflect (sequencer → widget mapping)', () => {
   afterEach(() => {
     document.body.innerHTML = '';

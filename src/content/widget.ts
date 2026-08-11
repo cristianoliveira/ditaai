@@ -91,6 +91,9 @@ const STYLES = `
   .dita-btn-play { background: ${theme.accent}; }
   .dita-btn-play:hover { background: ${theme.accentHover}; }
 
+  .dita-btn-stop { background: #b91c1c; }
+  .dita-btn-stop:hover { background: #dc2626; }
+
   .dita-btn-jump {
     width: 32px; height: 32px;
     font-size: 14px;
@@ -274,6 +277,8 @@ const PLAY_ICON =
   '<svg viewBox="0 0 24 24" data-icon="play" aria-hidden="true"><polygon points="5 3 19 12 5 21"/></svg>';
 const PAUSE_ICON =
   '<svg viewBox="0 0 24 24" data-icon="pause" aria-hidden="true"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>';
+const STOP_ICON =
+  '<svg viewBox="0 0 24 24" data-icon="stop" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>';
 
 export class DitaWidget {
   private host: HTMLDivElement;
@@ -341,6 +346,12 @@ export class DitaWidget {
       }
     });
 
+    const stopBtn = document.createElement('button');
+    stopBtn.className = 'dita-btn dita-btn-stop';
+    stopBtn.innerHTML = STOP_ICON;
+    stopBtn.setAttribute('aria-label', 'Stop page audio');
+    stopBtn.addEventListener('click', callbacks.onStop);
+
     const prevBtn = document.createElement('button');
     prevBtn.className = 'dita-btn dita-btn-jump';
     prevBtn.textContent = '⏮';
@@ -382,12 +393,6 @@ export class DitaWidget {
     this.paragraphPopover.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') this.closeParagraphPopover();
     });
-
-    const stopBtn = document.createElement('button');
-    stopBtn.className = 'dita-btn dita-btn-stop';
-    stopBtn.textContent = '■';
-    stopBtn.setAttribute('aria-label', 'Stop page audio');
-    stopBtn.addEventListener('click', callbacks.onStop);
 
     const selectBtn = document.createElement('button');
     selectBtn.className = 'dita-btn dita-btn-select';
@@ -481,13 +486,13 @@ export class DitaWidget {
       label,
       prevBtn,
       this.playBtn,
+      stopBtn,
       nextBtn,
       this.paragraphGroup,
       this.rateInput,
       this.rateLabel,
       this.volumeInput,
       this.volumeLabel,
-      stopBtn,
       selectBtn,
       this.selectionChip,
       dictBtn,
