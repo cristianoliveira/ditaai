@@ -2,6 +2,7 @@
 // Pause/resume works by cancelling the current utterance and re-speaking
 // from the exact word position (tracked via boundary events).
 
+import { logger } from '../../lib/logger';
 import type { BoundaryEvent, SpeakOptions, TextReader } from './text-reader';
 
 export interface SequencerState {
@@ -267,7 +268,7 @@ export class SegmentSequencer {
     try {
       await this.reader.prepare?.(segment, options);
     } catch (error) {
-      console.warn('[dita] speech preparation failed; continuing without lookahead', error);
+      logger.warn('speech preparation failed; continuing without lookahead', error);
     }
   }
 

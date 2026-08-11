@@ -6,6 +6,7 @@ import type {
   RuntimeMessage,
   TabTextFetcher,
 } from '../../domain/messaging/router';
+import { logger } from '../../lib/logger';
 
 export interface RuntimeListenerHooks {
   /** Notified for every serviceWorker-bound message, with the real sender
@@ -25,14 +26,14 @@ export function attachRuntimeListener(
     const method = String(msg.method ?? 'unknown');
     const traceVoice = method.toLowerCase().includes('installedvoice');
     const startedAt = Date.now();
-    if (traceVoice) console.info(`[dita][installed-voice][service-worker] ${method}:received`);
+    if (traceVoice) logger.info(`[installed-voice][service-worker] ${method}:received`);
 
     const result = router(msg as RuntimeMessage);
     if (result instanceof Promise) {
       result.then(
         (value) => {
           if (traceVoice) {
-            console.info(`[dita][installed-voice][service-worker] ${method}:complete`, {
+            logger.info(`[installed-voice][service-worker] ${method}:complete`, {
               durationMs: Date.now() - startedAt,
             });
           }
@@ -40,7 +41,7 @@ export function attachRuntimeListener(
         },
         (error) => {
           if (traceVoice) {
-            console.error(`[dita][installed-voice][service-worker] ${method}:failed`, {
+            logger.error(`[installed-voice][service-worker] ${method}:failed`, {
               durationMs: Date.now() - startedAt,
               error,
             });
@@ -51,7 +52,7 @@ export function attachRuntimeListener(
       return true; // keep the message channel open for async response
     }
     if (traceVoice) {
-      console.info(`[dita][installed-voice][service-worker] ${method}:complete`, {
+      logger.info(`[installed-voice][service-worker] ${method}:complete`, {
         durationMs: Date.now() - startedAt,
       });
     }

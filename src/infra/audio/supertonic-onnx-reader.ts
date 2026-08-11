@@ -13,6 +13,7 @@ import type {
   SpeakOptions,
   TextReader,
 } from '../../domain/audio/text-reader';
+import { logger } from '../../lib/logger';
 import { loadTextToSpeech, loadVoiceStyle, writeWav } from './supertonic-helper';
 import type { TextToSpeech } from './supertonic-helper';
 import { computeWordTimings } from './word-timing';
@@ -47,6 +48,10 @@ export class SupertonicOnnxReader implements TextReader {
   private style: Awaited<ReturnType<typeof loadVoiceStyle>> | null = null;
   private styleInitialization: Promise<Awaited<ReturnType<typeof loadVoiceStyle>>> | null = null;
   private readonly preparations = new Map<string, Promise<PreparedSpeech>>();
+  /** ONNX Runtime's session is not re-entrant. A seek can start preparation for
+   * its target while lookahead inference is still running, so all inference
+   * must pass through one queue. */
+  private inferenceQueue: Promise<void> = Promise.resolve();
   private audioContext: AudioContext | null = null;
   private sourceNode: AudioBufferSourceNode | null = null;
   private speechCount = 0;
@@ -81,14 +86,14 @@ export class SupertonicOnnxReader implements TextReader {
     this.preparations.delete(preparationKey);
 
     const playbackStartedAt = Date.now();
-    console.info(`[dita][supertonic:${speechId}] playback:start`, {
+    logger.info(`[supertonic:${speechId}] playback:start`, {
       rate: options?.rate ?? null,
       volume: options?.volume ?? null,
       resumeFromChar: options?.resumeFromChar ?? 0,
       chars: text.length,
     });
     await this.playAudioWithBoundaries(prepared, options?.volume);
-    console.info(`[dita][supertonic:${speechId}] playback:complete`, {
+    logger.info(`[supertonic:${speechId}] playback:complete`, {
       durationMs: Date.now() - playbackStartedAt,
     });
   }
@@ -129,14 +134,21 @@ export class SupertonicOnnxReader implements TextReader {
     const quality = options?.quality ?? this.totalSteps;
     const language = options?.language ?? this.language;
     const inferenceStartedAt = Date.now();
-    console.info(`[dita][supertonic:prepare:${preparationId}] inference:start`, {
+    logger.info(`[supertonic:prepare:${preparationId}] inference:start`, {
       textLength: text.length,
       totalSteps: quality,
       speed,
       language,
     });
-    const { wav } = await tts.infer([text], [language], style, quality, speed);
-    console.info(`[dita][supertonic:prepare:${preparationId}] inference:complete`, {
+    const inference = this.inferenceQueue.then(() =>
+      tts.infer([text], [language], style, quality, speed),
+    );
+    this.inferenceQueue = inference.then(
+      () => undefined,
+      () => undefined,
+    );
+    const { wav } = await inference;
+    logger.info(`[supertonic:prepare:${preparationId}] inference:complete`, {
       durationMs: Date.now() - inferenceStartedAt,
       sampleCount: wav.length,
     });
@@ -148,17 +160,17 @@ export class SupertonicOnnxReader implements TextReader {
 
   private async getTextToSpeech(preparationId: number): Promise<TextToSpeech> {
     if (this.tts) {
-      console.info(`[dita][supertonic:prepare:${preparationId}] models:reuse`);
+      logger.info(`[supertonic:prepare:${preparationId}] models:reuse`);
       return this.tts;
     }
     if (this.ttsInitialization) return this.ttsInitialization;
 
     const startedAt = Date.now();
-    console.info(`[dita][supertonic:prepare:${preparationId}] models:initialize`);
+    logger.info(`[supertonic:prepare:${preparationId}] models:initialize`);
     this.ttsInitialization = loadTextToSpeech(this.modelAssets)
       .then(({ tts }) => {
         this.tts = tts;
-        console.info(`[dita][supertonic:prepare:${preparationId}] models:ready`, {
+        logger.info(`[supertonic:prepare:${preparationId}] models:ready`, {
           durationMs: Date.now() - startedAt,
         });
         return tts;

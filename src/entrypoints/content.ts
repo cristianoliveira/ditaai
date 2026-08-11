@@ -44,6 +44,7 @@ import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-sto
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
 import { ChromeShortcutStorage } from '../infra/chrome/shortcut-storage';
 import { ChromeSubstitutionStorage, SUBSTITUTIONS_KEY } from '../infra/chrome/substitution-storage';
+import { logger } from '../lib/logger';
 import type { ParagraphSegment } from '../lib/types';
 
 /** A spoken chunk and its source paragraph. `base` is the chunk's offset within
@@ -203,7 +204,7 @@ export default defineContentScript({
     void selectorStore.load(hostname).then((selector) => {
       if (selector) {
         activeSelector = selector;
-        console.info(`[dita] restored selector for ${hostname}: ${selector}`);
+        logger.info(`restored selector for ${hostname}: ${selector}`);
       }
     });
     void substitutionStore.load().then((dict) => {
@@ -281,8 +282,8 @@ export default defineContentScript({
             searchFrom = base + text.length;
           }
         }
-        console.info(
-          `[dita] fallback extraction ${JSON.stringify({
+        logger.info(
+          `fallback extraction ${JSON.stringify({
             selector: activeSelector,
             elements: elements.length,
             chunks: chunks.length,
@@ -290,7 +291,7 @@ export default defineContentScript({
         );
         return chunks;
       } catch {
-        console.warn(`[dita] invalid selector for fallback: ${activeSelector}`);
+        logger.warn(`invalid selector for fallback: ${activeSelector}`);
         return [];
       }
     }
@@ -321,8 +322,8 @@ export default defineContentScript({
       }
       setStartMarker(marker);
 
-      console.info(
-        `[dita] segments ${JSON.stringify({
+      logger.info(
+        `segments ${JSON.stringify({
           count: texts.length,
           totalChars: texts.reduce((n, t) => n + t.length, 0),
           first: texts[0]?.slice(0, 80),
@@ -337,8 +338,8 @@ export default defineContentScript({
         clearAllHighlights();
         activeElement = chunks[index]?.element ?? null;
         if (activeElement) highlightParagraph(activeElement);
-        console.info(
-          `[dita] segment ${JSON.stringify({
+        logger.info(
+          `segment ${JSON.stringify({
             index,
             chars: texts[index]?.length ?? 0,
             rate: playbackRate,
@@ -352,10 +353,8 @@ export default defineContentScript({
         volume: playbackVolume,
         onBoundary: (event) => {
           const chunk = chunks[currentIndex];
-          console.info(
-            `[dita] boundary ${JSON.stringify(
-              describeBoundary(chunk?.text ?? '', currentIndex, event),
-            )}`,
+          logger.info(
+            `boundary ${JSON.stringify(describeBoundary(chunk?.text ?? '', currentIndex, event))}`,
           );
           if (highlightWordsEnabled && activeElement && chunk) {
             highlightWord(activeElement, event.charIndex + chunk.base, event.charLength);
@@ -430,9 +429,9 @@ export default defineContentScript({
       playbackVolume = clampVolume(volume);
       void savePlaybackVolume(playbackVolume);
       widget?.setVolume(playbackVolume);
-      console.info(`[dita] applyVolume ${JSON.stringify({ volume: playbackVolume })}`);
+      logger.info(`applyVolume ${JSON.stringify({ volume: playbackVolume })}`);
       scheduleSliderRestart(() => {
-        console.info(`[dita] restart(volume) ${JSON.stringify({ volume: playbackVolume })}`);
+        logger.info(`restart(volume) ${JSON.stringify({ volume: playbackVolume })}`);
         sequencer.setVolume(playbackVolume);
       });
     }
@@ -440,9 +439,9 @@ export default defineContentScript({
     function applyRate(rate: number): void {
       playbackRate = clampRate(rate);
       void savePlaybackRate(playbackRate);
-      console.info(`[dita] applyRate ${JSON.stringify({ rate: playbackRate })}`);
+      logger.info(`applyRate ${JSON.stringify({ rate: playbackRate })}`);
       scheduleSliderRestart(() => {
-        console.info(`[dita] restart(rate) ${JSON.stringify({ rate: playbackRate })}`);
+        logger.info(`restart(rate) ${JSON.stringify({ rate: playbackRate })}`);
         sequencer.setRate(playbackRate);
       });
     }

@@ -11,6 +11,7 @@ import {
 import { isFatalOnnxError } from '../../infra/audio/onnx-errors';
 import { configureOnnxRuntime } from '../../infra/audio/onnx-runtime';
 import { SupertonicOnnxReader } from '../../infra/audio/supertonic-onnx-reader';
+import { logger } from '../../lib/logger';
 
 configureOnnxRuntime((path) => chrome.runtime.getURL(path));
 
@@ -21,7 +22,7 @@ const pageVoiceRotations = new Map<string, PageVoiceRotation>();
 const PAGE_VISIT_VOICES_KEY = 'pageVisitVoices';
 
 function log(event: string, details?: Record<string, unknown>): void {
-  console.info(`[dita][installed-voice][offscreen] ${event}`, details ?? '');
+  logger.info(`[installed-voice][offscreen] ${event}`, details);
 }
 
 async function findInstalledVoiceId(
@@ -227,7 +228,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // down atomically — reader, sessions, audio and WASM heap included — so
       // cleanup is both safe and automatic.
       const fatal = isFatalOnnxError(error);
-      console.error(`[dita][installed-voice][offscreen] ${method}:failed`, {
+      logger.error(`[installed-voice][offscreen] ${method}:failed`, {
         durationMs: Date.now() - startedAt,
         error: detail,
       });

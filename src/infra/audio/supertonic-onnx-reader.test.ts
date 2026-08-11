@@ -79,6 +79,44 @@ describe('SupertonicOnnxReader preparation', () => {
     });
   });
 
+  it('serializes preparation because the ONNX session cannot infer concurrently', async () => {
+    const audio = audioContext();
+    let finishFirstInference: (() => void) | undefined;
+    let inferenceActive = false;
+    let overlapped = false;
+    helper.infer
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            inferenceActive = true;
+            finishFirstInference = () => {
+              inferenceActive = false;
+              resolve({ wav: [0, 0], duration: [1] });
+            };
+          }),
+      )
+      .mockImplementationOnce(async () => {
+        overlapped = inferenceActive;
+        return { wav: [0, 0], duration: [1] };
+      });
+    const subject = new SupertonicOnnxReader({
+      modelAssets: {},
+      voiceStyle: new ArrayBuffer(1),
+      audioContextFactory: () => audio.context as unknown as AudioContext,
+    });
+
+    const first = subject.prepare('lookahead paragraph');
+    await vi.waitFor(() => expect(helper.infer).toHaveBeenCalledOnce());
+    const second = subject.prepare('jump target paragraph');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(overlapped).toBe(false);
+
+    finishFirstInference?.();
+    await Promise.all([first, second]);
+    expect(helper.infer).toHaveBeenCalledTimes(2);
+  });
+
   it('retries preparation after inference fails', async () => {
     const audio = audioContext();
     helper.infer.mockRejectedValueOnce(new Error('inference failed'));

@@ -1,5 +1,6 @@
 import type { AvailableTextReader, SpeakOptions } from '../../domain/audio/text-reader';
 import type { VoiceSelectionStore } from '../../domain/voices/selection';
+import { logger } from '../../lib/logger';
 import { ChromeLanguageStorage } from './language-storage';
 import { ChromeSynthesisQualityStorage } from './synthesis-quality-storage';
 import { ChromeVoiceRotationStorage } from './voice-rotation-storage';
@@ -95,7 +96,7 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
       this.selectionStore.load(),
       this.rotationStore.load(),
     ]);
-    console.info('[dita][voice-selection][service-worker] forward', {
+    logger.info('[voice-selection][service-worker] forward', {
       method,
       pageVisitId: this.pageVisitId,
       selectedVoiceId,
@@ -126,11 +127,11 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
     attempt = 0,
   ): Promise<OffscreenResponse> {
     const startedAt = Date.now();
-    console.info(`[dita][installed-voice][service-worker] offscreen.${method}:start`);
+    logger.info(`[installed-voice][service-worker] offscreen.${method}:start`);
     try {
       await this.ensureDocument();
     } catch (error) {
-      console.error(`[dita][installed-voice][service-worker] offscreen.${method}:failed`, {
+      logger.error(`[installed-voice][service-worker] offscreen.${method}:failed`, {
         durationMs: Date.now() - startedAt,
         error,
       });
@@ -148,14 +149,14 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
       // The offscreen document itself died (e.g. a WASM trap took the renderer
       // down). Recreate it once so the next attempt runs on a fresh heap.
       if (attempt === 0) {
-        console.warn(
-          '[dita][installed-voice][service-worker] offscreen channel lost; recreating document',
+        logger.warn(
+          '[installed-voice][service-worker] offscreen channel lost; recreating document',
           { error },
         );
         await this.recreateDocument();
         return this.send(method, args, 1);
       }
-      console.error(`[dita][installed-voice][service-worker] offscreen.${method}:failed`, {
+      logger.error(`[installed-voice][service-worker] offscreen.${method}:failed`, {
         durationMs: Date.now() - startedAt,
         error,
       });
@@ -165,23 +166,22 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
     // A fatal error (memory access out of bounds) corrupts the WASM runtime for
     // the whole document. Only a fresh document resets it — recreate and retry.
     if (response?.fatal && attempt === 0) {
-      console.warn(
-        '[dita][installed-voice][service-worker] offscreen fatal error; recreating document',
-        { error: response.error },
-      );
+      logger.warn('[installed-voice][service-worker] offscreen fatal error; recreating document', {
+        error: response.error,
+      });
       await this.recreateDocument();
       return this.send(method, args, 1);
     }
 
     if (!response?.ok) {
       const error = new Error(response?.error ?? 'Offscreen voice unavailable');
-      console.error(`[dita][installed-voice][service-worker] offscreen.${method}:failed`, {
+      logger.error(`[installed-voice][service-worker] offscreen.${method}:failed`, {
         durationMs: Date.now() - startedAt,
         error,
       });
       throw error;
     }
-    console.info(`[dita][installed-voice][service-worker] offscreen.${method}:complete`, {
+    logger.info(`[installed-voice][service-worker] offscreen.${method}:complete`, {
       durationMs: Date.now() - startedAt,
     });
     return response;
@@ -203,11 +203,11 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
       documentUrls: [url],
     });
     if (contexts.length > 0) {
-      console.info('[dita][installed-voice][service-worker] offscreen.document:reuse');
+      logger.info('[installed-voice][service-worker] offscreen.document:reuse');
       return;
     }
 
-    console.info('[dita][installed-voice][service-worker] offscreen.document:create');
+    logger.info('[installed-voice][service-worker] offscreen.document:create');
     await this.chromeApi.offscreen.createDocument({
       url: 'offscreen.html',
       reasons: ['AUDIO_PLAYBACK' as chrome.offscreen.Reason],
@@ -222,7 +222,7 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
   private async recreateDocument(): Promise<void> {
     if (this.creation) return this.creation;
     this.creation = (async () => {
-      console.info('[dita][installed-voice][service-worker] offscreen.document:recreate');
+      logger.info('[installed-voice][service-worker] offscreen.document:recreate');
       try {
         await this.chromeApi.offscreen.closeDocument();
       } catch {

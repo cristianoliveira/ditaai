@@ -1,4 +1,5 @@
 import type { AvailableTextReader, SpeakOptions } from '../../domain/audio/text-reader';
+import { logger } from '../../lib/logger';
 
 interface RuntimeResponse {
   ok: boolean;
@@ -58,7 +59,7 @@ export class RuntimeInstalledVoiceReader implements AvailableTextReader {
 
   private async send(method: string, args: unknown[] = [], trace = true): Promise<RuntimeResponse> {
     const startedAt = Date.now();
-    if (trace) console.info(`[dita][installed-voice][content] ${method}:start`);
+    if (trace) logger.info(`[installed-voice][content] ${method}:start`);
     try {
       const response = (await chrome.runtime.sendMessage({
         dest: 'serviceWorker',
@@ -67,14 +68,14 @@ export class RuntimeInstalledVoiceReader implements AvailableTextReader {
       })) as RuntimeResponse | undefined;
       if (!response?.ok) throw new Error(response?.error ?? 'Installed voice unavailable');
       if (trace) {
-        console.info(`[dita][installed-voice][content] ${method}:complete`, {
+        logger.info(`[installed-voice][content] ${method}:complete`, {
           durationMs: Date.now() - startedAt,
         });
       }
       return response;
     } catch (error) {
       if (trace) {
-        console.error(`[dita][installed-voice][content] ${method}:failed`, {
+        logger.error(`[installed-voice][content] ${method}:failed`, {
           durationMs: Date.now() - startedAt,
           error,
         });

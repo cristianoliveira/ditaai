@@ -14,6 +14,7 @@
 //  On resolve: overlay + panel are cleaned up.
 
 import { buildCandidates } from '../../domain/selection/selection';
+import { logger } from '../../lib/logger';
 import { theme } from '../theme';
 import { PickerPanel } from './picker-panel';
 
@@ -177,7 +178,7 @@ export class Picker {
   private styleEl: HTMLStyleElement | null = null;
 
   enter(initialSelector?: string): Promise<string | null> {
-    console.info('[dita] picker entered');
+    logger.info('picker entered');
     this.injectStyles();
     this.createOverlay();
     this.overlay?.classList.add(OVERLAY_INTERACTIVE);

@@ -72,4 +72,89 @@ describe('extractParagraphs', () => {
     const segments = extractParagraphs(document);
     expect(segments[0]?.element).toBe(document.querySelector('p'));
   });
+
+  // ── Accessible names (image alts + aria-labels) ─────────────────────
+
+  it('narrates standalone images with alt as segments in document order', () => {
+    document.body.innerHTML = `
+      <p>First paragraph.</p>
+      <img alt="Quarterly revenue chart">
+      <p>Second paragraph.</p>`;
+    const segments = extractParagraphs(document);
+    expect(segments.map((s) => s.tag)).toEqual(['p', 'img', 'p']);
+    expect(segments.map((s) => s.text)).toEqual([
+      'First paragraph.',
+      'Image: Quarterly revenue chart',
+      'Second paragraph.',
+    ]);
+  });
+
+  it('skips decorative images (empty or missing alt)', () => {
+    document.body.innerHTML = `
+      <p>Real content.</p>
+      <img alt="">
+      <img>
+      <img alt="   ">`;
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual(['Real content.']);
+  });
+
+  it('narrates an image inside a paragraph without losing the paragraph text', () => {
+    document.body.innerHTML = '<p>See <img alt="the chart"> below.</p>';
+    const segments = extractParagraphs(document);
+    // raw textContent keeps the double space; collapseWhitespace normalizes it later
+    expect(segments.map((s) => s.text)).toEqual(['See  below.', 'Image: the chart']);
+  });
+
+  it('skips images inside boilerplate and aria-hidden subtrees', () => {
+    document.body.innerHTML = `
+      <nav><img alt="Logo"></nav>
+      <div aria-hidden="true"><img alt="Hidden chart"></div>
+      <main><img alt="Visible chart"></main>`;
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual(['Image: Visible chart']);
+  });
+
+  it('narrates aria-label as the accessible name when the element has no visible text', () => {
+    document.body.innerHTML = `
+      <p>Story.</p>
+      <div aria-label="Quarterly revenue chart"><svg></svg></div>`;
+    const segments = extractParagraphs(document);
+    expect(segments.map((s) => s.text)).toEqual(['Story.', 'Quarterly revenue chart']);
+    expect(segments[1]?.tag).toBe('div');
+  });
+
+  it('does not duplicate visible text when aria-label is also present', () => {
+    document.body.innerHTML = '<p aria-label="Ignored label">Visible text.</p>';
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual(['Visible text.']);
+  });
+
+  it('does not narrate form controls even when they carry aria-label', () => {
+    document.body.innerHTML = `
+      <button aria-label="Close">×</button>
+      <input aria-label="Search">
+      <p>Story.</p>`;
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual(['Story.']);
+  });
+
+  it('interleaves paragraphs and accessible names in document order', () => {
+    document.body.innerHTML = `
+      <img alt="Hero">
+      <p>Intro.</p>
+      <div aria-label="Key insight"><svg></svg></div>
+      <p>Outro.</p>`;
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual([
+      'Image: Hero',
+      'Intro.',
+      'Key insight',
+      'Outro.',
+    ]);
+  });
+
+  it('includes accessible names when falling back to generic containers', () => {
+    document.body.innerHTML = `
+      <main>
+        <div class="story"><span>Page text.</span></div>
+        <img alt="Chart">
+      </main>`;
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual(['Page text.', 'Image: Chart']);
+  });
 });

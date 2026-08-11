@@ -9,6 +9,7 @@ import { patchSendMessageCallback } from '../infra/chrome/messaging';
 import { OffscreenSupertonicReader } from '../infra/chrome/offscreen-supertonic-reader';
 import { attachRuntimeListener, fetchTabText, resolveActiveTab } from '../infra/chrome/runtime';
 import { watchSpeakingTabLifecycle } from '../infra/chrome/tab-lifecycle-watcher';
+import { logger } from '../lib/logger';
 
 export default defineBackground(() => {
   // Guard: swallow noisy "Receiving end does not exist" errors
@@ -146,5 +147,5 @@ export default defineBackground(() => {
     return false;
   });
 
-  console.log('[dita] background ready');
+  logger.info('background ready');
 });

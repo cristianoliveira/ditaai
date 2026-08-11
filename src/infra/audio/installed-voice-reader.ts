@@ -5,6 +5,7 @@ import type {
   SpeakOptions,
   TextReader,
 } from '../../domain/audio/text-reader';
+import { logger } from '../../lib/logger';
 import { isFatalOnnxError } from './onnx-errors';
 
 /** Prefers an installed extension voice and reliably falls back to browser speech. */
@@ -67,8 +68,8 @@ export class InstalledVoiceReader implements TextReader {
         const prepared = this.preparedInstalledSpeech.delete(this.preparationKey(text, options));
         if (prepared || (await this.installedReader.isAvailable())) {
           this.activeReader = this.installedReader;
-          console.info(
-            `[dita][installed-voice] speak ${JSON.stringify({
+          logger.info(
+            `[installed-voice] speak ${JSON.stringify({
               engine: 'installed',
               prepared,
               rate: options?.rate ?? null,
@@ -90,20 +91,20 @@ export class InstalledVoiceReader implements TextReader {
         // installed voice is genuinely unusable: latch and stop probing it.
         if (isFatalOnnxError(error)) {
           this.poisoned = true;
-          console.warn(
-            '[dita] installed voice suffered a fatal error; using browser speech for the rest of this page:',
+          logger.warn(
+            'installed voice suffered a fatal error; using browser speech for the rest of this page:',
             error,
           );
         } else {
-          console.warn('[dita] installed voice failed, falling back to browser speech:', error);
+          logger.warn('installed voice failed, falling back to browser speech:', error);
         }
       }
     }
 
     this.boundaryCallback = undefined;
     this.activeReader = this.fallbackReader;
-    console.info(
-      `[dita][installed-voice] speak ${JSON.stringify({
+    logger.info(
+      `[installed-voice] speak ${JSON.stringify({
         engine: 'fallback',
         poisoned: this.poisoned,
         rate: options?.rate ?? null,

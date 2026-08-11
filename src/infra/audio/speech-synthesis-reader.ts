@@ -2,6 +2,7 @@
 // Uses the browser's built-in TTS. No external server needed.
 
 import type { SpeakOptions, TextReader } from '../../domain/audio/text-reader';
+import { logger } from '../../lib/logger';
 
 export class SpeechSynthesisReader implements TextReader {
   constructor(private synth: SpeechSynthesis = window.speechSynthesis) {}
@@ -14,8 +15,8 @@ export class SpeechSynthesisReader implements TextReader {
       if (options?.rate) utterance.rate = options.rate;
       if (options?.pitch) utterance.pitch = options.pitch;
       if (options?.volume != null) utterance.volume = options.volume;
-      console.info(
-        `[dita][speech-synthesis] speak ${JSON.stringify({
+      logger.info(
+        `[speech-synthesis] speak ${JSON.stringify({
           rate: utterance.rate,
           volume: utterance.volume,
           resumeFromChar: offset,

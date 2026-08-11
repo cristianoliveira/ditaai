@@ -18,6 +18,7 @@ import { ChromeSynthesisQualityStorage } from '../../infra/chrome/synthesis-qual
 import { ChromeVoiceRotationStorage } from '../../infra/chrome/voice-rotation-storage';
 import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
+import { logger } from '../../lib/logger';
 import { ShortcutsPanel } from './shortcuts-panel';
 import { type VoiceCardState, renderVoiceCard } from './voice-card';
 
@@ -72,13 +73,13 @@ for (const entry of SUPPORTED_LANGUAGES) {
 synthesisQualitySelect.addEventListener('change', () => {
   const steps = Number(synthesisQualitySelect.value);
   void qualityStore.save(steps);
-  console.info('[dita][synthesis-quality][page] saved', { steps });
+  logger.info('[synthesis-quality][page] saved', { steps });
 });
 
 narrationLanguageSelect.addEventListener('change', () => {
   const code = narrationLanguageSelect.value;
   void languageStore.save(code);
-  console.info('[dita][narration-language][page] saved', { code });
+  logger.info('[narration-language][page] saved', { code });
 });
 
 // ── Render ───────────────────────────────────────────────────────────
@@ -127,7 +128,7 @@ async function refresh(): Promise<void> {
   ]);
   synthesisQualitySelect.value = String(synthesisQuality);
   narrationLanguageSelect.value = narrationLanguage;
-  console.info('[dita][synthesis-settings][page] loaded', {
+  logger.info('[synthesis-settings][page] loaded', {
     synthesisQuality,
     narrationLanguage,
     defaultQuality: DEFAULT_SYNTHESIS_QUALITY,
@@ -137,7 +138,7 @@ async function refresh(): Promise<void> {
     (voice) => voice.id,
   );
   selectedVoiceId = resolveSelectedVoiceId(storedVoiceId, installedVoiceIds);
-  console.info('[dita][voice-selection][page] loaded', {
+  logger.info('[voice-selection][page] loaded', {
     storedVoiceId,
     installedVoiceIds,
     resolvedVoiceId: selectedVoiceId,
@@ -197,15 +198,15 @@ function renderVoices(): void {
 
 function selectVoice(voiceId: string): void {
   if (!state.get(voiceId)?.installed) {
-    console.warn('[dita][voice-selection][page] rejected unavailable voice', { voiceId });
+    logger.warn('[voice-selection][page] rejected unavailable voice', { voiceId });
     return;
   }
   const previousVoiceId = selectedVoiceId;
   selectedVoiceId = voiceId;
-  console.info('[dita][voice-selection][page] selected', { previousVoiceId, voiceId });
+  logger.info('[voice-selection][page] selected', { previousVoiceId, voiceId });
   renderVoices();
   void selectionStore.save(voiceId).then(() => {
-    console.info('[dita][voice-selection][page] persisted', { voiceId });
+    logger.info('[voice-selection][page] persisted', { voiceId });
   });
 }
 
@@ -241,7 +242,7 @@ async function downloadVoice(voiceId: string): Promise<void> {
     if (!selectedVoiceId) selectVoice(voiceId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`Download failed for ${voiceId}:`, msg);
+    logger.error(`Download failed for ${voiceId}:`, msg);
     state.set(voiceId, { voiceId, installed: false, downloading: false, progress: 0 });
   }
 
@@ -318,7 +319,7 @@ exportConfigurationButton.addEventListener('click', async () => {
     URL.revokeObjectURL(url);
     showConfigurationStatus('Configuration exported.');
   } catch (error) {
-    console.error('[dita][configuration] export failed', error);
+    logger.error('[configuration] export failed', error);
     showConfigurationStatus('Could not export configuration.', true);
   }
 });
@@ -336,7 +337,7 @@ importConfigurationFile.addEventListener('change', async () => {
     await refresh();
     showConfigurationStatus('Configuration imported. Reopen existing pages to apply all settings.');
   } catch (error) {
-    console.error('[dita][configuration] import failed', error);
+    logger.error('[configuration] import failed', error);
     showConfigurationStatus('Invalid configuration file. Nothing was imported.', true);
   }
 });
