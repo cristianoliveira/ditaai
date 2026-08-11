@@ -91,8 +91,8 @@ const STYLES = `
   .dita-btn-play { background: ${theme.accent}; }
   .dita-btn-play:hover { background: ${theme.accentHover}; }
 
-  .dita-btn-stop { background: #b91c1c; }
-  .dita-btn-stop:hover { background: #dc2626; }
+  .dita-btn-stop { background: ${theme.stop}; }
+  .dita-btn-stop:hover { background: ${theme.stopHover}; }
 
   .dita-btn-jump {
     width: 32px; height: 32px;

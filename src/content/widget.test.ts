@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SequencerState } from '../domain/audio/sequencer';
+import { theme } from './theme';
 import { DitaWidget } from './widget';
 
 const noopCallbacks = {
@@ -263,6 +264,16 @@ describe('DitaWidget transport cluster', () => {
 
     expect(stop?.querySelector('svg[data-icon="stop"]')).not.toBeNull();
     expect(stop?.textContent?.trim()).toBe('');
+  });
+
+  it('colors the stop button from the shared theme', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    const stop = root?.querySelector<HTMLButtonElement>('.dita-btn-stop');
+
+    expect(stop).not.toBeNull();
+    expect(getComputedStyle(stop as HTMLButtonElement).backgroundColor).toBe(theme.stop);
   });
 });
 

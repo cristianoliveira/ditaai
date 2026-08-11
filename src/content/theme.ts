@@ -13,6 +13,9 @@
 const ACCENT_HEX = '#f59e0b'; // amber-500, rgb(245, 158, 11)
 const ACCENT_HOVER_HEX = '#fbbf24'; // amber-400
 
+const STOP_HEX = '#b91c1c'; // red-700 — darker red scores higher contrast vs white
+const STOP_HOVER_HEX = '#dc2626'; // red-600
+
 const ACCENT_R = 245;
 const ACCENT_G = 158;
 const ACCENT_B = 11;
@@ -35,6 +38,10 @@ export interface Theme {
   accent: string;
   /** Lighter hover variant for buttons. */
   accentHover: string;
+  /** Solid stop-action red — media convention, distinct from the amber accent. */
+  stop: string;
+  /** Lighter hover variant for the stop button. */
+  stopHover: string;
   /** RGBA tint of the accent at a given alpha (focus borders, hover backgrounds). */
   accentTint(alpha: number): string;
   /** On-page highlight tokens (word + paragraph + start point). */
@@ -55,6 +62,8 @@ export interface Theme {
 export const theme: Theme = {
   accent: ACCENT_HEX,
   accentHover: ACCENT_HOVER_HEX,
+  stop: STOP_HEX,
+  stopHover: STOP_HOVER_HEX,
   accentTint: (alpha: number) => `rgba(${ACCENT_R}, ${ACCENT_G}, ${ACCENT_B}, ${alpha})`,
   highlight: {
     fill: `rgba(${FILL_R}, ${FILL_G}, ${FILL_B}, 0.55)`,
