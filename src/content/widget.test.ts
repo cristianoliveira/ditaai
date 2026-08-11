@@ -523,8 +523,42 @@ describe('DitaWidget paragraph picker', () => {
     expect(select?.hidden).toBe(false);
     expect(select?.getAttribute('aria-label')).toBe('Jump to paragraph');
     expect(select?.options.length).toBe(2);
-    expect(select?.options[0]?.textContent).toBe('¶ 1 — First paragraph');
     expect(select?.options[0]?.value).toBe('0');
+  });
+
+  it('shows current/total for the selected option while closed', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    widget.setParagraphs([
+      { value: 0, label: '¶ 1 — First' },
+      { value: 1, label: '¶ 2 — Second' },
+      { value: 2, label: '¶ 3 — Third' },
+    ]);
+
+    // default selection (0) → "1/3"
+    expect(picker()?.selectedOptions[0]?.textContent).toBe('1/3');
+
+    widget.setCurrentParagraph(2);
+    expect(picker()?.selectedOptions[0]?.textContent).toBe('3/3');
+  });
+
+  it('expands to full labels on focus and collapses back on blur', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    widget.setParagraphs([
+      { value: 0, label: '¶ 1 — First' },
+      { value: 1, label: '¶ 2 — Second' },
+    ]);
+    const select = picker();
+    if (!select) throw new Error('picker missing');
+
+    select.dispatchEvent(new Event('focus'));
+    expect(select.options[0]?.textContent).toBe('¶ 1 — First');
+    expect(select.options[1]?.textContent).toBe('¶ 2 — Second');
+
+    select.dispatchEvent(new Event('blur'));
+    // selection still 0 → collapses to "1/2"
+    expect(select.selectedOptions[0]?.textContent).toBe('1/2');
   });
 
   it('hides again when set to null', () => {

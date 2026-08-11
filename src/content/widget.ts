@@ -246,6 +246,7 @@ export class DitaWidget {
   private volumeInput: HTMLInputElement;
   private volumeLabel: HTMLSpanElement;
   private paragraphSelect: HTMLSelectElement;
+  private paragraphLabels: string[] = [];
   private progressEl: HTMLSpanElement;
   private state: WidgetState = 'idle';
   private highlightEnabled = true;
@@ -312,8 +313,15 @@ export class DitaWidget {
     this.paragraphSelect.className = 'dita-paragraphs';
     this.paragraphSelect.hidden = true;
     this.paragraphSelect.setAttribute('aria-label', 'Jump to paragraph');
+    // Native <select> shows the selected option's text when closed and every
+    // option's text when open — there's no per-state label. So swap to full
+    // labels on focus (dropdown opening) and back to a compact "current/total"
+    // for the selected option on close. Only Chromium is targeted here.
+    this.paragraphSelect.addEventListener('focus', () => this.expandParagraphLabels());
+    this.paragraphSelect.addEventListener('blur', () => this.collapseParagraphLabel());
     this.paragraphSelect.addEventListener('change', () => {
       callbacks.onJumpToParagraph?.(Number(this.paragraphSelect.value));
+      this.collapseParagraphLabel();
     });
 
     const stopBtn = document.createElement('button');
@@ -518,8 +526,10 @@ export class DitaWidget {
   }
 
   /** Populate the paragraph dropdown. Pass null (or an empty list) to hide it.
-   * Each option's `value` is reported back via onJumpToParagraph. */
+   * Each option's `value` is reported back via onJumpToParagraph; `label` is
+   * the full text shown only while the dropdown is open. */
   setParagraphs(options: readonly ParagraphOption[] | null): void {
+    this.paragraphLabels = options ? options.map((o) => o.label) : [];
     this.paragraphSelect.replaceChildren();
     if (!options || options.length === 0) {
       this.paragraphSelect.hidden = true;
@@ -532,11 +542,30 @@ export class DitaWidget {
       this.paragraphSelect.append(option);
     }
     this.paragraphSelect.hidden = false;
+    this.collapseParagraphLabel();
   }
 
   /** Reflect the paragraph currently being read. Updates the dropdown without
    * firing onJumpToParagraph — programmatic value changes dispatch no event. */
   setCurrentParagraph(paragraphIndex: number): void {
     this.paragraphSelect.value = String(paragraphIndex);
+    this.collapseParagraphLabel();
+  }
+
+  /** Closed state: show only "current/total" for the selected option. */
+  private collapseParagraphLabel(): void {
+    const total = this.paragraphLabels.length;
+    if (total === 0) return;
+    const idx = this.paragraphSelect.selectedIndex;
+    const option = idx >= 0 ? (this.paragraphSelect.options[idx] ?? null) : null;
+    if (option) option.textContent = `${idx + 1}/${total}`;
+  }
+
+  /** Open state: restore the full per-paragraph labels. */
+  private expandParagraphLabels(): void {
+    this.paragraphLabels.forEach((label, i) => {
+      const option = this.paragraphSelect.options[i];
+      if (option) option.textContent = label;
+    });
   }
 }
