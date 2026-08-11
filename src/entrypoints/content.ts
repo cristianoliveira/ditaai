@@ -22,6 +22,7 @@ import {
 import { PronunciationPopover } from '../content/pronunciation-popover';
 import { ShortcutController } from '../content/shortcuts';
 import { DitaWidget } from '../content/widget';
+import type { ParagraphOption } from '../content/widget';
 import { locateWord } from '../content/word-locator';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
@@ -35,6 +36,7 @@ import {
   type JumpDirection,
   type JumpStrategy,
   createParagraphJumper,
+  paragraphIndexForSegment,
 } from '../domain/playback/jump';
 import { filterParagraphs } from '../domain/selection/selection';
 import { DEFAULT_SHORTCUTS, type ShortcutAction } from '../domain/shortcuts/shortcuts';
@@ -88,6 +90,16 @@ function paragraphBreakpoints(chunks: Chunk[]): number[] {
     if (prev && curr && curr.element !== prev.element) breaks.push(i);
   }
   return breaks;
+}
+
+/** Dropdown entries for the paragraph picker — one per paragraph, labeled with
+ * a short preview of its first spoken chunk. */
+function paragraphOptions(chunks: Chunk[], breakpoints: number[]): ParagraphOption[] {
+  const PREVIEW = 60;
+  return breakpoints.map((start, i) => {
+    const preview = (chunks[start]?.text ?? '').slice(0, PREVIEW).trim();
+    return { value: i, label: preview ? `¶ ${i + 1} — ${preview}` : `¶ ${i + 1}` };
+  });
 }
 
 const HIGHLIGHT_PREF = 'highlightWords';
@@ -175,6 +187,7 @@ export default defineContentScript({
     let chunks: Chunk[] = [];
     let activeElement: Element | null = null;
     let currentIndex = 0;
+    let currentBreakpoints: number[] = [];
     let paragraphJumper: JumpStrategy = createParagraphJumper([]);
     let highlightWordsEnabled = true;
     let playbackRate = 1;
@@ -331,10 +344,14 @@ export default defineContentScript({
       );
 
       sequencer.load(texts, startIndex, startChar);
-      paragraphJumper = createParagraphJumper(paragraphBreakpoints(chunks));
+      currentBreakpoints = paragraphBreakpoints(chunks);
+      paragraphJumper = createParagraphJumper(currentBreakpoints);
+      widget?.setParagraphs(paragraphOptions(chunks, currentBreakpoints));
+      widget?.setCurrentParagraph(paragraphIndexForSegment(currentBreakpoints, startIndex));
 
       sequencer.onSegmentChange = (index) => {
         currentIndex = index;
+        widget?.setCurrentParagraph(paragraphIndexForSegment(currentBreakpoints, index));
         clearAllHighlights();
         activeElement = chunks[index]?.element ?? null;
         if (activeElement) highlightParagraph(activeElement);
@@ -458,6 +475,10 @@ export default defineContentScript({
           onPause: pausePlayback,
           onResume: resumePlayback,
           onJump: (direction) => jumpPlayback(direction),
+          onJumpToParagraph: (paragraphIndex) => {
+            const start = currentBreakpoints[paragraphIndex] ?? 0;
+            sequencer.seek(start);
+          },
           onStop: stopPlayback,
           onClose: () => {
             sequencer.stop();

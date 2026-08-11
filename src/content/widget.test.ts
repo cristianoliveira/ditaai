@@ -494,3 +494,80 @@ describe('DitaWidget Dictionary button', () => {
     expect(onDictionary).toHaveBeenCalled();
   });
 });
+
+describe('DitaWidget paragraph picker', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function picker(): HTMLSelectElement | null {
+    const root = document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+    return root?.querySelector<HTMLSelectElement>('.dita-paragraphs') ?? null;
+  }
+
+  it('is hidden until paragraphs are provided', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    expect(picker()?.hidden).toBe(true);
+  });
+
+  it('renders one option per paragraph with an aria-label', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    widget.setParagraphs([
+      { value: 0, label: '¶ 1 — First paragraph' },
+      { value: 1, label: '¶ 2 — Second paragraph' },
+    ]);
+
+    const select = picker();
+    expect(select?.hidden).toBe(false);
+    expect(select?.getAttribute('aria-label')).toBe('Jump to paragraph');
+    expect(select?.options.length).toBe(2);
+    expect(select?.options[0]?.textContent).toBe('¶ 1 — First paragraph');
+    expect(select?.options[0]?.value).toBe('0');
+  });
+
+  it('hides again when set to null', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    widget.setParagraphs([{ value: 0, label: '¶ 1' }]);
+    expect(picker()?.hidden).toBe(false);
+
+    widget.setParagraphs(null);
+    expect(picker()?.hidden).toBe(true);
+  });
+
+  it('fires onJumpToParagraph with the numeric value on change', () => {
+    const onJumpToParagraph = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
+    widget.mount();
+    widget.setParagraphs([
+      { value: 0, label: '¶ 1' },
+      { value: 1, label: '¶ 2' },
+      { value: 2, label: '¶ 3' },
+    ]);
+    const select = picker();
+    if (!select) throw new Error('picker missing');
+
+    select.value = '2';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(onJumpToParagraph).toHaveBeenCalledWith(2);
+  });
+
+  it('setCurrentParagraph updates the selection without firing the callback', () => {
+    const onJumpToParagraph = vi.fn();
+    const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
+    widget.mount();
+    widget.setParagraphs([
+      { value: 0, label: '¶ 1' },
+      { value: 1, label: '¶ 2' },
+      { value: 2, label: '¶ 3' },
+    ]);
+
+    widget.setCurrentParagraph(2);
+
+    expect(picker()?.value).toBe('2');
+    expect(onJumpToParagraph).not.toHaveBeenCalled();
+  });
+});

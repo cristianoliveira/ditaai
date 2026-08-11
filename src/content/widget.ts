@@ -7,6 +7,13 @@ import { theme } from './theme';
 
 export type WidgetState = 'idle' | 'playing' | 'paused';
 
+export interface ParagraphOption {
+  /** Stable identifier reported back via onJumpToParagraph. Paragraph index. */
+  value: number;
+  /** Human-readable label shown in the dropdown. */
+  label: string;
+}
+
 export interface WidgetCallbacks {
   onPlay(): void;
   onPause(): void;
@@ -14,6 +21,7 @@ export interface WidgetCallbacks {
   onStop(): void;
   onClose(): void;
   onJump?(direction: JumpDirection): void;
+  onJumpToParagraph?(paragraphIndex: number): void;
   onSettings?(): void;
   onToggleHighlight?(enabled: boolean): void;
   onSelect?(): void;
@@ -174,6 +182,26 @@ const STYLES = `
     text-align: center;
   }
 
+  .dita-paragraphs[hidden] { display: none; }
+  .dita-paragraphs {
+    max-width: 200px;
+    height: 28px;
+    padding: 0 6px;
+    border: 1px solid #2a2a4a;
+    border-radius: 999px;
+    background: #2a2a4a;
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    text-overflow: ellipsis;
+  }
+  .dita-paragraphs:hover { border-color: #4a4a6a; }
+  .dita-paragraphs:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
+  }
+
   .dita-rate {
     width: 70px;
     accent-color: ${theme.accent};
@@ -217,6 +245,7 @@ export class DitaWidget {
   private rateLabel: HTMLSpanElement;
   private volumeInput: HTMLInputElement;
   private volumeLabel: HTMLSpanElement;
+  private paragraphSelect: HTMLSelectElement;
   private progressEl: HTMLSpanElement;
   private state: WidgetState = 'idle';
   private highlightEnabled = true;
@@ -278,6 +307,14 @@ export class DitaWidget {
     nextBtn.textContent = '⏭';
     nextBtn.setAttribute('aria-label', 'Next paragraph');
     nextBtn.addEventListener('click', () => callbacks.onJump?.('forward'));
+
+    this.paragraphSelect = document.createElement('select');
+    this.paragraphSelect.className = 'dita-paragraphs';
+    this.paragraphSelect.hidden = true;
+    this.paragraphSelect.setAttribute('aria-label', 'Jump to paragraph');
+    this.paragraphSelect.addEventListener('change', () => {
+      callbacks.onJumpToParagraph?.(Number(this.paragraphSelect.value));
+    });
 
     const stopBtn = document.createElement('button');
     stopBtn.className = 'dita-btn dita-btn-stop';
@@ -378,6 +415,7 @@ export class DitaWidget {
       prevBtn,
       this.playBtn,
       nextBtn,
+      this.paragraphSelect,
       this.progressEl,
       this.rateInput,
       this.rateLabel,
@@ -477,5 +515,28 @@ export class DitaWidget {
       this.selectionChip.hidden = true;
       this.selectionLabel.textContent = '';
     }
+  }
+
+  /** Populate the paragraph dropdown. Pass null (or an empty list) to hide it.
+   * Each option's `value` is reported back via onJumpToParagraph. */
+  setParagraphs(options: readonly ParagraphOption[] | null): void {
+    this.paragraphSelect.replaceChildren();
+    if (!options || options.length === 0) {
+      this.paragraphSelect.hidden = true;
+      return;
+    }
+    for (const opt of options) {
+      const option = document.createElement('option');
+      option.value = String(opt.value);
+      option.textContent = opt.label;
+      this.paragraphSelect.append(option);
+    }
+    this.paragraphSelect.hidden = false;
+  }
+
+  /** Reflect the paragraph currently being read. Updates the dropdown without
+   * firing onJumpToParagraph — programmatic value changes dispatch no event. */
+  setCurrentParagraph(paragraphIndex: number): void {
+    this.paragraphSelect.value = String(paragraphIndex);
   }
 }

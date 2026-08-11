@@ -19,6 +19,19 @@ export function clampSegmentIndex(index: number, total: number): number {
   return Math.max(0, Math.min(index, total - 1));
 }
 
+/** Index of the paragraph containing a given segment — the position of the
+ * largest breakpoint <= `segmentIndex`. Pure inverse of the jumper's relative
+ * navigation, used to reflect the current paragraph in the UI. Returns 0 when
+ * breakpoints is empty; breakpoints need not be pre-sorted. */
+export function paragraphIndexForSegment(breakpoints: number[], segmentIndex: number): number {
+  const sorted = [...new Set(breakpoints)].filter((b) => Number.isFinite(b)).sort((a, b) => a - b);
+  let index = 0;
+  sorted.forEach((start, i) => {
+    if (start <= segmentIndex) index = i;
+  });
+  return index;
+}
+
 /**
  * Jumps between paragraph starts. `breakpoints` are the first segment index of
  * each paragraph (sorted ascending, typically starting at 0).

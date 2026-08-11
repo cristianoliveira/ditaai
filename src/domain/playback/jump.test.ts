@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampSegmentIndex, createParagraphJumper } from './jump';
+import { clampSegmentIndex, createParagraphJumper, paragraphIndexForSegment } from './jump';
 
 describe('clampSegmentIndex', () => {
   it('clamps within [0, total-1]', () => {
@@ -57,5 +57,26 @@ describe('createParagraphJumper', () => {
   it('dedupes and sorts breakpoints', () => {
     const messy = createParagraphJumper([4, 0, 4, 9, 0]);
     expect(messy.jump(2, 'forward', 12)).toBe(4);
+  });
+});
+
+describe('paragraphIndexForSegment', () => {
+  // breakpoints [0, 4, 9] → paragraphs at segments 0-3, 4-8, 9+
+  const breakpoints = [0, 4, 9];
+
+  it('returns the paragraph whose start is the largest <= segment', () => {
+    expect(paragraphIndexForSegment(breakpoints, 0)).toBe(0);
+    expect(paragraphIndexForSegment(breakpoints, 3)).toBe(0);
+    expect(paragraphIndexForSegment(breakpoints, 4)).toBe(1);
+    expect(paragraphIndexForSegment(breakpoints, 8)).toBe(1);
+    expect(paragraphIndexForSegment(breakpoints, 9)).toBe(2);
+  });
+
+  it('clamps past-the-end segments to the last paragraph', () => {
+    expect(paragraphIndexForSegment(breakpoints, 999)).toBe(2);
+  });
+
+  it('returns 0 for empty breakpoints', () => {
+    expect(paragraphIndexForSegment([], 5)).toBe(0);
   });
 });
