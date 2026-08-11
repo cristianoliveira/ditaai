@@ -46,6 +46,7 @@ import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-sto
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
 import { ChromeShortcutStorage } from '../infra/chrome/shortcut-storage';
 import { ChromeSubstitutionStorage, SUBSTITUTIONS_KEY } from '../infra/chrome/substitution-storage';
+import { logInteraction } from '../lib/interaction-logger';
 import { logger } from '../lib/logger';
 import type { ParagraphSegment } from '../lib/types';
 
@@ -176,6 +177,7 @@ export default defineContentScript({
     // back to idle mid-session. Idle also owns DOM teardown (highlights + start
     // marker) so it runs exactly once per session.
     sequencer.onStateChange = (state) => {
+      logger.info('playback:state-changed', state);
       widget?.reflect(state);
       if (!state.playing && !state.paused) {
         clearAllHighlights();
@@ -202,7 +204,12 @@ export default defineContentScript({
     let markedStart: Element | null = null;
     const startAffordance = new ParagraphStartAffordance({
       isReadable: (el) => readableElements.has(el),
-      onStartFrom: startFromPosition,
+      onStartFrom: (element) => {
+        logInteraction(logger, 'page', 'start-from-position', {
+          segmentIndex: chunks.findIndex((chunk) => chunk.element === element),
+        });
+        startFromPosition(element);
+      },
     });
 
     void loadHighlightEnabled().then((value) => {
@@ -480,22 +487,43 @@ export default defineContentScript({
     function buildWidget(): DitaWidget {
       return new DitaWidget(
         {
-          onPlay: playAction,
-          onPause: pausePlayback,
-          onResume: resumePlayback,
-          onJump: (direction) => jumpPlayback(direction),
+          onPlay: () => {
+            logInteraction(logger, 'widget', 'play');
+            playAction();
+          },
+          onPause: () => {
+            logInteraction(logger, 'widget', 'pause');
+            pausePlayback();
+          },
+          onResume: () => {
+            logInteraction(logger, 'widget', 'resume');
+            resumePlayback();
+          },
+          onJump: (direction) => {
+            logInteraction(logger, 'widget', 'jump', { direction, currentSegment: currentIndex });
+            jumpPlayback(direction);
+          },
           onJumpToParagraph: (paragraphIndex) => {
             const start = currentBreakpoints[paragraphIndex] ?? 0;
+            logInteraction(logger, 'widget', 'jump-to-paragraph', {
+              paragraphIndex,
+              targetSegment: start,
+            });
             sequencer.seek(start);
           },
-          onStop: stopPlayback,
+          onStop: () => {
+            logInteraction(logger, 'widget', 'stop');
+            stopPlayback();
+          },
           onClose: () => {
+            logInteraction(logger, 'widget', 'close');
             sequencer.stop();
             clearAllHighlights();
             setStartMarker(null);
             unmountWidget();
           },
           onSettings: () => {
+            logInteraction(logger, 'widget', 'open-configuration');
             chrome.runtime.sendMessage({
               dest: 'background',
               method: 'openVoicesPage',
@@ -503,9 +531,11 @@ export default defineContentScript({
             });
           },
           onDictionary: () => {
+            logInteraction(logger, 'widget', 'open-dictionary');
             showPronunciationManager();
           },
           onSelect: async () => {
+            logInteraction(logger, 'widget', 'select-reading-area');
             if (!widget) return;
             unmountWidget();
             const picker = new Picker();
@@ -520,18 +550,26 @@ export default defineContentScript({
             mountWidget();
           },
           onClearSelection: () => {
+            logInteraction(logger, 'widget', 'clear-reading-area');
             void selectorStore.clear(hostname);
             activeSelector = null;
             widget?.setSelection(null);
             refreshReadable();
           },
           onToggleHighlight: (enabled) => {
+            logInteraction(logger, 'widget', 'toggle-highlight', { enabled });
             highlightWordsEnabled = enabled;
             void saveHighlightEnabled(enabled);
             if (!enabled && activeElement) clearHighlight(activeElement);
           },
-          onChangeRate: (rate) => applyRate(rate),
-          onChangeVolume: (volume) => applyVolume(volume),
+          onChangeRate: (rate) => {
+            logInteraction(logger, 'widget', 'change-rate', { rate });
+            applyRate(rate);
+          },
+          onChangeVolume: (volume) => {
+            logInteraction(logger, 'widget', 'change-volume', { volume });
+            applyVolume(volume);
+          },
         },
         {
           highlightEnabled: highlightWordsEnabled,
@@ -581,14 +619,38 @@ export default defineContentScript({
     // way. The stored keymap (user-editable on the voices page) is merged over
     // defaults when loaded.
     const shortcutActions: Record<ShortcutAction, () => void> = {
-      togglePlay,
-      stop: stopPlayback,
-      jumpPrev: () => jumpPlayback('backward'),
-      jumpNext: () => jumpPlayback('forward'),
-      volumeUp: () => adjustVolume(VOLUME_STEP),
-      volumeDown: () => adjustVolume(-VOLUME_STEP),
-      toggleWidget,
-      focusWidget,
+      togglePlay: () => {
+        logInteraction(logger, 'keyboard', 'toggle-play', { ...sequencer.getState() });
+        togglePlay();
+      },
+      stop: () => {
+        logInteraction(logger, 'keyboard', 'stop');
+        stopPlayback();
+      },
+      jumpPrev: () => {
+        logInteraction(logger, 'keyboard', 'jump', { direction: 'backward' });
+        jumpPlayback('backward');
+      },
+      jumpNext: () => {
+        logInteraction(logger, 'keyboard', 'jump', { direction: 'forward' });
+        jumpPlayback('forward');
+      },
+      volumeUp: () => {
+        logInteraction(logger, 'keyboard', 'change-volume', { direction: 'up' });
+        adjustVolume(VOLUME_STEP);
+      },
+      volumeDown: () => {
+        logInteraction(logger, 'keyboard', 'change-volume', { direction: 'down' });
+        adjustVolume(-VOLUME_STEP);
+      },
+      toggleWidget: () => {
+        logInteraction(logger, 'keyboard', 'toggle-widget');
+        toggleWidget();
+      },
+      focusWidget: () => {
+        logInteraction(logger, 'keyboard', 'focus-widget');
+        focusWidget();
+      },
     };
     const shortcutController = new ShortcutController(shortcutActions, DEFAULT_SHORTCUTS);
     void new ChromeShortcutStorage().load().then((map) => shortcutController.update(map));
@@ -670,6 +732,7 @@ export default defineContentScript({
         return false;
       }
       if (msg.method === 'toggleWidget') {
+        logInteraction(logger, 'browser-action', 'toggle-widget');
         toggleWidget();
         sendResponse({ ok: true });
         return false;
@@ -711,6 +774,10 @@ export default defineContentScript({
 
         const word =
           paragraph && selectionText.trim() ? locateWord(built, selectionText, paragraph) : null;
+        logInteraction(logger, 'context-menu', 'start-from-position', {
+          segmentIndex: word?.index,
+          charIndex: word?.char,
+        });
         startFromPosition(paragraph, word ?? undefined);
         sendResponse({ ok: true });
         return false;
@@ -725,21 +792,25 @@ export default defineContentScript({
         return false;
       }
       if (msg.method === 'togglePlay') {
+        logInteraction(logger, 'popup', 'toggle-play', { ...sequencer.getState() });
         togglePlay();
         sendResponse(sequencer.getState());
         return false;
       }
       if (msg.method === 'pausePlayback') {
+        logInteraction(logger, 'popup', 'pause');
         pausePlayback();
         sendResponse(sequencer.getState());
         return false;
       }
       if (msg.method === 'resumePlayback') {
+        logInteraction(logger, 'popup', 'resume');
         resumePlayback();
         sendResponse(sequencer.getState());
         return false;
       }
       if (msg.method === 'stopPlayback') {
+        logInteraction(logger, 'popup', 'stop');
         stopPlayback();
         sendResponse(sequencer.getState());
         return false;

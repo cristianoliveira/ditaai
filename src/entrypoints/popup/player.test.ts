@@ -1,6 +1,16 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Logger } from '../../lib/logger';
 import { PopupPlayer } from './player';
+
+function loggerSpy(): Logger {
+  return {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
+}
 
 describe('PopupPlayer', () => {
   afterEach(() => {
@@ -9,7 +19,8 @@ describe('PopupPlayer', () => {
 
   it('starts page narration when play is clicked while stopped', async () => {
     const send = vi.fn().mockResolvedValue({ playing: false, paused: false });
-    const player = new PopupPlayer(send);
+    const interactionLogger = loggerSpy();
+    const player = new PopupPlayer(send, undefined, interactionLogger);
     document.body.append(player.mount());
 
     await player.refresh();
@@ -17,6 +28,9 @@ describe('PopupPlayer', () => {
     await vi.waitFor(() => {
       expect(send).toHaveBeenCalledWith('openWidget');
       expect(send).toHaveBeenLastCalledWith('togglePlay');
+    });
+    expect(interactionLogger.info).toHaveBeenCalledWith('interaction:play', {
+      surface: 'popup',
     });
   });
 
@@ -74,15 +88,18 @@ describe('PopupPlayer', () => {
     expect(send).toHaveBeenCalledWith('openWidget');
   });
 
-  it('does not throw when the page cannot receive the open request', async () => {
-    const send = vi
-      .fn()
-      .mockRejectedValue(
-        new Error('Could not establish connection. Receiving end does not exist.'),
-      );
-    const player = new PopupPlayer(send);
+  it('does not throw and logs context when the page cannot receive the open request', async () => {
+    const error = new Error('Could not establish connection. Receiving end does not exist.');
+    const send = vi.fn().mockRejectedValue(error);
+    const interactionLogger = loggerSpy();
+    const player = new PopupPlayer(send, undefined, interactionLogger);
     document.body.append(player.mount());
 
     await expect(player.openPlayerBar()).resolves.toBeUndefined();
+    expect(interactionLogger.warn).toHaveBeenCalledWith('interaction:request-failed', {
+      surface: 'popup',
+      method: 'openWidget',
+      error,
+    });
   });
 });

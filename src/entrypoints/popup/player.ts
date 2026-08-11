@@ -1,3 +1,6 @@
+import { logInteraction } from '../../lib/interaction-logger';
+import { type Logger, logger } from '../../lib/logger';
+
 export interface PagePlaybackState {
   playing: boolean;
   paused: boolean;
@@ -16,6 +19,7 @@ export class PopupPlayer {
   constructor(
     private readonly send: SendToPage,
     private readonly openConfiguration: OpenConfiguration = async () => {},
+    private readonly interactionLogger: Logger = logger,
   ) {
     this.element = document.createElement('main');
     this.element.className = 'player';
@@ -41,7 +45,10 @@ export class PopupPlayer {
     this.status = status;
     this.playButton.addEventListener('click', () => void this.toggle());
     stopButton.addEventListener('click', () => void this.stop());
-    configurationButton.addEventListener('click', () => void this.openConfiguration());
+    configurationButton.addEventListener('click', () => {
+      logInteraction(this.interactionLogger, 'popup', 'open-configuration');
+      void this.openConfiguration();
+    });
   }
 
   mount(): HTMLElement {
@@ -62,15 +69,24 @@ export class PopupPlayer {
   }
 
   private async toggle(): Promise<void> {
-    if (this.state.playing) await this.request('pausePlayback');
-    else if (this.state.paused) await this.request('resumePlayback');
-    else {
-      await this.request('openWidget');
-      await this.request('togglePlay');
+    if (this.state.playing) {
+      logInteraction(this.interactionLogger, 'popup', 'pause');
+      await this.request('pausePlayback');
+      return;
     }
+    if (this.state.paused) {
+      logInteraction(this.interactionLogger, 'popup', 'resume');
+      await this.request('resumePlayback');
+      return;
+    }
+
+    logInteraction(this.interactionLogger, 'popup', 'play');
+    await this.request('openWidget');
+    await this.request('togglePlay');
   }
 
   private async stop(): Promise<void> {
+    logInteraction(this.interactionLogger, 'popup', 'stop');
     await this.request('stopPlayback');
   }
 
@@ -78,7 +94,12 @@ export class PopupPlayer {
     try {
       const result = await this.send(method);
       if (isPagePlaybackState(result)) this.reflect(result);
-    } catch {
+    } catch (error) {
+      this.interactionLogger.warn('interaction:request-failed', {
+        surface: 'popup',
+        method,
+        error,
+      });
       this.status.textContent = 'This page cannot be read';
       this.playButton.disabled = true;
     }
