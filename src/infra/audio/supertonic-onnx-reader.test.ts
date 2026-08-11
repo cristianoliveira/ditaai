@@ -13,7 +13,11 @@ vi.mock('./supertonic-helper', () => ({
   writeWav: helper.writeWav,
 }));
 
-import { SupertonicOnnxReader } from './supertonic-onnx-reader';
+import {
+  FAST_SPEECH_CHARS_PER_SEC,
+  SupertonicOnnxReader,
+  speechRate,
+} from './supertonic-onnx-reader';
 
 function audioContext() {
   let ended: (() => void) | undefined;
@@ -199,5 +203,24 @@ describe('SupertonicOnnxReader preparation', () => {
     expect(audio.gain.gain.value).toBe(0.4);
     expect(audio.source.connect).toHaveBeenCalledWith(audio.gain);
     expect(audio.gain.connect).toHaveBeenCalledWith(audio.context.destination);
+  });
+});
+
+describe('speechRate', () => {
+  it('reports chars per second from spoken chars and playback duration', () => {
+    expect(speechRate(150, 10_000)).toEqual({ charsPerSec: 15, anomalous: false });
+  });
+
+  it('flags anomalously fast playback (duration predictor under-prediction)', () => {
+    // Regression guard: a 783-char segment in ~30s is the observed fast-speech
+    // signature (~26 chars/s). Normal speech stays around 15 chars/s.
+    const rate = speechRate(783, 30_000);
+    expect(rate.charsPerSec).toBeCloseTo(26.1, 1);
+    expect(rate.anomalous).toBe(true);
+    expect(FAST_SPEECH_CHARS_PER_SEC).toBeLessThan(rate.charsPerSec);
+  });
+
+  it('does not flag when there was no playback duration', () => {
+    expect(speechRate(150, 0)).toEqual({ charsPerSec: 0, anomalous: false });
   });
 });

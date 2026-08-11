@@ -6,8 +6,20 @@ export interface TextSegment {
   tag: string;
 }
 
-/** Leaves room for language tags and Unicode normalization below model's 1000-token limit. */
-export const MAX_TEXT_SEGMENT_LENGTH = 900;
+/**
+ * Upper bound on chars per TTS segment.
+ *
+ * Two model constraints meet here:
+ *  - hard cap: the model's text encoder takes ~1000 tokens, so we leave room
+n *    for language tags and Unicode normalization.
+ *  - accuracy cap: the Supertonic duration predictor under-predicts total
+ *    audio duration for long utterances, producing uniformly fast speech.
+ *    Observed in the wild: segments up to ~430 chars stay accurate (~15
+ *    chars/s); a 783-char segment compressed to ~26 chars/s (~1.8x). 300 keeps
+ *    every chunk well inside the proven-accurate range while bounding the
+ *    number of inference calls.
+ */
+export const MAX_TEXT_SEGMENT_LENGTH = 300;
 
 /** Collapse whitespace, trim, drop empty segments, and bound speech input size. */
 export function prepareSegments(segments: TextSegment[]): string[] {

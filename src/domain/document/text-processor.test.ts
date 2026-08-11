@@ -56,6 +56,23 @@ describe('splitText', () => {
     expect(chunks.every((chunk) => chunk.length <= 10)).toBe(true);
     expect(chunks.join(' ')).toBe('one two three four five six seven');
   });
+
+  it('splits paragraphs longer than the model-accurate range (regression: fast speech)', () => {
+    // The Supertonic duration predictor under-predicts total audio duration for
+    // long utterances, producing uniformly fast (~1.8x) speech. Observed in the
+    // wild: segments up to ~430 chars stay accurate (~15 chars/s); a 783-char
+    // segment compressed to ~26 chars/s. Keep every chunk well inside the
+    // accurate range so this can't recur for a single long paragraph.
+    const longParagraph = 'Sentence with several words. '.repeat(27).trim();
+    expect(longParagraph.length).toBeGreaterThan(430);
+    expect(longParagraph.length).toBeLessThan(900);
+
+    const chunks = splitText(longParagraph);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk) => chunk.length <= MAX_TEXT_SEGMENT_LENGTH)).toBe(true);
+    expect(chunks.join(' ')).toBe(longParagraph);
+  });
 });
 
 describe('collapseWhitespace', () => {

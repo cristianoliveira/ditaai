@@ -23,6 +23,26 @@ interface PreparedSpeech {
   words: ReturnType<typeof computeWordTimings>;
 }
 
+/**
+ * Above this chars/sec the Supertonic duration predictor is under-predicting
+ * total duration, producing fast speech. Normal narration sits around 15
+ * chars/s; the observed regression ran ~26 chars/s. 22 leaves headroom above
+ * natural variation while catching the failure mode.
+ */
+export const FAST_SPEECH_CHARS_PER_SEC = 22;
+
+export interface SpeechRate {
+  charsPerSec: number;
+  anomalous: boolean;
+}
+
+/** Pure playback-rate metric for logging. Deterministic and unit-tested. */
+export function speechRate(spokenChars: number, durationMs: number): SpeechRate {
+  if (durationMs <= 0) return { charsPerSec: 0, anomalous: false };
+  const charsPerSec = spokenChars / (durationMs / 1000);
+  return { charsPerSec, anomalous: charsPerSec > FAST_SPEECH_CHARS_PER_SEC };
+}
+
 export interface SupertonicOnnxConfig {
   /** URL prefix for fetching model files (https://) or record of cached ArrayBuffers. */
   modelAssets?: string | Record<string, ArrayBuffer>;
@@ -85,6 +105,7 @@ export class SupertonicOnnxReader implements TextReader {
     if (!prepared) return;
     this.preparations.delete(preparationKey);
 
+    const spokenChars = text.length - (options?.resumeFromChar ?? 0);
     const playbackStartedAt = Date.now();
     logger.info(`[supertonic:${speechId}] playback:start`, {
       rate: options?.rate ?? null,
@@ -93,9 +114,15 @@ export class SupertonicOnnxReader implements TextReader {
       chars: text.length,
     });
     await this.playAudioWithBoundaries(prepared, options?.volume);
-    logger.info(`[supertonic:${speechId}] playback:complete`, {
-      durationMs: Date.now() - playbackStartedAt,
-    });
+    const durationMs = Date.now() - playbackStartedAt;
+    const rate = speechRate(spokenChars, durationMs);
+    logger.info(`[supertonic:${speechId}] playback:complete`, { durationMs, ...rate });
+    if (rate.anomalous) {
+      logger.warn(`[supertonic:${speechId}] playback:fast-speech-detected`, {
+        chars: spokenChars,
+        ...rate,
+      });
+    }
   }
 
   private getPreparedSpeech(text: string, options?: SpeakOptions): Promise<PreparedSpeech | null> {
