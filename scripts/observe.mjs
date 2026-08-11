@@ -7,6 +7,7 @@ import process from 'node:process';
 import { chromium } from '@playwright/test';
 import { findChromiumExecutable } from './chromium-executable.mjs';
 import { attachBrowserObservability, createEventWriter } from './observability.mjs';
+import { chromiumLaunchArguments, openRequestedPage } from './observe-browser.mjs';
 
 const HELP = `Dita local observability browser
 
@@ -14,7 +15,7 @@ Usage:
   pnpm observe
 
 Environment:
-  DITA_OBSERVE_URL                         URL opened on startup (default: about:blank)
+  DITA_OBSERVE_URL                         Optional URL opened beside restored tabs
   DITA_OBSERVABILITY_DIR                   Output root (default: .tmp/observability)
   PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH      Explicit Chromium executable
 
@@ -62,10 +63,7 @@ const context = await chromium.launchPersistentContext(profileDirectory, {
   headless: false,
   ...(executablePath ? { executablePath } : { channel: 'chromium' }),
   viewport: null,
-  args: [
-    `--disable-extensions-except=${extensionDirectory}`,
-    `--load-extension=${extensionDirectory}`,
-  ],
+  args: chromiumLaunchArguments(extensionDirectory),
 });
 attachBrowserObservability(context, writer);
 
@@ -81,8 +79,7 @@ await writer.write({
   details: { extensionId },
 });
 
-const initialPage = context.pages()[0] ?? (await context.newPage());
-await initialPage.goto(process.env.DITA_OBSERVE_URL ?? 'about:blank');
+await openRequestedPage(context, process.env.DITA_OBSERVE_URL);
 
 console.log(`
 Dita observability is ready.
