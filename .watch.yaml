@@ -12,6 +12,13 @@ on:
     - '**/*.config.ts'
 
 tasks:
+  - name: Update plans
+    run:
+      - git add plans/
+      - git commit -m "chore: updated plans"
+    change: 'plans/**/*'
+    run_on_init: true
+
   - name: CI checks
     run:
       - just check
