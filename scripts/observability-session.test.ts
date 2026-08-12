@@ -49,6 +49,20 @@ describe('readSessionStatus', () => {
       eventsPath: '/tmp/events.jsonl',
     });
   });
+
+  it('treats an empty or unparseable session file as missing (stale partial write)', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'dita-session-'));
+    temporaryDirectories.push(directory);
+    const sessionPath = path.join(directory, 'session.json');
+    await fs.writeFile(sessionPath, '');
+    const probe = vi.fn();
+
+    await expect(readSessionStatus(sessionPath, probe)).resolves.toEqual({
+      status: 'missing',
+      alive: false,
+    });
+    expect(probe).not.toHaveBeenCalled();
+  });
 });
 
 describe('requestSessionStop', () => {

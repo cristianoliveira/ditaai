@@ -6,7 +6,12 @@ export async function readSessionStatus(sessionPath, probeProcess = isProcessAli
   try {
     session = JSON.parse(await fs.readFile(sessionPath, 'utf8'));
   } catch (error) {
-    if (error?.code === 'ENOENT') return { status: 'missing', alive: false };
+    // A session file that is missing, empty, or unparseable (e.g. a stale
+    // partial write from an interrupted session) means no readable session is
+    // running — report it as missing instead of failing the caller.
+    if (error?.code === 'ENOENT' || error instanceof SyntaxError) {
+      return { status: 'missing', alive: false };
+    }
     throw error;
   }
 
