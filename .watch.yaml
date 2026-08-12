@@ -15,7 +15,7 @@ tasks:
   - name: Update plans
     run:
       - git add plans/
-      - git commit -m "chore: updated plans"
+      - 'git commit -m "chore: updated plans"'
     change: 'plans/**/*'
     run_on_init: true
 
