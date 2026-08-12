@@ -7,7 +7,7 @@
 // the collapsed string. This keeps highlight in sync with audio even when the
 // raw DOM has newlines, indentation, or inline children.
 
-import { theme } from './theme';
+import { theme } from '../ui/theme';
 
 const HIGHLIGHT_CLASS = 'dita-word-highlight';
 const SENTENCE_CLASS = 'dita-sentence-highlight';

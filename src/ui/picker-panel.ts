@@ -2,7 +2,7 @@
 // Shadow-DOM isolated. Shows the selector, match count, action buttons,
 // and a list of alternative CSS selectors (candidates).
 
-import { theme } from '../theme';
+import { theme } from './theme';
 
 export interface PickerPanelOptions {
   selector: string;

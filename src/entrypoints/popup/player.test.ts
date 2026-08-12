@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { theme } from '../../content/theme';
 import type { Logger } from '../../lib/logger';
+import { theme } from '../../ui/theme';
 import { PopupPlayer } from './player';
 
 function loggerSpy(): Logger {

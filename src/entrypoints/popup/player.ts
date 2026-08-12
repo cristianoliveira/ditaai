@@ -1,7 +1,7 @@
-import { PAUSE_ICON, PLAY_ICON, STOP_ICON, createIconButton } from '../../content/icons';
-import { theme } from '../../content/theme';
 import { logInteraction } from '../../lib/interaction-logger';
 import { type Logger, logger } from '../../lib/logger';
+import { PAUSE_ICON, PLAY_ICON, STOP_ICON, createIconButton } from '../../ui/icons';
+import { theme } from '../../ui/theme';
 
 export interface PagePlaybackState {
   playing: boolean;

@@ -15,8 +15,8 @@
 
 import { buildCandidates } from '../../domain/selection/selection';
 import { logger } from '../../lib/logger';
-import { theme } from '../theme';
-import { PickerPanel } from './picker-panel';
+import { PickerPanel } from '../../ui/picker-panel';
+import { theme } from '../../ui/theme';
 
 const OVERLAY_ID = 'dita-picker-overlay';
 const HIGHLIGHT_CLASS = 'dita-picker-hover';

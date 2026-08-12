@@ -13,16 +13,8 @@ import {
 } from '../content/highlighter';
 import { nearestReadable } from '../content/nearest-readable';
 import { extractParagraphs } from '../content/paragraph-extractor';
-import { ParagraphStartAffordance } from '../content/paragraph-start-affordance';
 import { Picker } from '../content/picker/picker';
-import {
-  PronunciationManager,
-  type PronunciationManagerEntry,
-} from '../content/pronunciation-manager';
-import { PronunciationPopover } from '../content/pronunciation-popover';
 import { ShortcutController } from '../content/shortcuts';
-import { DitaWidget } from '../content/widget';
-import type { ParagraphOption } from '../content/widget';
 import { locateWord } from '../content/word-locator';
 import { DEFAULT_AUDIO_BUFFER_SECONDS } from '../domain/audio/buffer';
 import { SegmentSequencer } from '../domain/audio/sequencer';
@@ -54,6 +46,11 @@ import { ChromeSubstitutionStorage, SUBSTITUTIONS_KEY } from '../infra/chrome/su
 import { logInteraction } from '../lib/interaction-logger';
 import { logger } from '../lib/logger';
 import type { ParagraphSegment } from '../lib/types';
+import { ParagraphStartAffordance } from '../ui/paragraph-start-affordance';
+import { PronunciationManager, type PronunciationManagerEntry } from '../ui/pronunciation-manager';
+import { PronunciationPopover } from '../ui/pronunciation-popover';
+import { DitaWidget } from '../ui/widget';
+import type { ParagraphOption } from '../ui/widget';
 
 /** A spoken chunk and its source paragraph. `base` is the chunk's offset within
  * collapseWhitespace(element.textContent).trim(), so word boundaries (which are
