@@ -25,13 +25,52 @@ describe('extractParagraphs', () => {
     expect(segments.map((s) => s.tag)).toEqual(['li', 'li']);
   });
 
-  it('excludes blocks inside nav/footer/header/aside boilerplate', () => {
+  it('excludes blocks inside nav/footer/aside boilerplate', () => {
     document.body.innerHTML = `
       <nav><p>Menu item</p></nav>
       <footer><p>Copyright</p></footer>
       <main><p>Real content</p></main>`;
     const segments = extractParagraphs(document);
     expect(segments.map((s) => s.text)).toEqual(['Real content']);
+  });
+
+  it('reads the title inside an article <header> (not a site masthead)', () => {
+    document.body.innerHTML = `
+      <nav><a>Docs</a></nav>
+      <article>
+        <header>
+          <p>Aug 11, 2026</p>
+          <h1>Compression is prediction</h1>
+        </header>
+        <p>First paragraph of the body.</p>
+      </article>`;
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual([
+      'Aug 11, 2026',
+      'Compression is prediction',
+      'First paragraph of the body.',
+    ]);
+  });
+
+  it('still skips a top-level site banner <header>', () => {
+    document.body.innerHTML = `
+      <header><p>Sign up Log in</p></header>
+      <main><p>Real content</p></main>`;
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual(['Real content']);
+  });
+
+  it('reads an article header but skips a separate site banner header', () => {
+    document.body.innerHTML = `
+      <header><p>Sign up Log in</p></header>
+      <main>
+        <article>
+          <header><h1>Post title</h1></header>
+          <p>Body paragraph.</p>
+        </article>
+      </main>`;
+    expect(extractParagraphs(document).map((s) => s.text)).toEqual([
+      'Post title',
+      'Body paragraph.',
+    ]);
   });
 
   it('keeps an article as a single leaf when it has no nested readable block', () => {

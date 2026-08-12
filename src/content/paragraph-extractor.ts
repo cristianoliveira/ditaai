@@ -14,8 +14,14 @@
 
 const READABLE_SELECTORS = 'article, p, h1, h2, h3, h4, h5, h6, li, blockquote';
 const GENERIC_CONTENT_SELECTORS = 'main, [role="main"], section, div';
-const IGNORE_SELECTORS =
-  'script, style, nav, footer, header, aside, noscript, [aria-hidden="true"]';
+// `<header>` is intentionally NOT here: it is ambiguous. A top-level banner
+// header (site masthead) is chrome we skip, but a `<header>` nested inside an
+// article/section/main holds the title + byline we want to narrate. See
+// `insideIgnoredSubtree` for the banner-only check.
+const IGNORE_SELECTORS = 'script, style, nav, footer, aside, noscript, [aria-hidden="true"]';
+// Sectioning content that turns a nested `<header>` into a title block rather
+// than a site banner (mirrors the HTML5/ARIA `role=banner` rule).
+const SECTIONING_ANCESTORS = 'article, section, main, [role="main"], aside, nav';
 const CONTROL_SELECTORS = 'button, input, select, textarea';
 const IMAGE_SELECTOR = 'img[alt]';
 const ACCESSIBLE_NAME_SELECTOR = '[aria-label]';
@@ -38,13 +44,26 @@ export function extractParagraphs(root: ParentNode = document): ParagraphSegment
 function extractLeafBlocks(root: ParentNode, selectors: string): ParagraphSegment[] {
   return [...root.querySelectorAll(selectors)]
     .filter((element) => !element.querySelector(selectors))
-    .filter((element) => !element.closest(IGNORE_SELECTORS))
+    .filter((element) => !insideIgnoredSubtree(element))
     .filter((element) => (element.textContent ?? '').trim() !== '')
     .map((element) => ({
       text: element.textContent ?? '',
       tag: element.tagName.toLowerCase(),
       element,
     }));
+}
+
+/** Drop chrome: always-ignored subtrees, plus `<header>` ancestors that act as
+ * a top-level site banner. A `<header>` nested in article/section/main is a
+ * title block and is kept. */
+function insideIgnoredSubtree(element: Element): boolean {
+  if (element.closest(IGNORE_SELECTORS)) return true;
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    if (node.tagName.toLowerCase() === 'header' && !node.closest(SECTIONING_ANCESTORS)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Accessible names worth narrating: image alts and aria-labels that add
@@ -55,14 +74,14 @@ function extractAccessibleNameSegments(root: ParentNode): ParagraphSegment[] {
   for (const img of root.querySelectorAll(IMAGE_SELECTOR)) {
     const alt = (img.getAttribute('alt') ?? '').trim();
     if (!alt) continue;
-    if (img.closest(IGNORE_SELECTORS) || img.closest(CONTROL_SELECTORS)) continue;
+    if (insideIgnoredSubtree(img) || img.closest(CONTROL_SELECTORS)) continue;
     segments.push({ text: `${IMAGE_LABEL_PREFIX} ${alt}`, tag: 'img', element: img });
   }
 
   for (const element of root.querySelectorAll(ACCESSIBLE_NAME_SELECTOR)) {
     const label = (element.getAttribute('aria-label') ?? '').trim();
     if (!label) continue;
-    if (element.closest(IGNORE_SELECTORS) || element.matches(CONTROL_SELECTORS)) continue;
+    if (insideIgnoredSubtree(element) || element.matches(CONTROL_SELECTORS)) continue;
     if ((element.textContent ?? '').trim() !== '') continue; // visible text already narratable
     segments.push({ text: label, tag: element.tagName.toLowerCase(), element });
   }
