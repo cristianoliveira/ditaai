@@ -106,6 +106,10 @@ export class SupertonicOnnxReader implements TextReader {
     const prepared = await this.getPreparedSpeech(text, options);
     if (!prepared) return;
     this.preparations.delete(preparationKey);
+    logger.info('[audio-buffer][supertonic] cache:consume', {
+      chars: text.length - (options?.resumeFromChar ?? 0),
+      cacheEntries: this.preparations.size,
+    });
 
     const spokenChars = text.length - (options?.resumeFromChar ?? 0);
     const playbackStartedAt = Date.now();
@@ -134,8 +138,26 @@ export class SupertonicOnnxReader implements TextReader {
 
     const key = this.preparationKey(text, options);
     const existing = this.preparations.get(key);
-    if (existing) return existing;
+    if (existing) {
+      logger.info('[audio-buffer][supertonic] cache:hit', {
+        chars: textToSpeak.length,
+        resumeFromChar: offset,
+        rate: options?.rate ?? this.speed,
+        quality: options?.quality ?? this.totalSteps,
+        language: options?.language ?? this.language,
+        cacheEntries: this.preparations.size,
+      });
+      return existing;
+    }
 
+    logger.info('[audio-buffer][supertonic] cache:miss', {
+      chars: textToSpeak.length,
+      resumeFromChar: offset,
+      rate: options?.rate ?? this.speed,
+      quality: options?.quality ?? this.totalSteps,
+      language: options?.language ?? this.language,
+      cacheEntries: this.preparations.size,
+    });
     const preparation = this.generateSpeech(textToSpeak, offset, options);
     this.preparations.set(key, preparation);
     void preparation.catch(() => {
@@ -145,6 +167,9 @@ export class SupertonicOnnxReader implements TextReader {
       const oldestKey = this.preparations.keys().next().value;
       if (oldestKey === undefined) break;
       this.preparations.delete(oldestKey);
+      logger.info('[audio-buffer][supertonic] cache:evict', {
+        cacheEntries: this.preparations.size,
+      });
     }
     return preparation;
   }

@@ -87,6 +87,30 @@ describe('SupertonicOnnxReader preparation', () => {
     );
   });
 
+  it('logs prepared-audio cache misses and hits without logging text', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const audio = audioContext();
+    const subject = new SupertonicOnnxReader({
+      modelAssets: {},
+      voiceStyle: new ArrayBuffer(1),
+      audioContextFactory: () => audio.context as unknown as AudioContext,
+    });
+
+    await subject.prepare('private paragraph', { rate: 1.2 });
+    await subject.speak('private paragraph', { rate: 1.2 });
+
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('[audio-buffer][supertonic] cache:miss'),
+      expect.objectContaining({ chars: 17, rate: 1.2 }),
+    );
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('[audio-buffer][supertonic] cache:hit'),
+      expect.objectContaining({ chars: 17, rate: 1.2 }),
+    );
+    expect(info.mock.calls.flat().join(' ')).not.toContain('private paragraph');
+    info.mockRestore();
+  });
+
   it('retains several generated segments for the audio buffer', async () => {
     const audio = audioContext();
     const subject = new SupertonicOnnxReader({

@@ -176,7 +176,37 @@ describe('SegmentSequencer', () => {
     ]);
   });
 
+  it('logs initial and refill buffer lifecycle with correlated fill ids', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const reader = makeFakeReader();
+    reader.prepare = vi.fn().mockResolvedValue(undefined);
+    const seq = new SegmentSequencer(reader);
+    seq.setBufferSeconds(5);
+    seq.load(['a'.repeat(75), 'b'.repeat(75)]);
+
+    await seq.play({ rate: 1 });
+
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('[audio-buffer] fill:start'),
+      expect.objectContaining({ fillId: 1, mode: 'initial', startIndex: 0, targetSeconds: 5 }),
+    );
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('[audio-buffer] segment:complete'),
+      expect.objectContaining({ fillId: 1, segmentIndex: 0, chars: 75 }),
+    );
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('[audio-buffer] fill:complete'),
+      expect.objectContaining({ fillId: 1, outcome: 'target-reached', preparedSegments: 1 }),
+    );
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('[audio-buffer] fill:start'),
+      expect.objectContaining({ fillId: 2, mode: 'refill', startIndex: 1 }),
+    );
+    info.mockRestore();
+  });
+
   it('stops filling the buffer when playback is cancelled', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
     let finishPreparation: (() => void) | undefined;
     const reader: TextReader = {
       prepare: vi.fn(
@@ -202,6 +232,11 @@ describe('SegmentSequencer', () => {
 
     expect(reader.prepare).toHaveBeenCalledOnce();
     expect(reader.speak).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('[audio-buffer] fill:complete'),
+      expect.objectContaining({ fillId: 1, outcome: 'stopped', preparedSegments: 1 }),
+    );
+    info.mockRestore();
   });
 
   it('continues playback when preparation fails', async () => {

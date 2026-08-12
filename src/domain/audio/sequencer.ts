@@ -35,6 +35,7 @@ export class SegmentSequencer {
   private volume: number | undefined;
   private restarting = false;
   private bufferSeconds = 0;
+  private bufferFillCount = 0;
   /** Promise of the currently running play loop, or null when idle. Used by the
    * re-entrancy guard so a second play() (e.g. a repeated click before the
    * prior loop unwound) never runs concurrently with the first — two loops
@@ -70,7 +71,14 @@ export class SegmentSequencer {
   }
 
   setBufferSeconds(seconds: number): void {
+    const previousSeconds = this.bufferSeconds;
     this.bufferSeconds = clampAudioBufferSeconds(seconds);
+    logger.info('[audio-buffer] config:applied', {
+      requestedSeconds: seconds,
+      previousSeconds,
+      seconds: this.bufferSeconds,
+      changed: previousSeconds !== this.bufferSeconds,
+    });
   }
 
   getState(): SequencerState {
@@ -293,6 +301,9 @@ export class SegmentSequencer {
     options: SpeakOptions,
     announce = false,
   ): Promise<void> {
+    const fillId = ++this.bufferFillCount;
+    const mode = announce ? 'initial' : 'refill';
+    const startedAt = Date.now();
     const targetDurationMs = this.bufferSeconds * 1_000;
     let bufferedDurationMs = 0;
     let bufferedSegments = 0;
@@ -305,41 +316,102 @@ export class SegmentSequencer {
       });
     };
 
+    logger.info('[audio-buffer] fill:start', {
+      fillId,
+      mode,
+      startIndex,
+      targetSeconds: this.bufferSeconds,
+      rate: this.rate ?? 1,
+      resumeFromChar: options.resumeFromChar ?? 0,
+      remainingSegments: Math.max(0, this.segments.length - startIndex),
+    });
     emitProgress(true);
     try {
       for (let index = startIndex; index < this.segments.length; index++) {
-        if (
-          this.stopped ||
-          this.seeking ||
-          this.restarting ||
-          this.paused ||
-          bufferedDurationMs >= targetDurationMs ||
-          bufferedSegments >= MAX_BUFFERED_SEGMENTS
-        ) {
-          return;
-        }
+        if (this.bufferFillOutcome(bufferedDurationMs, bufferedSegments) !== 'in-progress') break;
         const segment = this.segments[index];
-        if (!segment) return;
+        if (!segment) break;
         const segmentOptions = {
           ...options,
           resumeFromChar: index === startIndex ? options.resumeFromChar : 0,
         };
-        await this.prepareSegment(segment, segmentOptions);
         const offset = segmentOptions.resumeFromChar ?? 0;
-        bufferedDurationMs += audioBufferDurationMs(segment.slice(offset), this.rate ?? 1);
+        const chars = segment.slice(offset).length;
+        const estimatedDurationMs = audioBufferDurationMs(segment.slice(offset), this.rate ?? 1);
+        const segmentStartedAt = Date.now();
+        logger.info('[audio-buffer] segment:start', {
+          fillId,
+          mode,
+          segmentIndex: index,
+          chars,
+          estimatedDurationMs,
+          bufferedSeconds: bufferedDurationMs / 1_000,
+          targetSeconds: this.bufferSeconds,
+        });
+        const prepared = await this.prepareSegment(segment, segmentOptions);
+        bufferedDurationMs += estimatedDurationMs;
         bufferedSegments++;
+        logger.info('[audio-buffer] segment:complete', {
+          fillId,
+          mode,
+          segmentIndex: index,
+          chars,
+          prepared,
+          durationMs: Date.now() - segmentStartedAt,
+          estimatedDurationMs,
+          bufferedSeconds: Math.min(bufferedDurationMs, targetDurationMs) / 1_000,
+          targetSeconds: this.bufferSeconds,
+        });
         emitProgress(true);
       }
     } finally {
       emitProgress(false);
+      logger.info('[audio-buffer] fill:complete', {
+        fillId,
+        mode,
+        startIndex,
+        outcome: this.bufferFillOutcome(bufferedDurationMs, bufferedSegments, true),
+        durationMs: Date.now() - startedAt,
+        preparedSegments: bufferedSegments,
+        estimatedBufferedSeconds: bufferedDurationMs / 1_000,
+        targetSeconds: this.bufferSeconds,
+      });
     }
   }
 
-  private async prepareSegment(segment: string, options: SpeakOptions): Promise<void> {
+  private bufferFillOutcome(
+    bufferedDurationMs: number,
+    bufferedSegments: number,
+    completed = false,
+  ):
+    | 'in-progress'
+    | 'target-reached'
+    | 'segment-cap'
+    | 'stopped'
+    | 'seeking'
+    | 'restarting'
+    | 'paused'
+    | 'end-of-content' {
+    if (this.stopped) return 'stopped';
+    if (this.seeking) return 'seeking';
+    if (this.restarting) return 'restarting';
+    if (this.paused) return 'paused';
+    if (bufferedDurationMs >= this.bufferSeconds * 1_000) return 'target-reached';
+    if (bufferedSegments >= MAX_BUFFERED_SEGMENTS) return 'segment-cap';
+    return completed ? 'end-of-content' : 'in-progress';
+  }
+
+  private async prepareSegment(segment: string, options: SpeakOptions): Promise<boolean> {
     try {
       await this.reader.prepare?.(segment, options);
+      return true;
     } catch (error) {
-      logger.warn('speech preparation failed; continuing without lookahead', error);
+      logger.warn('speech preparation failed; continuing without lookahead', {
+        error,
+        chars: segment.length,
+        resumeFromChar: options.resumeFromChar ?? 0,
+      });
+      return false;
     }
   }
 
