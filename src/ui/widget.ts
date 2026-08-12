@@ -145,9 +145,10 @@ const STYLES = `
     gap: 4px;
     max-width: 180px;
     padding: 3px 4px 3px 10px;
+    border: 1px solid ${theme.accentTint(0.3)};
     border-radius: 999px;
-    background: ${theme.accent};
-    color: #fff;
+    background: ${theme.accentTint(0.12)};
+    color: #e0e0e0;
     font-size: 12px;
   }
   .dita-selection-chip[hidden] { display: none; }
@@ -162,13 +163,16 @@ const STYLES = `
     width: 18px; height: 18px;
     border: none;
     border-radius: 50%;
-    background: rgba(0,0,0,0.25);
-    color: #fff;
+    background: transparent;
+    color: #b8b8cc;
     font-size: 10px;
     line-height: 1;
     cursor: pointer;
   }
-  .dita-selection-chip-remove:hover { background: rgba(0,0,0,0.45); }
+  .dita-selection-chip-remove:hover {
+    background: ${theme.accentTint(0.2)};
+    color: #fff;
+  }
 
   .dita-btn-dict {
     width: 28px; height: 28px;

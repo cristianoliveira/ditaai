@@ -537,6 +537,13 @@ describe('DitaWidget selection chip', () => {
     expect(removeButton()?.getAttribute('aria-label')).toBe('Clear read selection');
   });
 
+  it('uses a subtle tint instead of a solid accent background', () => {
+    const widget = new DitaWidget(noopCallbacks, { selection: 'article.post' });
+    widget.mount();
+
+    expect(getComputedStyle(chip() as HTMLElement).backgroundColor).toBe(theme.accentTint(0.12));
+  });
+
   it('remove control fires onClearSelection', () => {
     const onClearSelection = vi.fn();
     const widget = new DitaWidget(
