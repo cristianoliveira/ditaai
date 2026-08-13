@@ -138,6 +138,27 @@ describe('Picker', () => {
     picker.exit();
   });
 
+  it('hovers the exact element under the cursor, not its readable ancestor', () => {
+    document.body.innerHTML = `
+      <article>
+        <p class="target">Hello <span class="word">world</span></p>
+      </article>`;
+    const word = document.querySelector('.word') as Element;
+    const target = document.querySelector('.target') as Element;
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(word);
+
+    const picker = new Picker();
+    void picker.enter();
+
+    overlay().dispatchEvent(new MouseEvent('mousemove', { clientX: 1, clientY: 1 }));
+
+    // precision-first: low-level element is targeted, not the readable <p>
+    expect(word.classList.contains('dita-picker-hover')).toBe(true);
+    expect(target.classList.contains('dita-picker-hover')).toBe(false);
+
+    picker.exit();
+  });
+
   it('click on panel Pick button re-enters hover mode', async () => {
     setupPage();
     const target = document.querySelector('.target');
@@ -162,5 +183,199 @@ describe('Picker', () => {
     expect(ovl.classList.contains('dita-picker-overlay--interactive')).toBe(true);
 
     picker.exit();
+  });
+
+  describe('keyboard tree navigation', () => {
+    function setupNestedPage(): void {
+      document.body.innerHTML = `
+        <nav><p>menu</p></nav>
+        <article>
+          <p class="a">A</p>
+          <p class="b">B</p>
+          <p class="c">C</p>
+          <div class="outer">
+            <div class="inner">
+              <p class="target">Target paragraph.</p>
+            </div>
+          </div>
+        </article>`;
+    }
+
+    function hover(el: Element): void {
+      vi.spyOn(document, 'elementFromPoint').mockReturnValue(el);
+      overlay().dispatchEvent(new MouseEvent('mousemove', { clientX: 1, clientY: 1 }));
+    }
+
+    function pressKey(key: string): KeyboardEvent {
+      const ev = new KeyboardEvent('keydown', { key, cancelable: true });
+      document.dispatchEvent(ev);
+      return ev;
+    }
+
+    function hoveredEl(): Element | null {
+      return document.querySelector('.dita-picker-hover');
+    }
+
+    it('ArrowUp moves highlight to the parent element', () => {
+      setupNestedPage();
+      const target = document.querySelector('.target') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(target);
+      pressKey('ArrowUp');
+
+      expect(hoveredEl()).toBe(document.querySelector('.inner'));
+      picker.exit();
+    });
+
+    it('ArrowDown drills into the first child element', () => {
+      setupNestedPage();
+      const target = document.querySelector('.target') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(target); // p.target
+      pressKey('ArrowUp'); // .inner
+      pressKey('ArrowUp'); // .outer
+      pressKey('ArrowDown'); // .outer -> .inner
+
+      expect(hoveredEl()).toBe(document.querySelector('.inner'));
+      picker.exit();
+    });
+
+    it('ArrowDown on a leaf element keeps the current highlight', () => {
+      setupNestedPage();
+      const target = document.querySelector('.target') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(target); // p has no element children
+      pressKey('ArrowDown');
+
+      expect(hoveredEl()).toBe(target);
+      picker.exit();
+    });
+
+    it('ArrowRight moves to the next sibling', () => {
+      setupNestedPage();
+      const b = document.querySelector('.b') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(b);
+      pressKey('ArrowRight');
+
+      expect(hoveredEl()).toBe(document.querySelector('.c'));
+      picker.exit();
+    });
+
+    it('ArrowLeft moves to the previous sibling', () => {
+      setupNestedPage();
+      const b = document.querySelector('.b') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(b);
+      pressKey('ArrowLeft');
+
+      expect(hoveredEl()).toBe(document.querySelector('.a'));
+      picker.exit();
+    });
+
+    it('[ and ] aliases walk parent and child like arrows', () => {
+      setupNestedPage();
+      const target = document.querySelector('.target') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(target);
+      pressKey('[');
+      expect(hoveredEl()).toBe(document.querySelector('.inner'));
+
+      pressKey(']');
+      expect(hoveredEl()).toBe(target);
+      picker.exit();
+    });
+
+    it('navigation is ignored while editing the selector input', () => {
+      setupNestedPage();
+      const target = document.querySelector('.target') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(target);
+      const input = document.querySelector('.hover-selector') as HTMLInputElement;
+      input.focus();
+
+      pressKey('ArrowUp');
+
+      expect(hoveredEl()).toBe(target);
+      picker.exit();
+    });
+
+    it('navigation updates the hover selector preview for the new element', () => {
+      setupNestedPage();
+      const target = document.querySelector('.target') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(target);
+      pressKey('ArrowUp'); // -> .inner
+
+      const chips = [...document.querySelectorAll('.hover-candidate')] as HTMLElement[];
+      const texts = chips.map((c) => c.textContent);
+      expect(texts).toContain('div.inner');
+      picker.exit();
+    });
+
+    it('navigation keys prevent default to avoid scrolling the page', () => {
+      setupNestedPage();
+      const target = document.querySelector('.target') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(target);
+      const ev = pressKey('ArrowUp');
+
+      expect(ev.defaultPrevented).toBe(true);
+      picker.exit();
+    });
+
+    it('does not escape above body when walking parents', () => {
+      setupNestedPage();
+      const target = document.querySelector('.target') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(target);
+      pressKey('ArrowUp'); // .inner
+      pressKey('ArrowUp'); // .outer
+      pressKey('ArrowUp'); // article
+      pressKey('ArrowUp'); // body
+      expect(hoveredEl()).toBe(document.body);
+
+      pressKey('ArrowUp'); // html is blocked
+      expect(hoveredEl()).toBe(document.body);
+      picker.exit();
+    });
+
+    it('locks the keyboard-navigated element on click, not the element under the cursor', () => {
+      setupNestedPage();
+      const target = document.querySelector('.target') as Element;
+      const inner = document.querySelector('.inner') as Element;
+      const picker = new Picker();
+      void picker.enter();
+
+      hover(target);
+      pressKey('ArrowUp'); // navigate up to .inner
+
+      // click: elementFromPoint still resolves to target (cursor never moved)
+      overlay().dispatchEvent(new MouseEvent('click', { clientX: 1, clientY: 1 }));
+
+      expect(inner.classList.contains('dita-picker-hover')).toBe(true);
+      expect(target.classList.contains('dita-picker-hover')).toBe(false);
+      picker.exit();
+    });
   });
 });

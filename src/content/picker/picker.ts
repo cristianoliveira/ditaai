@@ -269,7 +269,7 @@ export class Picker {
 
     const hint = document.createElement('span');
     hint.className = 'hover-hint';
-    hint.textContent = 'click to select';
+    hint.textContent = 'arrows walk · click to select';
 
     this.hoverCandidates = document.createElement('div');
     this.hoverCandidates.className = 'hover-candidates';
@@ -307,38 +307,36 @@ export class Picker {
 
   private onOverlayMouseMove = (e: MouseEvent): void => {
     const el = this.elementBeneath(e.clientX, e.clientY);
-    if (
-      !el ||
-      el === this.overlay ||
-      el.id === 'dita-picker-host' ||
-      el.id === 'dita-widget-host'
-    ) {
-      return;
-    }
-
+    if (!el || this.isPickerElement(el)) return;
     if (el === this.hoveredElement) return;
-
-    this.clearHoverHighlight();
-
-    this.hoveredElement = this.findReadableAncestor(el);
-    if (this.hoveredElement) {
-      this.hoveredElement.classList.add(HIGHLIGHT_CLASS);
-
-      // Update hover preview box
-      const selectorCandidates = buildCandidates(this.hoveredElement);
-      const selector = selectorCandidates[0] ?? this.hoveredElement.tagName.toLowerCase();
-      if (this.hoverInput) {
-        this.hoverInput.value = selector;
-        this.hoverInput.setAttribute('data-last-hover', selector);
-      }
-      const count = selectorCandidates.length > 0 ? this.getMatchCount(selector) : 0;
-      if (this.hoverCount) {
-        this.hoverCount.textContent = String(count);
-        this.hoverCount.className = count === 0 ? 'hover-count zero' : 'hover-count';
-      }
-      this.renderHoverCandidates(selectorCandidates, selector);
-    }
+    // Precision-first: target the exact element under the cursor (low level).
+    // Arrow keys widen up to ancestors; no readable-ancestor snapping.
+    this.setHoveredElement(el);
   };
+
+  // Shared by mouse hover and keyboard navigation: highlight `el` and
+  // refresh the hover preview (selector, count, candidate chips).
+  private setHoveredElement(el: Element): void {
+    this.clearHoverHighlight();
+    this.hoveredElement = el;
+    el.classList.add(HIGHLIGHT_CLASS);
+    this.updateHoverPreview(el);
+  }
+
+  private updateHoverPreview(el: Element): void {
+    const selectorCandidates = buildCandidates(el);
+    const selector = selectorCandidates[0] ?? el.tagName.toLowerCase();
+    if (this.hoverInput) {
+      this.hoverInput.value = selector;
+      this.hoverInput.setAttribute('data-last-hover', selector);
+    }
+    const count = selectorCandidates.length > 0 ? this.getMatchCount(selector) : 0;
+    if (this.hoverCount) {
+      this.hoverCount.textContent = String(count);
+      this.hoverCount.className = count === 0 ? 'hover-count zero' : 'hover-count';
+    }
+    this.renderHoverCandidates(selectorCandidates, selector);
+  }
 
   private clearHoverHighlight(): void {
     if (this.hoveredElement) {
@@ -353,10 +351,20 @@ export class Picker {
     if (e.key === 'Escape') {
       e.preventDefault();
       this.resolveCleanup?.(null);
+      return;
     }
+    if (!this.isNavigationKey(e.key)) return;
+    // let the user type/edit the selector without walking the tree
+    if (document.activeElement === this.hoverInput) return;
+    if (!this.isHoverMode()) return;
+    e.preventDefault();
+    const next = this.navigateTree(e.key);
+    if (next) this.setHoveredElement(next);
   };
 
   private onOverlayClick = (e: MouseEvent): void => {
+    // Capture the live hovered element (mouse or keyboard nav) before clearing.
+    const hovered = this.hoveredElement;
     this.clearHoverHighlight();
 
     // Use the selector from the hover input (user may have edited it)
@@ -369,8 +377,11 @@ export class Picker {
       this.selectedSelector = customSelector;
       this.candidates = [customSelector];
     } else {
-      this.selectedElement = this.findReadableAncestor(el);
-      if (!this.selectedElement) return;
+      // Prefer the live hovered element (keyboard nav) so clicking locks what
+      // is shown; otherwise target the exact element under the cursor.
+      const target = hovered ?? el;
+      if (!target) return;
+      this.selectedElement = target;
       this.candidates = buildCandidates(this.selectedElement);
       this.selectedSelector = this.candidates[0] ?? this.selectedElement.tagName.toLowerCase();
     }
@@ -542,8 +553,59 @@ export class Picker {
     this.renderHoverCandidates(candidates, candidate);
   }
 
-  private findReadableAncestor(el: Element): Element {
-    const readable = el.closest('article, p, h1, h2, h3, h4, h5, h6, li, blockquote');
-    return readable ?? el;
+  // ---- keyboard tree walk (widen up / drill down / siblings during hover) ----
+
+  private isHoverMode(): boolean {
+    return !!this.overlay?.classList.contains(OVERLAY_INTERACTIVE) && !this.panel;
+  }
+
+  private isNavigationKey(key: string): boolean {
+    return (
+      key === 'ArrowUp' ||
+      key === 'ArrowDown' ||
+      key === 'ArrowLeft' ||
+      key === 'ArrowRight' ||
+      key === '[' ||
+      key === ']'
+    );
+  }
+
+  private navigateTree(key: string): Element | null {
+    const current = this.hoveredElement;
+    if (!current) return null;
+    let next: Element | null = null;
+    switch (key) {
+      case 'ArrowUp':
+      case '[':
+        next = current.parentElement;
+        break;
+      case 'ArrowDown':
+      case ']':
+        next = current.firstElementChild;
+        break;
+      case 'ArrowLeft':
+        next = current.previousElementSibling;
+        break;
+      case 'ArrowRight':
+        next = current.nextElementSibling;
+        break;
+      default:
+        return null;
+    }
+    if (!next || this.isPickerElement(next)) return null;
+    // never navigate above body — selecting html/page is never useful here
+    if (next.tagName.toLowerCase() === 'html') return null;
+    return next;
+  }
+
+  private isPickerElement(el: Element): boolean {
+    return (
+      el === this.overlay ||
+      el === this.hoverPreview ||
+      el.id === 'dita-picker-host' ||
+      el.id === 'dita-widget-host' ||
+      el.classList.contains(OVERLAY_CLASS) ||
+      el.classList.contains('dita-picker-dismiss')
+    );
   }
 }
