@@ -15,7 +15,7 @@ See [product direction](docs/PRODUCT.md) for promises and boundaries.
 
 ## Demo
 
-https://github.com/user-attachments/assets/37b8bd1d-18eb-4536-b43f-5e22f6b254f2
+https://github.com/user-attachments/assets/55e586b5-133f-4dda-ad90-2cad994a7e97
 
 ## Why
 
