@@ -5,6 +5,7 @@
 // host to begin reading from that paragraph. The affordance knows nothing about
 // chunks, indices, or playback — it only reports which element the user picked.
 
+import { PLAY_ICON, createIconButton } from './icons';
 import { theme } from './theme';
 
 export interface ParagraphStartAffordanceDeps {
@@ -39,6 +40,12 @@ const SHADOW_STYLE = `
     justify-content: center;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     z-index: 2147483647;
+  }
+  .dita-start-btn svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
   }
   .dita-start-btn[hidden] { display: none; }
 `;
@@ -76,15 +83,16 @@ export class ParagraphStartAffordance {
     const style = document.createElement('style');
     style.textContent = SHADOW_STYLE;
 
-    this.button = document.createElement('button');
-    this.button.className = 'dita-start-btn';
-    this.button.textContent = '▶';
+    this.button = createIconButton({
+      icon: PLAY_ICON,
+      label: 'Start reading from this paragraph',
+      className: 'dita-start-btn',
+      onClick: () => this.onClick(),
+    });
     this.button.hidden = true;
-    this.button.setAttribute('aria-label', 'Start reading from this paragraph');
     // Do not let pressing the control collapse the page's text selection
     // before the click starts playback from that paragraph.
     this.button.addEventListener('mousedown', (event) => event.preventDefault());
-    this.button.addEventListener('click', () => this.onClick());
 
     shadow.append(style, this.button);
     document.body.appendChild(this.host);

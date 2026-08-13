@@ -30,6 +30,19 @@ describe('ParagraphStartAffordance', () => {
     expect(btn?.hidden).toBe(false);
   });
 
+  it('renders the shared SVG play icon instead of a font glyph', () => {
+    const para = document.createElement('p');
+    document.body.appendChild(para);
+    const aff = new ParagraphStartAffordance({
+      isReadable: (element) => element === para,
+      onStartFrom: () => {},
+    });
+    aff.enable();
+
+    expect(startButton()?.querySelector('svg[data-icon="play"]')).not.toBeNull();
+    expect(startButton()?.textContent ?? '').not.toContain('▶');
+  });
+
   it('finds the readable ancestor when hovering a child element', () => {
     const para = document.createElement('p');
     const span = document.createElement('span');
