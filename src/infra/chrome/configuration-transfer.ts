@@ -15,6 +15,7 @@ export const CONFIGURATION_STORAGE_KEYS = [
   'playbackRate',
   'playbackVolume',
   'pronunciationsEnabled',
+  'simplifyLinks',
   'synthesisQuality',
   'narrationLanguage',
   'audioBufferSeconds',

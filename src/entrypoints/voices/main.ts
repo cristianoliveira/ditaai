@@ -15,6 +15,7 @@ import { sourceUrl } from '../../domain/voices/voice';
 import { ChromeAudioBufferStorage } from '../../infra/chrome/audio-buffer-storage';
 import { ChromeConfigurationTransfer } from '../../infra/chrome/configuration-transfer';
 import { ChromeLanguageStorage } from '../../infra/chrome/language-storage';
+import { ChromeLinksStorage } from '../../infra/chrome/links-storage';
 import { ChromeShortcutStorage } from '../../infra/chrome/shortcut-storage';
 import { ChromeSynthesisQualityStorage } from '../../infra/chrome/synthesis-quality-storage';
 import { ChromeVoiceRotationStorage } from '../../infra/chrome/voice-rotation-storage';
@@ -33,6 +34,7 @@ const engineStatus = document.getElementById('engine-status')!;
 const voicesGrid = document.getElementById('voices-grid')!;
 const statusBar = document.getElementById('status-bar')!;
 const rotateVoicesInput = document.getElementById('rotate-voices') as HTMLInputElement;
+const simplifyLinksInput = document.getElementById('simplify-links') as HTMLInputElement;
 const synthesisQualitySelect = document.getElementById('synthesis-quality') as HTMLSelectElement;
 const narrationLanguageSelect = document.getElementById('narration-language') as HTMLSelectElement;
 const audioBufferSelect = document.getElementById('audio-buffer-seconds') as HTMLSelectElement;
@@ -53,6 +55,7 @@ async function isInCache(url: string): Promise<boolean> {
 const state = new Map<string, VoiceCardState>();
 const selectionStore = new ChromeVoiceSelectionStorage();
 const rotationStore = new ChromeVoiceRotationStorage();
+const linksStore = new ChromeLinksStorage();
 const qualityStore = new ChromeSynthesisQualityStorage();
 const languageStore = new ChromeLanguageStorage();
 const audioBufferStore = new ChromeAudioBufferStorage();
@@ -140,6 +143,7 @@ async function refresh(): Promise<void> {
   const storedVoiceId = await selectionStore.load();
   rotateVoices = await rotationStore.load();
   rotateVoicesInput.checked = rotateVoices;
+  simplifyLinksInput.checked = await linksStore.load();
   const [synthesisQuality, narrationLanguage, audioBufferSeconds] = await Promise.all([
     qualityStore.load(),
     languageStore.load(),
@@ -314,6 +318,11 @@ void shortcutStorage.load().then((map) => shortcutsPanel.update(map));
 rotateVoicesInput.addEventListener('change', () => {
   rotateVoices = rotateVoicesInput.checked;
   void rotationStore.save(rotateVoices);
+});
+
+simplifyLinksInput.addEventListener('change', () => {
+  void linksStore.save(simplifyLinksInput.checked);
+  logger.info('[simplify-links][page] saved', { enabled: simplifyLinksInput.checked });
 });
 
 // ── Configuration backup ─────────────────────────────────────────────

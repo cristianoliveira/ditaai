@@ -19,6 +19,7 @@ import { locateWord } from '../content/word-locator';
 import { DEFAULT_AUDIO_BUFFER_SECONDS } from '../domain/audio/buffer';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
+import { simplifyLinks } from '../domain/document/links';
 import {
   type Substitutions,
   applySubstitutions,
@@ -40,6 +41,7 @@ import {
   ChromeAudioBufferStorage,
 } from '../infra/chrome/audio-buffer-storage';
 import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-storage';
+import { ChromeLinksStorage, SIMPLIFY_LINKS_KEY } from '../infra/chrome/links-storage';
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
 import { ChromeShortcutStorage } from '../infra/chrome/shortcut-storage';
 import { ChromeSubstitutionStorage, SUBSTITUTIONS_KEY } from '../infra/chrome/substitution-storage';
@@ -62,7 +64,11 @@ interface Chunk {
   base: number;
 }
 
-function buildChunks(doc: Document, substitutions: Substitutions = {}): Chunk[] {
+function buildChunks(
+  doc: Document,
+  substitutions: Substitutions = {},
+  linksEnabled = true,
+): Chunk[] {
   const paragraphs: ParagraphSegment[] = extractParagraphs(doc);
   const chunks: Chunk[] = [];
   for (const paragraph of paragraphs) {
@@ -73,7 +79,7 @@ function buildChunks(doc: Document, substitutions: Substitutions = {}): Chunk[] 
       const found = cleaned.indexOf(text, searchFrom);
       const base = found === -1 ? searchFrom : found;
       chunks.push({
-        text: applySubstitutions(text, substitutions),
+        text: applySubstitutions(linksEnabled ? simplifyLinks(text) : text, substitutions),
         element: paragraph.element,
         base,
       });
@@ -219,8 +225,10 @@ export default defineContentScript({
     let playbackVolume = 1;
     let substitutions: Substitutions = {};
     let pronunciationsEnabled = true;
+    let linksEnabled = true;
     const selectorStore = new ChromeDomainSelectorStorage();
     const substitutionStore = new ChromeSubstitutionStorage();
+    const linksStore = new ChromeLinksStorage();
     const hostname = window.location.hostname;
     let activeSelector: string | null = null;
     let readableElements: Set<Element> = new Set();
@@ -256,6 +264,9 @@ export default defineContentScript({
     void loadPronunciationsEnabled().then((value) => {
       pronunciationsEnabled = value;
     });
+    void linksStore.load().then((value) => {
+      linksEnabled = value;
+    });
 
     // Keep the in-memory dict fresh when storage changes (this tab or another),
     // so a substitution saved from the popover applies immediately.
@@ -268,6 +279,9 @@ export default defineContentScript({
       if (changes[PRONUNCIATIONS_ENABLED_PREF]) {
         pronunciationsEnabled = changes[PRONUNCIATIONS_ENABLED_PREF].newValue !== false;
         refreshOpenManager();
+      }
+      if (changes[SIMPLIFY_LINKS_KEY]) {
+        linksEnabled = changes[SIMPLIFY_LINKS_KEY].newValue !== false;
       }
     });
 
@@ -294,7 +308,7 @@ export default defineContentScript({
     }
 
     function buildChunksFiltered(doc: Document): Chunk[] {
-      const allChunks = buildChunks(doc, pronunciationsEnabled ? substitutions : {});
+      const allChunks = buildChunks(doc, pronunciationsEnabled ? substitutions : {}, linksEnabled);
       if (!activeSelector) return allChunks;
 
       // First try: filter paragraphs that match the selector.
@@ -318,7 +332,10 @@ export default defineContentScript({
             const found = cleaned.indexOf(text, searchFrom);
             const base = found === -1 ? searchFrom : found;
             chunks.push({
-              text: applySubstitutions(text, pronunciationsEnabled ? substitutions : {}),
+              text: applySubstitutions(
+                linksEnabled ? simplifyLinks(text) : text,
+                pronunciationsEnabled ? substitutions : {},
+              ),
               element: el,
               base,
             });

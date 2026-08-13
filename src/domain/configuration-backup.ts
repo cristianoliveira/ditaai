@@ -17,6 +17,7 @@ export interface ConfigurationSettings {
   playbackRate?: number;
   playbackVolume?: number;
   pronunciationsEnabled?: boolean;
+  simplifyLinks?: boolean;
   synthesisQuality?: number;
   narrationLanguage?: string;
   audioBufferSeconds?: number;
@@ -76,6 +77,7 @@ export function parseConfigurationBackup(text: string): ConfigurationSettings {
   if (typeof settings.pronunciationsEnabled === 'boolean') {
     result.pronunciationsEnabled = settings.pronunciationsEnabled;
   }
+  if (typeof settings.simplifyLinks === 'boolean') result.simplifyLinks = settings.simplifyLinks;
   if (isSynthesisQuality(settings.synthesisQuality)) {
     result.synthesisQuality = settings.synthesisQuality;
   }
@@ -104,6 +106,7 @@ interface UnknownConfigurationSettings {
   playbackRate?: unknown;
   playbackVolume?: unknown;
   pronunciationsEnabled?: unknown;
+  simplifyLinks?: unknown;
   synthesisQuality?: unknown;
   narrationLanguage?: unknown;
   audioBufferSeconds?: unknown;
