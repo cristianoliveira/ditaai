@@ -15,7 +15,10 @@ tasks:
   - name: Update plans
     run:
       - git add plans/
-      - 'git commit -m "chore: updated plans"'
+      # Commit only when plans/ actually has staged changes. Without this,
+      # run_on_init fails with "nothing to commit" when plans/ is unchanged,
+      # and the pre-commit version bump otherwise sneaks in empty commits.
+      - 'git diff --cached --quiet -- plans/ || git commit -m "chore: updated plans"'
     change: 'plans/**/*'
     run_on_init: true
 
