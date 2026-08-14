@@ -7,6 +7,7 @@
 on:
   socket: .pi/fzz.sock
   change: '**/*.ts'
+  concurrency: 2
   ignore:
     - '**/*.js'
     - '**/*.config.ts'
@@ -22,13 +23,27 @@ tasks:
     change: 'plans/**/*'
     run_on_init: true
 
+  # Version bump mutates files that check/build read, so it stays serial
+  # before the parallel ci group.
+  - name: Bump version
+    run:
+      - just bump
+    run_on_init: true
+
   - name: CI checks
+    parallel: ci
     run:
       - just check
-      - just bump
+    run_on_init: true
+
+  - name: Build
+    parallel: ci
+    run:
       - just build
     run_on_init: true
 
+  # Runs only after the ci group reaches a terminal outcome, so the browser
+  # restart picks up the fresh build.
   - name: smoke test
     run:
       - sleep 30
