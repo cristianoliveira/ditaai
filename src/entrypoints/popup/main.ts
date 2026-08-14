@@ -1,3 +1,4 @@
+import { closeOnPointerLeave } from './close-on-pointer-leave';
 import { PopupPlayer } from './player';
 
 async function activeTabId(): Promise<number> {
@@ -23,6 +24,8 @@ async function main(): Promise<void> {
   await player.refresh();
   // Icon click opens popup + on-page player bar together.
   await player.openPlayerBar();
+  // Dismiss the popup when the mouse leaves it; narration keeps playing.
+  closeOnPointerLeave(document, () => window.close());
 }
 
 void main();
