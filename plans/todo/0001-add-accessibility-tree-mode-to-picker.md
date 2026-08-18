@@ -35,11 +35,16 @@ select.
 
 ## User experience
 
-Picker gains a source configuration:
+Picker gains one explicit source checkbox:
 
 ```text
-Picker source:  [ DOM ] [ Accessibility ]
+[ ] Use accessibility tree
 ```
+
+- Unchecked (default) = **DOM** mode.
+- Checked = **Accessibility** mode.
+- The checkbox state is visible throughout the picker session and persisted only
+  when the user confirms a scope; Cancel leaves the saved scope unchanged.
 
 ### DOM
 
@@ -225,8 +230,9 @@ revise locator before implementing UI.
 
 ### 5. Add picker source configuration
 
-- Add DOM/Accessibility control to existing picker panel.
-- Source switch preserves picker session and current page location where
+- Add a **Use accessibility tree** checkbox to the existing picker panel.
+  Unchecked is DOM mode; checked is Accessibility mode.
+- Changing the checkbox preserves picker session and current page location where
   possible.
 - DOM mode remains byte-for-behavior compatible.
 - Accessibility mode requests normalized AX node under pointer and renders role,
@@ -267,7 +273,8 @@ revise locator before implementing UI.
 
 ## Acceptance criteria
 
-- [ ] Existing picker offers **DOM / Accessibility** source configuration.
+- [ ] Existing picker offers a **Use accessibility tree** checkbox; unchecked
+      is DOM mode and checked is Accessibility mode.
 - [ ] Accessibility mode uses Chrome computed accessibility tree, not a DOM-text
       approximation.
 - [ ] User can inspect `StaticText`, role, accessible name/value, and relevant
