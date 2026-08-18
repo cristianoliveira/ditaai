@@ -1,3 +1,14 @@
+---
+id: TASK-0005
+title: "Keyboard shortcuts (play/pause/jump/volume/widget)"
+status: done
+depends_on: []
+priority: normal
+tags: []
+---
+
+> **Done.** Verified shipped: domain/shortcuts, ShortcutController, ChromeShortcutStorage, voices page shortcuts-panel + tests. Original plan below.
+
 ## Keyboard Shortcuts
 
 As a user, I want to control narration with the keyboard so I can play, pause,

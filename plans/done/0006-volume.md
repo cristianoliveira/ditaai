@@ -1,3 +1,14 @@
+---
+id: TASK-0006
+title: "Volume control from widget (both TTS paths)"
+status: done
+depends_on: []
+priority: normal
+tags: []
+---
+
+> **Done.** Verified shipped: widget volume slider, Sequencer.setVolume, SpeakOptions.volume, GainNode chain in supertonic reader. Original plan below.
+
 ## Volume
 
 As a user, I want to control the narration volume from the widget so I can
