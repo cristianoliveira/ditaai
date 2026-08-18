@@ -52,9 +52,9 @@ function callDebugger<T>(
     invoke((error, result) => {
       const runtime = chrome.runtime as typeof chrome.runtime & { lastError?: { message: string } };
       if (runtime.lastError) {
-        const message = runtime.lastError.message;
-        delete runtime.lastError;
-        reject(new Error(message));
+        // Chrome clears lastError after this callback returns; never mutate the
+        // browser-owned field (tests provide a fresh runtime stub per call).
+        reject(new Error(runtime.lastError.message));
         return;
       }
       if (error) {

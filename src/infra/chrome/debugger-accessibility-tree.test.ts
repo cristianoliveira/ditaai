@@ -61,7 +61,7 @@ function stubDebugger(
     detach: overrides?.detach ?? vi.fn((_t: unknown, cb: () => void) => cb()),
     sendCommand:
       overrides?.sendCommand ??
-      vi.fn((target: unknown, method: string, _params: unknown, cb: (result: unknown) => void) => {
+      vi.fn((_target: unknown, method: string, _params: unknown, cb: (result: unknown) => void) => {
         switch (method) {
           case 'DOM.getDocument':
             return cb({ root: { nodeId: 1 } });

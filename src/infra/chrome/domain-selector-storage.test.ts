@@ -97,7 +97,7 @@ describe('ChromeDomainSelectorStorage (DomainScopeStore)', () => {
     await store.save('new.example', { source: 'dom', selector: 'p' });
 
     // export copies the whole map verbatim; both formats coexist and parse
-    const exported = { ...data['domainSelectors'] };
+    const exported = { ...data.domainSelectors };
     expect(exported['legacy.com']).toBe('article');
     expect(JSON.parse(exported['new.example'] as string)).toEqual({
       source: 'dom',
@@ -109,8 +109,8 @@ describe('ChromeDomainSelectorStorage (DomainScopeStore)', () => {
     // reads whatever the last save wrote, straight from the stubbed map
     const calls = (chrome.storage.local.set as ReturnType<typeof vi.fn>).mock.calls;
     for (let i = calls.length - 1; i >= 0; i--) {
-      const items = calls[i]?.[0] as Record<string, Record<string, string>> | undefined;
-      const map = items?.['domainSelectors'];
+      const items = calls[i]?.[0] as { domainSelectors?: Record<string, string> } | undefined;
+      const map = items?.domainSelectors;
       if (map && hostname in map) return map[hostname] as string;
     }
     return '';
