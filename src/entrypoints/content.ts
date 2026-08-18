@@ -252,10 +252,13 @@ export default defineContentScript({
     void loadPlaybackVolume().then((value) => {
       playbackVolume = value;
     });
-    void selectorStore.load(hostname).then((selector) => {
-      if (selector) {
-        activeSelector = selector;
-        logger.info(`restored selector for ${hostname}: ${selector}`);
+    void selectorStore.load(hostname).then((scope) => {
+      // accessibility scopes resolve through the accessibility port once
+      // playback wiring lands (TASK-0001 step 7); until then they degrade to
+      // no selection instead of reading the wrong content.
+      if (scope?.source === 'dom') {
+        activeSelector = scope.selector;
+        logger.info(`restored selector for ${hostname}: ${scope.selector}`);
       }
     });
     void substitutionStore.load().then((dict) => {
@@ -585,7 +588,7 @@ export default defineContentScript({
             // remove a saved selector.
             if (selector) {
               activeSelector = selector;
-              void selectorStore.save(hostname, selector);
+              void selectorStore.save(hostname, { source: 'dom', selector });
             }
             mountWidget();
           },

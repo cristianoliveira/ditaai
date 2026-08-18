@@ -2,11 +2,16 @@
 // and filters paragraph segments by a confirmed selector.
 
 import type { ParagraphSegment } from '../../lib/types';
+import type { ReadScope } from './read-scope';
 
-/** Port: persists selected CSS selectors keyed by domain (hostname). */
-export interface DomainSelectorStore {
-  load(hostname: string): Promise<string | null>;
-  save(hostname: string, selector: string): Promise<void>;
+/**
+ * Port: persists the confirmed read scope keyed by domain (hostname).
+ * Legacy selector strings migrate to `{ source: 'dom', selector }` at the
+ * storage boundary (ChromeDomainSelectorStorage) — one representation in runtime.
+ */
+export interface DomainScopeStore {
+  load(hostname: string): Promise<ReadScope | null>;
+  save(hostname: string, scope: ReadScope): Promise<void>;
   clear(hostname: string): Promise<void>;
 }
 

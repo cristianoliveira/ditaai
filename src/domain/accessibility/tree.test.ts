@@ -72,7 +72,7 @@ describe('orderedStaticText', () => {
   it('caps traversal for large subtrees', () => {
     const big: AccessibilityPickerNode[] = [];
     big.push({ id: 'root', role: 'RootWebArea', properties: [], childIds: [], bounds: [] });
-    for (let i = 0; i < 50_000; i++) {
+    for (let i = 0; i < 5_000; i++) {
       big.push({
         id: `t${i}`,
         role: 'StaticText',

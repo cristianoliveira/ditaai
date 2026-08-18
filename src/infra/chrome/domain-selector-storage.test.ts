@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChromeDomainSelectorStorage } from './domain-selector-storage';
 
-describe('ChromeDomainSelectorStorage', () => {
+describe('ChromeDomainSelectorStorage (DomainScopeStore)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -20,22 +20,55 @@ describe('ChromeDomainSelectorStorage', () => {
         },
       },
     });
+    return data;
   }
 
-  it('loads a saved selector by hostname', async () => {
+  it('migrates a legacy bare selector string to a DOM scope on load', async () => {
     stubStorage({ 'example.com': 'div.content' });
 
     const store = new ChromeDomainSelectorStorage();
-    const result = await store.load('example.com');
-    expect(result).toBe('div.content');
+    expect(await store.load('example.com')).toEqual({
+      source: 'dom',
+      selector: 'div.content',
+    });
+  });
+
+  it('round-trips a DOM scope', async () => {
+    stubStorage();
+    const store = new ChromeDomainSelectorStorage();
+
+    await store.save('example.com', { source: 'dom', selector: 'main .prose' });
+    expect(await store.load('example.com')).toEqual({ source: 'dom', selector: 'main .prose' });
+  });
+
+  it('round-trips an accessibility scope', async () => {
+    stubStorage();
+    const store = new ChromeDomainSelectorStorage();
+    const scope = {
+      source: 'accessibility',
+      anchorSelector: '#story .prose-wrap',
+      locator: { firstStaticPrefix: 'The landscape', staticCount: 14 },
+    } as const;
+
+    await store.save('example.com', scope);
+    const stored = stubStoragePeekRaw('example.com');
+    // persisted payload never carries session-only AX ids
+    expect(stored).not.toMatch(/nodeId|backendDOM/i);
+    expect(await store.load('example.com')).toEqual(scope);
+  });
+
+  it('returns null for malformed stored values', async () => {
+    stubStorage({ 'bad.example': '{"source":"dom",' });
+
+    const store = new ChromeDomainSelectorStorage();
+    expect(await store.load('bad.example')).toBeNull();
   });
 
   it('returns null for unknown hostname', async () => {
-    stubStorage();
+    stubStorage({ 'example.com': 'p' });
 
     const store = new ChromeDomainSelectorStorage();
-    const result = await store.load('unknown.com');
-    expect(result).toBeNull();
+    expect(await store.load('unknown.com')).toBeNull();
   });
 
   it('clears a hostname entry', async () => {
@@ -43,27 +76,43 @@ describe('ChromeDomainSelectorStorage', () => {
 
     const store = new ChromeDomainSelectorStorage();
     await store.clear('example.com');
-    const result = await store.load('example.com');
-    expect(result).toBeNull();
+    expect(await store.load('example.com')).toBeNull();
   });
 
   it('isolates hostnames — saving one does not affect another', async () => {
     stubStorage();
 
     const store = new ChromeDomainSelectorStorage();
-    await store.save('a.com', '.main');
-    await store.save('b.com', '.sidebar');
+    await store.save('a.com', { source: 'dom', selector: '.main' });
+    await store.save('b.com', { source: 'dom', selector: '.side' });
 
-    expect(await store.load('a.com')).toBe('.main');
-    expect(await store.load('b.com')).toBe('.sidebar');
+    expect(await store.load('a.com')).toEqual({ source: 'dom', selector: '.main' });
+    expect(await store.load('b.com')).toEqual({ source: 'dom', selector: '.side' });
   });
 
-  it('overwrites an existing selector for the same hostname', async () => {
-    stubStorage({ 'example.com': 'old' });
+  it('keeps values opaque for backup/export: stored map round-trips through raw storage', async () => {
+    const data = stubStorage({ 'legacy.com': 'article' });
 
     const store = new ChromeDomainSelectorStorage();
-    await store.save('example.com', 'new');
+    await store.save('new.example', { source: 'dom', selector: 'p' });
 
-    expect(await store.load('example.com')).toBe('new');
+    // export copies the whole map verbatim; both formats coexist and parse
+    const exported = { ...data['domainSelectors'] };
+    expect(exported['legacy.com']).toBe('article');
+    expect(JSON.parse(exported['new.example'] as string)).toEqual({
+      source: 'dom',
+      selector: 'p',
+    });
   });
+
+  function stubStoragePeekRaw(hostname: string): string {
+    // reads whatever the last save wrote, straight from the stubbed map
+    const calls = (chrome.storage.local.set as ReturnType<typeof vi.fn>).mock.calls;
+    for (let i = calls.length - 1; i >= 0; i--) {
+      const items = calls[i]?.[0] as Record<string, Record<string, string>> | undefined;
+      const map = items?.['domainSelectors'];
+      if (map && hostname in map) return map[hostname] as string;
+    }
+    return '';
+  }
 });

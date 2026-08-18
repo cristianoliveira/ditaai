@@ -1,28 +1,36 @@
-// chrome.storage.local adapter for DomainSelectorStore.
-// Persists selected CSS selectors keyed by hostname so users don't
+// chrome.storage.local adapter for DomainScopeStore.
+// Persists confirmed read scopes keyed by hostname so users don't
 // need to re-pick elements on every visit to the same domain.
+//
+// Storage boundary owns migration (TASK-0001 step 4): legacy bare selector
+// strings migrate to `{ source: 'dom', selector }` on read; saves always
+// write the serialized discriminated scope.
 
-import type { DomainSelectorStore } from '../../domain/selection/selection';
+import type { ReadScope } from '../../domain/selection/read-scope';
+import { parseStoredScope, serializeScope } from '../../domain/selection/read-scope';
+import type { DomainScopeStore } from '../../domain/selection/selection';
 
 const KEY = 'domainSelectors';
 
-export class ChromeDomainSelectorStorage implements DomainSelectorStore {
-  async load(hostname: string): Promise<string | null> {
-    const stored = await chrome.storage.local.get(KEY);
-    const map: Record<string, string> = (stored[KEY] as Record<string, string>) ?? {};
-    return map[hostname] ?? null;
+async function readMap(): Promise<Record<string, string>> {
+  const stored = await chrome.storage.local.get(KEY);
+  return (stored[KEY] as Record<string, string>) ?? {};
+}
+
+export class ChromeDomainSelectorStorage implements DomainScopeStore {
+  async load(hostname: string): Promise<ReadScope | null> {
+    const map = await readMap();
+    return parseStoredScope(map[hostname]);
   }
 
-  async save(hostname: string, selector: string): Promise<void> {
-    const stored = await chrome.storage.local.get(KEY);
-    const map: Record<string, string> = (stored[KEY] as Record<string, string>) ?? {};
-    map[hostname] = selector;
+  async save(hostname: string, scope: ReadScope): Promise<void> {
+    const map = await readMap();
+    map[hostname] = serializeScope(scope);
     await chrome.storage.local.set({ [KEY]: map });
   }
 
   async clear(hostname: string): Promise<void> {
-    const stored = await chrome.storage.local.get(KEY);
-    const map: Record<string, string> = (stored[KEY] as Record<string, string>) ?? {};
+    const map = await readMap();
     delete map[hostname];
     await chrome.storage.local.set({ [KEY]: map });
   }
