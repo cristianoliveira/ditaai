@@ -1,7 +1,7 @@
 ---
 id: TASK-0001
 title: Add accessibility-tree mode to picker
-status: doing
+status: done
 depends_on: []
 priority: high
 tags: [accessibility, picker]
