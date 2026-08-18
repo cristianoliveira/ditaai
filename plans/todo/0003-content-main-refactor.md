@@ -1,3 +1,11 @@
+---
+id: TASK-0003
+title: "Refactor: split content.ts main (complexity 77 -> <25)"
+status: todo
+depends_on: []
+priority: normal
+tags: [refactor, content]
+---
 # Refactor: split content.ts main (complexity 77, 682 lines)
 
 ## Problem

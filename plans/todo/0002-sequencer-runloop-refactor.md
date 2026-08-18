@@ -1,3 +1,11 @@
+---
+id: TASK-0002
+title: "Refactor: sequencer runLoop (complexity 17 -> <10)"
+status: todo
+depends_on: []
+priority: normal
+tags: [refactor, audio]
+---
 # Refactor: sequencer runLoop (complexity 17, 90 lines)
 
 ## Problem
