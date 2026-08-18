@@ -8,9 +8,9 @@ export default defineConfig({
   manifest: {
     name: 'DitaAi',
     version: '0.3.0',
-    version_name: '0.3.0-6efcae3-1787040320',
+    version_name: '0.3.0-996abcf-1787040599',
     description: 'Turn web pages into private, local audio',
-    permissions: ['storage', 'tabs', 'offscreen', 'contextMenus'],
+    permissions: ['storage', 'tabs', 'offscreen', 'contextMenus', 'debugger'],
     host_permissions: ['<all_urls>'],
     content_security_policy: {
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
