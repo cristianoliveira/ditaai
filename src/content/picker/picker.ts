@@ -13,6 +13,18 @@
 //    → Cancel / Escape: resolve with null
 //  On resolve: overlay + panel are cleaned up.
 
+import {
+  buildTreeIndex,
+  candidateChain,
+  isNarratable,
+  orderedStaticText,
+} from '../../domain/accessibility/tree';
+import type {
+  AccessibilityPickerNode,
+  AccessibilitySnapshot,
+  AccessibilityTreePort,
+} from '../../domain/accessibility/types';
+import type { ReadScope } from '../../domain/selection/read-scope';
 import { buildCandidates } from '../../domain/selection/selection';
 import { logger } from '../../lib/logger';
 import { PickerPanel } from '../../ui/picker-panel';
@@ -125,6 +137,17 @@ const OVERLAY_STYLES = `
     color: #fff;
   }
 
+  .${HOVER_PREVIEW_CLASS} .hover-source-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #c7c7dc;
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: auto;
+  }
+  .${HOVER_PREVIEW_CLASS} .hover-source-toggle input { accent-color: ${theme.accent}; }
+
   .${HOVER_PREVIEW_CLASS} .hover-hint {
     font-size: 10px;
     color: #8b8ba7;
@@ -160,6 +183,14 @@ const OVERLAY_STYLES = `
     border-color: ${theme.accent};
     color: #fff;
   }
+
+  .dita-picker-ax-bound {
+    position: fixed;
+    z-index: 2147483646;
+    pointer-events: none;
+    outline: 2px solid ${theme.accent};
+    background: ${theme.accentTint(0.12)};
+  }
 `;
 
 export class Picker {
@@ -169,6 +200,7 @@ export class Picker {
   private hoverInput: HTMLInputElement | null = null;
   private hoverCount: HTMLSpanElement | null = null;
   private hoverCandidates: HTMLDivElement | null = null;
+  private sourceCheckbox: HTMLInputElement | null = null;
   private panel: PickerPanel | null = null;
   private hoveredElement: Element | null = null;
   private selectedElement: Element | null = null;
@@ -176,8 +208,24 @@ export class Picker {
   private candidates: string[] = [];
   private previewActive = false;
   private styleEl: HTMLStyleElement | null = null;
+  private readonly accessibilityPort?: AccessibilityTreePort;
+  private accessibilityMode = false;
+  private accessibilitySnapshot: AccessibilitySnapshot | null = null;
+  private accessibilityIndex: ReadonlyMap<string, AccessibilityPickerNode> = new Map();
+  private accessibilityNode: AccessibilityPickerNode | null = null;
+  private accessibilityRequest = 0;
+
+  constructor(accessibilityPort?: AccessibilityTreePort) {
+    this.accessibilityPort = accessibilityPort;
+  }
 
   enter(initialSelector?: string): Promise<string | null> {
+    return this.enterScope(initialSelector).then((result) =>
+      typeof result === 'string' ? result : null,
+    );
+  }
+
+  enterScope(initialSelector?: string): Promise<string | ReadScope | null> {
     logger.info('picker entered');
     this.injectStyles();
     this.createOverlay();
@@ -199,8 +247,10 @@ export class Picker {
     }
 
     return new Promise((resolve) => {
-      const cleanup = (selector: string | null) => {
+      const cleanup = (selector: string | ReadScope | null) => {
         this.clearAllHighlights();
+        this.accessibilityRequest += 1;
+        void this.accessibilityPort?.close();
         this.removeOverlay();
         this.removePanel();
         this.removeStyles();
@@ -220,7 +270,7 @@ export class Picker {
     this.resolveCleanup?.(null);
   }
 
-  private resolveCleanup: ((selector: string | null) => void) | null = null;
+  private resolveCleanup: ((selector: string | ReadScope | null) => void) | null = null;
 
   // ---- overlay management ----
 
@@ -274,6 +324,26 @@ export class Picker {
     this.hoverCandidates = document.createElement('div');
     this.hoverCandidates.className = 'hover-candidates';
 
+    const sourceLabel = document.createElement('label');
+    sourceLabel.className = 'hover-source-toggle';
+    this.sourceCheckbox = document.createElement('input');
+    this.sourceCheckbox.type = 'checkbox';
+    this.sourceCheckbox.setAttribute('data-source', 'accessibility');
+    this.sourceCheckbox.addEventListener('click', (event) => event.stopPropagation());
+    this.sourceCheckbox.addEventListener('change', () => {
+      void this.setAccessibilityMode(this.sourceCheckbox?.checked === true).catch((error) => {
+        if (this.sourceCheckbox) this.sourceCheckbox.checked = false;
+        if (this.hoverInput) {
+          this.hoverInput.value = `Accessibility unavailable: ${String(error)}`;
+          this.hoverInput.title = String(error);
+        }
+        logger.warn(`accessibility picker unavailable: ${String(error)}`);
+      });
+    });
+    const sourceText = document.createElement('span');
+    sourceText.textContent = 'Use accessibility tree';
+    sourceLabel.append(this.sourceCheckbox, sourceText);
+
     // Dismiss button (top-right corner)
     this.dismissBtn = document.createElement('button');
     this.dismissBtn.className = 'dita-picker-dismiss';
@@ -283,7 +353,13 @@ export class Picker {
     });
     document.body.appendChild(this.dismissBtn);
 
-    this.hoverPreview.append(this.hoverInput, this.hoverCount, hint, this.hoverCandidates);
+    this.hoverPreview.append(
+      this.hoverInput,
+      this.hoverCount,
+      sourceLabel,
+      hint,
+      this.hoverCandidates,
+    );
     document.body.appendChild(this.hoverPreview);
     document.body.appendChild(this.overlay);
   }
@@ -301,11 +377,16 @@ export class Picker {
     this.hoverInput = null;
     this.hoverCount = null;
     this.hoverCandidates = null;
+    this.sourceCheckbox = null;
   }
 
   // ---- hover ----
 
   private onOverlayMouseMove = (e: MouseEvent): void => {
+    if (this.accessibilityMode) {
+      void this.setAccessibilityPoint(e.clientX, e.clientY);
+      return;
+    }
     const el = this.elementBeneath(e.clientX, e.clientY);
     if (!el || this.isPickerElement(el)) return;
     if (el === this.hoveredElement) return;
@@ -321,6 +402,99 @@ export class Picker {
     this.hoveredElement = el;
     el.classList.add(HIGHLIGHT_CLASS);
     this.updateHoverPreview(el);
+  }
+
+  private navigateAccessibility(direction: 'up' | 'down' | 'left' | 'right'): string | null {
+    if (!this.accessibilityNode) return null;
+    const node = this.accessibilityIndex.get(this.accessibilityNode.id);
+    if (!node) return null;
+    const parent = node.parentId ? this.accessibilityIndex.get(node.parentId) : undefined;
+    if (direction === 'up') return node.parentId ?? null;
+    if (direction === 'down') return node.childIds[0] ?? null;
+    if (!parent) return null;
+    const index = parent.childIds.indexOf(node.id);
+    return direction === 'left'
+      ? (parent.childIds[index - 1] ?? null)
+      : (parent.childIds[index + 1] ?? null);
+  }
+
+  private async setAccessibilityNode(nodeId: string): Promise<void> {
+    const node = this.accessibilityIndex.get(nodeId);
+    if (!node) return;
+    this.accessibilityNode = node;
+    this.clearHoverHighlight();
+    this.renderAccessibilityPreview(node);
+    this.renderAccessibilityBounds(await this.accessibilityPort?.bounds(node.id));
+  }
+
+  private async setAccessibilityPoint(x: number, y: number): Promise<void> {
+    const request = ++this.accessibilityRequest;
+    const node = await this.accessibilityPort?.hitTest({ x, y });
+    if (!this.accessibilityMode || request !== this.accessibilityRequest || !node) return;
+    this.accessibilityNode = node;
+    this.clearHoverHighlight();
+    this.renderAccessibilityPreview(node);
+    this.renderAccessibilityBounds(await this.accessibilityPort?.bounds(node.id));
+  }
+
+  private renderAccessibilityPreview(node: AccessibilityPickerNode): void {
+    if (this.hoverInput) {
+      const name = node.staticText ?? node.name ?? '';
+      const properties =
+        node.properties.length > 0
+          ? ` [${node.properties.map((property) => `${property.name}=${property.value}`).join(', ')}]`
+          : '';
+      const value = node.value ? ` = ${node.value}` : '';
+      this.hoverInput.value = `${node.role}${name ? `: ${name.slice(0, 80)}` : ''}${value}${properties}`;
+      this.hoverInput.readOnly = true;
+    }
+    if (this.hoverCount) {
+      this.hoverCount.textContent = node.role === 'StaticText' ? 'text' : node.role;
+      this.hoverCount.className = 'hover-count';
+    }
+    const candidates = candidateChain(this.accessibilityIndex, node.id).map(
+      (candidate) => `${candidate.role}${candidate.name ? `: ${candidate.name.slice(0, 40)}` : ''}`,
+    );
+    this.renderHoverCandidates(candidates, '');
+  }
+
+  private renderAccessibilityBounds(
+    bounds: readonly { x: number; y: number; width: number; height: number }[] | undefined,
+  ): void {
+    this.clearAccessibilityBounds();
+    for (const rect of bounds ?? []) {
+      const overlay = document.createElement('div');
+      overlay.className = 'dita-picker-ax-bound';
+      Object.assign(overlay.style, {
+        left: `${rect.x}px`,
+        top: `${rect.y}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+      });
+      document.body.appendChild(overlay);
+    }
+  }
+
+  private clearAccessibilityBounds(): void {
+    for (const el of document.querySelectorAll('.dita-picker-ax-bound')) el.remove();
+  }
+
+  private async setAccessibilityMode(enabled: boolean): Promise<void> {
+    if (!this.accessibilityPort) return;
+    this.accessibilityMode = enabled;
+    this.accessibilityRequest += 1;
+    this.clearHoverHighlight();
+    this.clearAccessibilityBounds();
+    if (!enabled) {
+      this.accessibilityNode = null;
+      this.accessibilitySnapshot = null;
+      this.accessibilityIndex = new Map();
+      this.hoverInput?.removeAttribute('readonly');
+      return;
+    }
+    const snapshot = await this.accessibilityPort.open();
+    this.accessibilitySnapshot = snapshot;
+    this.accessibilityIndex = buildTreeIndex(snapshot.nodes);
   }
 
   private updateHoverPreview(el: Element): void {
@@ -358,6 +532,19 @@ export class Picker {
     if (document.activeElement === this.hoverInput) return;
     if (!this.isHoverMode()) return;
     e.preventDefault();
+    if (this.accessibilityMode) {
+      const direction =
+        e.key === 'ArrowUp' || e.key === '['
+          ? 'up'
+          : e.key === 'ArrowDown' || e.key === ']'
+            ? 'down'
+            : e.key === 'ArrowLeft'
+              ? 'left'
+              : 'right';
+      const nextId = this.accessibilityNode ? this.navigateAccessibility(direction) : null;
+      if (nextId) void this.setAccessibilityNode(nextId);
+      return;
+    }
     const next = this.navigateTree(e.key);
     if (next) this.setHoveredElement(next);
   };
@@ -366,6 +553,17 @@ export class Picker {
     // Capture the live hovered element (mouse or keyboard nav) before clearing.
     const hovered = this.hoveredElement;
     this.clearHoverHighlight();
+
+    if (this.accessibilityMode && this.accessibilityNode) {
+      this.selectedElement = hovered ?? this.elementBeneath(e.clientX, e.clientY);
+      if (this.hoverPreview) this.hoverPreview.style.display = 'none';
+      if (this.overlay) {
+        this.overlay.classList.remove(OVERLAY_INTERACTIVE);
+        this.overlay.style.pointerEvents = 'none';
+      }
+      this.showAccessibilityPanel(this.accessibilityNode);
+      return;
+    }
 
     // Use the selector from the hover input (user may have edited it)
     const customSelector = this.hoverInput?.value || '';
@@ -440,6 +638,7 @@ export class Picker {
 
   private clearAllHighlights(): void {
     this.clearHoverHighlight();
+    this.clearAccessibilityBounds();
     this.clearMatchHighlights();
     if (this.selectedElement) {
       this.selectedElement.classList.remove(HIGHLIGHT_CLASS);
@@ -449,7 +648,21 @@ export class Picker {
 
   // ---- panel ----
 
-  private showPanel(selector: string): void {
+  private showAccessibilityPanel(node: AccessibilityPickerNode): void {
+    const text = orderedStaticText(this.accessibilityIndex, node.id).join(' ').trim();
+    const label = `${node.role}${node.name ? `: ${node.name}` : ''}`;
+    this.candidates = candidateChain(this.accessibilityIndex, node.id).map(
+      (candidate) => `${candidate.role}${candidate.name ? `: ${candidate.name.slice(0, 40)}` : ''}`,
+    );
+    this.showPanel(label, true, isNarratable(this.accessibilityIndex, node.id), text);
+  }
+
+  private showPanel(
+    selector: string,
+    accessibilityMode = false,
+    accessibilityConfirmEnabled = true,
+    previewText?: string,
+  ): void {
     if (this.panel) {
       this.panel.update(selector, this.getMatchCount(selector), this.candidates);
       return;
@@ -487,9 +700,27 @@ export class Picker {
         this.clearAllHighlights();
         this.resolveCleanup?.(sel);
       },
+      onConfirmAccessibility: () => {
+        const scope = this.buildAccessibilityScope();
+        if (!scope) return;
+        this.clearAllHighlights();
+        this.resolveCleanup?.(scope);
+      },
       onCancel: () => {
         this.clearAllHighlights();
         this.resolveCleanup?.(null);
+      },
+      accessibilityMode,
+      accessibilityConfirmEnabled,
+      previewText,
+      onToggleAccessibility: (enabled) => {
+        void this.setAccessibilityMode(enabled).catch((error) => {
+          if (this.hoverInput) {
+            this.hoverInput.value = `Accessibility unavailable: ${String(error)}`;
+            this.hoverInput.title = String(error);
+          }
+          logger.warn(`accessibility picker unavailable: ${String(error)}`);
+        });
       },
       onSelectCandidate: (sel) => {
         this.selectedSelector = sel;
@@ -501,6 +732,27 @@ export class Picker {
     });
 
     this.panel.mount();
+  }
+
+  private buildAccessibilityScope(): ReadScope | null {
+    const node = this.accessibilityNode;
+    const anchor = this.selectedElement;
+    if (!node || !anchor) return null;
+    const text = orderedStaticText(this.accessibilityIndex, node.id)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!text) return null;
+    const candidates = buildCandidates(anchor);
+    const anchorSelector = candidates.at(-1) ?? anchor.tagName.toLowerCase();
+    return {
+      source: 'accessibility',
+      anchorSelector,
+      locator: {
+        firstStaticPrefix: text.slice(0, 120),
+        staticCount: orderedStaticText(this.accessibilityIndex, node.id).length,
+      },
+    };
   }
 
   private removePanel(): void {

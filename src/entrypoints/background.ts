@@ -4,6 +4,7 @@
 import { createMessageRouter } from '../domain/messaging/router';
 import type { RuntimeMessage } from '../domain/messaging/router';
 import { PlaybackController } from '../domain/playback/playback-controller';
+import { ChromeDebuggerAccessibilityTree } from '../infra/chrome/debugger-accessibility-tree';
 import { InstalledVoiceBoundaryRelay } from '../infra/chrome/installed-voice-boundary-relay';
 import { patchSendMessageCallback } from '../infra/chrome/messaging';
 import { OffscreenSupertonicReader } from '../infra/chrome/offscreen-supertonic-reader';
@@ -17,6 +18,66 @@ export default defineBackground(() => {
 
   const controller = new PlaybackController();
   const installedReader = new OffscreenSupertonicReader();
+  const accessibilityTrees = new Map<number, ChromeDebuggerAccessibilityTree>();
+
+  const closeAccessibilityTree = (tabId: number): void => {
+    const tree = accessibilityTrees.get(tabId);
+    if (!tree) return;
+    accessibilityTrees.delete(tabId);
+    void tree.close();
+  };
+
+  // Accessibility mode owns a debugger session only for the active picker or
+  // evaluation. Every terminal path, including tab lifecycle, closes it.
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg?.dest !== 'background' || !String(msg.method).startsWith('accessibility')) {
+      return false;
+    }
+    const tabId = sender.tab?.id;
+    if (typeof tabId !== 'number') {
+      sendResponse({ ok: false, error: 'Accessibility requests require a tab' });
+      return false;
+    }
+
+    const run = async (): Promise<unknown> => {
+      if (msg.method === 'accessibilityOpen') {
+        closeAccessibilityTree(tabId);
+        const tree = new ChromeDebuggerAccessibilityTree(tabId);
+        accessibilityTrees.set(tabId, tree);
+        try {
+          return await tree.open();
+        } catch (error) {
+          accessibilityTrees.delete(tabId);
+          await tree.close();
+          throw error;
+        }
+      }
+
+      const tree = accessibilityTrees.get(tabId);
+      if (!tree) throw new Error('Accessibility picker is not open');
+      if (msg.method === 'accessibilityRefresh') return tree.refresh();
+      if (msg.method === 'accessibilityHitTest')
+        return tree.hitTest(msg.args?.[0] as { x: number; y: number });
+      if (msg.method === 'accessibilityBounds') return tree.bounds(String(msg.args?.[0] ?? ''));
+      if (msg.method === 'accessibilityClose') {
+        closeAccessibilityTree(tabId);
+        return null;
+      }
+      throw new Error(`Unknown accessibility method: ${msg.method}`);
+    };
+
+    run().then(
+      (value) => sendResponse({ ok: true, value }),
+      (error) =>
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) }),
+    );
+    return true;
+  });
+
+  chrome.tabs.onRemoved.addListener((tabId) => closeAccessibilityTree(tabId));
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === 'loading') closeAccessibilityTree(tabId);
+  });
   const router = createMessageRouter(controller, {
     fetchTabText,
     resolveActiveTab,

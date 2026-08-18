@@ -16,6 +16,7 @@ import { extractParagraphs } from '../content/paragraph-extractor';
 import { Picker } from '../content/picker/picker';
 import { ShortcutController } from '../content/shortcuts';
 import { locateWord } from '../content/word-locator';
+import { buildTreeIndex, orderedStaticText } from '../domain/accessibility/tree';
 import { DEFAULT_AUDIO_BUFFER_SECONDS } from '../domain/audio/buffer';
 import { SegmentSequencer } from '../domain/audio/sequencer';
 import type { TextReader } from '../domain/audio/text-reader';
@@ -32,6 +33,7 @@ import {
   createParagraphJumper,
   paragraphIndexForSegment,
 } from '../domain/playback/jump';
+import type { ReadScope } from '../domain/selection/read-scope';
 import { filterParagraphs } from '../domain/selection/selection';
 import { DEFAULT_SHORTCUTS, type ShortcutAction } from '../domain/shortcuts/shortcuts';
 import { InstalledVoiceReader } from '../infra/audio/installed-voice-reader';
@@ -42,6 +44,7 @@ import {
 } from '../infra/chrome/audio-buffer-storage';
 import { ChromeDomainSelectorStorage } from '../infra/chrome/domain-selector-storage';
 import { ChromeLinksStorage, SIMPLIFY_LINKS_KEY } from '../infra/chrome/links-storage';
+import { RuntimeAccessibilityTree } from '../infra/chrome/runtime-accessibility-tree';
 import { RuntimeInstalledVoiceReader } from '../infra/chrome/runtime-installed-voice-reader';
 import { ChromeShortcutStorage } from '../infra/chrome/shortcut-storage';
 import { ChromeSubstitutionStorage, SUBSTITUTIONS_KEY } from '../infra/chrome/substitution-storage';
@@ -227,10 +230,13 @@ export default defineContentScript({
     let pronunciationsEnabled = true;
     let linksEnabled = true;
     const selectorStore = new ChromeDomainSelectorStorage();
+    const accessibilityPort = new RuntimeAccessibilityTree();
     const substitutionStore = new ChromeSubstitutionStorage();
     const linksStore = new ChromeLinksStorage();
     const hostname = window.location.hostname;
     let activeSelector: string | null = null;
+    let activeScope: ReadScope | null = null;
+    let activeAccessibilityText: string[] | null = null;
     let readableElements: Set<Element> = new Set();
     let markedStart: Element | null = null;
     const startAffordance = new ParagraphStartAffordance({
@@ -252,13 +258,34 @@ export default defineContentScript({
     void loadPlaybackVolume().then((value) => {
       playbackVolume = value;
     });
-    void selectorStore.load(hostname).then((scope) => {
-      // accessibility scopes resolve through the accessibility port once
-      // playback wiring lands (TASK-0001 step 7); until then they degrade to
-      // no selection instead of reading the wrong content.
+    void selectorStore.load(hostname).then(async (scope) => {
+      activeScope = scope;
       if (scope?.source === 'dom') {
         activeSelector = scope.selector;
         logger.info(`restored selector for ${hostname}: ${scope.selector}`);
+        return;
+      }
+      if (scope?.source !== 'accessibility') return;
+      try {
+        const snapshot = await accessibilityPort.open();
+        const index = buildTreeIndex(snapshot.nodes);
+        const matches = snapshot.nodes.filter((node) => {
+          const text = orderedStaticText(index, node.id);
+          return (
+            text.length === scope.locator.staticCount &&
+            text.join(' ').replace(/\s+/g, ' ').trim().startsWith(scope.locator.firstStaticPrefix)
+          );
+        });
+        const text = matches[0] ? orderedStaticText(index, matches[0].id) : [];
+        if (text.length === 0) throw new Error('Saved accessibility scope no longer resolves');
+        activeAccessibilityText = text;
+        activeSelector = scope.anchorSelector;
+        logger.info(`restored accessibility scope for ${hostname}`);
+      } catch (error) {
+        activeAccessibilityText = null;
+        logger.warn(`accessibility scope unavailable: ${String(error)}`);
+      } finally {
+        await accessibilityPort.close().catch(() => {});
       }
     });
     void substitutionStore.load().then((dict) => {
@@ -311,6 +338,26 @@ export default defineContentScript({
     }
 
     function buildChunksFiltered(doc: Document): Chunk[] {
+      if (activeScope?.source === 'accessibility' && activeAccessibilityText) {
+        const anchor = (() => {
+          try {
+            return doc.querySelector(activeScope.anchorSelector);
+          } catch {
+            return null;
+          }
+        })();
+        if (!anchor) return [];
+        const cleaned = collapseWhitespace(activeAccessibilityText.join(' ')).trim();
+        return splitText(cleaned).map((text, index, parts) => ({
+          text: applySubstitutions(
+            linksEnabled ? simplifyLinks(text) : text,
+            pronunciationsEnabled ? substitutions : {},
+          ),
+          element: anchor,
+          base: parts.slice(0, index).join('').length,
+        }));
+      }
+
       const allChunks = buildChunks(doc, pronunciationsEnabled ? substitutions : {}, linksEnabled);
       if (!activeSelector) return allChunks;
 
@@ -581,20 +628,52 @@ export default defineContentScript({
             logInteraction(logger, 'widget', 'select-reading-area');
             if (!widget) return;
             unmountWidget();
-            const picker = new Picker();
-            const selector = await picker.enter(activeSelector ?? undefined);
+            const picker = new Picker(accessibilityPort);
+            const result = await picker.enterScope(activeSelector ?? undefined);
             // Cancel/Esc/✕ resolve to null — leave any existing selection
             // intact. The Clear-selection control is the explicit way to
             // remove a saved selector.
-            if (selector) {
-              activeSelector = selector;
-              void selectorStore.save(hostname, { source: 'dom', selector });
+            if (typeof result === 'string') {
+              activeScope = { source: 'dom', selector: result };
+              activeAccessibilityText = null;
+              activeSelector = result;
+              void selectorStore.save(hostname, activeScope);
+            } else if (result?.source === 'accessibility') {
+              activeScope = result;
+              activeSelector = result.anchorSelector;
+              try {
+                const snapshot = await accessibilityPort.open();
+                const index = buildTreeIndex(snapshot.nodes);
+                const match = snapshot.nodes.find((node) => {
+                  const text = orderedStaticText(index, node.id);
+                  return (
+                    text.length === result.locator.staticCount &&
+                    text
+                      .join(' ')
+                      .replace(/\s+/g, ' ')
+                      .trim()
+                      .startsWith(result.locator.firstStaticPrefix)
+                  );
+                });
+                activeAccessibilityText = match ? orderedStaticText(index, match.id) : null;
+                if (!activeAccessibilityText?.length)
+                  throw new Error('Accessibility selection is empty');
+                await selectorStore.save(hostname, result);
+              } catch (error) {
+                activeAccessibilityText = null;
+                logger.warn(`accessibility selection failed: ${String(error)}`);
+              } finally {
+                await accessibilityPort.close().catch(() => {});
+              }
             }
+            refreshReadable();
             mountWidget();
           },
           onClearSelection: () => {
             logInteraction(logger, 'widget', 'clear-reading-area');
             void selectorStore.clear(hostname);
+            activeScope = null;
+            activeAccessibilityText = null;
             activeSelector = null;
             widget?.setSelection(null);
             refreshReadable();

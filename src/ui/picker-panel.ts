@@ -11,8 +11,13 @@ export interface PickerPanelOptions {
   onPick(): void;
   onPreview(): void;
   onConfirm(selector: string): void;
+  onConfirmAccessibility?(): void;
   onCancel(): void;
   onSelectCandidate?(selector: string): void;
+  accessibilityMode?: boolean;
+  accessibilityConfirmEnabled?: boolean;
+  previewText?: string;
+  onToggleAccessibility?(enabled: boolean): void;
 }
 
 const STYLES = `
@@ -81,6 +86,28 @@ const STYLES = `
 
   .panel-body {
     padding: 8px 12px;
+  }
+
+  .source-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    color: #c7c7dc;
+    font-size: 12px;
+  }
+  .source-toggle input { accent-color: ${theme.accent}; }
+
+  .accessibility-preview {
+    max-height: 80px;
+    overflow: auto;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border: 1px solid #3a3a5a;
+    border-radius: 6px;
+    color: #d9d9e8;
+    line-height: 1.35;
+    white-space: pre-wrap;
   }
 
   .candidates-label {
@@ -180,9 +207,30 @@ export class PickerPanel {
 
     header.append(this.input, this.badge);
 
-    // Body: candidate selectors
+    // Body: source and candidate selectors
     const body = document.createElement('div');
     body.className = 'panel-body';
+
+    const sourceLabel = document.createElement('label');
+    sourceLabel.className = 'source-toggle';
+    const sourceCheckbox = document.createElement('input');
+    sourceCheckbox.type = 'checkbox';
+    sourceCheckbox.checked = options.accessibilityMode === true;
+    sourceCheckbox.setAttribute('data-source', 'accessibility');
+    sourceCheckbox.addEventListener('change', () =>
+      this.options.onToggleAccessibility?.(sourceCheckbox.checked),
+    );
+    const sourceText = document.createElement('span');
+    sourceText.textContent = 'Use accessibility tree';
+    sourceLabel.append(sourceCheckbox, sourceText);
+
+    if (options.previewText !== undefined) {
+      const preview = document.createElement('div');
+      preview.className = 'accessibility-preview';
+      preview.setAttribute('data-preview', 'accessibility');
+      preview.textContent = options.previewText || 'No narratable text found';
+      body.appendChild(preview);
+    }
 
     const candidatesLabel = document.createElement('div');
     candidatesLabel.className = 'candidates-label';
@@ -191,7 +239,7 @@ export class PickerPanel {
     this.candidateContainer = document.createElement('div');
     this.renderCandidates();
 
-    body.append(candidatesLabel, this.candidateContainer);
+    body.append(sourceLabel, candidatesLabel, this.candidateContainer);
 
     // Actions: Pick | Preview | Confirm | Cancel
     const actions = document.createElement('div');
@@ -201,9 +249,14 @@ export class PickerPanel {
     const previewBtn = this.createButton('Preview', 'action-preview', 'preview', () =>
       this.options.onPreview(),
     );
-    const confirmBtn = this.createButton('Confirm', 'action-confirm', 'confirm', () =>
-      this.options.onConfirm(this.selector),
-    );
+    const confirmBtn = this.createButton('Confirm', 'action-confirm', 'confirm', () => {
+      if (this.options.accessibilityMode) this.options.onConfirmAccessibility?.();
+      else this.options.onConfirm(this.selector);
+    });
+    if (this.options.accessibilityMode && this.options.accessibilityConfirmEnabled === false) {
+      confirmBtn.disabled = true;
+      confirmBtn.title = 'Select a narratable accessibility node first';
+    }
     const cancelBtn = this.createButton('Cancel', 'action-cancel', 'cancel', () =>
       this.options.onCancel(),
     );

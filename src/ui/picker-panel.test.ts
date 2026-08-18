@@ -178,6 +178,23 @@ describe('PickerPanel', () => {
     expect(previewed).toBe(true);
   });
 
+  it('shows the accessibility source checkbox', () => {
+    const panel = new PickerPanel({
+      selector: 'p',
+      matchCount: 1,
+      candidates: ['p'],
+      onPick: () => {},
+      onPreview: () => {},
+      onConfirm: () => {},
+      onCancel: () => {},
+    });
+
+    panel.mount();
+    const checkbox = shadow(host()).querySelector('[data-source="accessibility"]');
+    expect(checkbox).not.toBeNull();
+    expect((checkbox as HTMLInputElement).checked).toBe(false);
+  });
+
   it('shows candidate alternatives as clickable items', () => {
     let selectedCandidate: string | null = null;
     const panel = new PickerPanel({

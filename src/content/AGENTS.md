@@ -31,7 +31,7 @@ byline block (mirrors the HTML5/ARIA `role=banner` rule).
 
 ## `picker/picker.ts` — select → review → add picker
 
-`Picker` — interactive element-picker overlay with ONE continuous workflow:
+`Picker` — interactive element-picker overlay with ONE continuous workflow. It supports DOM mode and an explicit Chrome accessibility-tree mode through an injected `AccessibilityTreePort`; accessibility node ids remain session-only and persisted scopes use stable DOM anchors plus text fingerprints.
 no modal panel, the bottom bar stays interactive the whole time. The bar has
 `Read area | Ignore` mode toggle, an editable selector input + match count,
 candidate chips, and two removable chip lists (Reading / Ignored).

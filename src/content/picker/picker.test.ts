@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AccessibilityTreePort } from '../../domain/accessibility/types';
 import { Picker } from './picker';
 
 function overlay(): HTMLDivElement {
@@ -81,6 +82,61 @@ describe('Picker', () => {
     const result = await promise;
     expect(result).toBeTypeOf('string');
     expect(result?.length).toBeGreaterThan(0);
+  });
+
+  it('confirms a narratable accessibility scope', async () => {
+    setupPage();
+    const target = document.querySelector('.target') as Element;
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(target);
+    const port: AccessibilityTreePort = {
+      open: vi.fn().mockResolvedValue({
+        nodes: [
+          {
+            id: 'paragraph',
+            role: 'paragraph',
+            childIds: ['text'],
+            properties: [],
+            bounds: [],
+          },
+          {
+            id: 'text',
+            role: 'StaticText',
+            staticText: 'Target paragraph.',
+            parentId: 'paragraph',
+            childIds: [],
+            properties: [],
+            bounds: [],
+          },
+        ],
+      }),
+      refresh: vi.fn(),
+      hitTest: vi.fn().mockResolvedValue({
+        id: 'paragraph',
+        role: 'paragraph',
+        childIds: ['text'],
+        properties: [],
+        bounds: [],
+      }),
+      bounds: vi.fn().mockResolvedValue([]),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const picker = new Picker(port);
+    const promise = picker.enterScope();
+    const source = document.querySelector('[data-source="accessibility"]') as HTMLInputElement;
+    source.click();
+    await vi.waitFor(() => expect(port.open).toHaveBeenCalled());
+    overlay().dispatchEvent(new MouseEvent('mousemove', { clientX: 100, clientY: 100 }));
+    await vi.waitFor(() => expect(port.bounds).toHaveBeenCalledWith('paragraph'));
+    overlay().dispatchEvent(new MouseEvent('click', { clientX: 100, clientY: 100 }));
+    await vi.waitFor(() => expect(document.querySelector('#dita-picker-host')).not.toBeNull());
+
+    const confirm = panelShadow().querySelector('[data-action="confirm"]') as HTMLButtonElement;
+    confirm.click();
+    await expect(promise).resolves.toMatchObject({
+      source: 'accessibility',
+      locator: { firstStaticPrefix: 'Target paragraph.', staticCount: 1 },
+    });
   });
 
   it('returns null when cancelled', async () => {
