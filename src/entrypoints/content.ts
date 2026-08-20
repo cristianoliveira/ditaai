@@ -1,8 +1,7 @@
 // Content script entry — runs at document_idle.
 // Page-level composition root: widget UI + text extraction + playback + highlighting.
 
-import { describeBoundary } from '../content/boundary-diagnostics';
-import { type Chunk, buildChunks, paragraphBreakpoints, paragraphOptions } from '../content/chunks';
+import { type Chunk, buildChunks } from '../content/chunks';
 import { FakeBoundaryReader } from '../content/fake-reader';
 import {
   clearHighlight,
@@ -15,6 +14,7 @@ import {
 import { nearestReadable } from '../content/nearest-readable';
 import { extractParagraphs } from '../content/paragraph-extractor';
 import { Picker } from '../content/picker/picker';
+import { PagePlayer } from '../content/player-session';
 import { ShortcutController } from '../content/shortcuts';
 import { locateWord } from '../content/word-locator';
 import { buildTreeIndex, orderedStaticText } from '../domain/accessibility/tree';
@@ -28,12 +28,7 @@ import {
   sanitizeSubstitutions,
 } from '../domain/document/substitutions';
 import { collapseWhitespace, splitText } from '../domain/document/text-processor';
-import {
-  type JumpDirection,
-  type JumpStrategy,
-  createParagraphJumper,
-  paragraphIndexForSegment,
-} from '../domain/playback/jump';
+import type { JumpDirection } from '../domain/playback/jump';
 import type { ReadScope } from '../domain/selection/read-scope';
 import { filterParagraphs } from '../domain/selection/selection';
 import { DEFAULT_SHORTCUTS, type ShortcutAction } from '../domain/shortcuts/shortcuts';
@@ -147,8 +142,8 @@ export default defineContentScript({
       logger.info('playback:state-changed', state);
       widget?.reflect(state);
       if (!state.playing && !state.paused) {
-        clearAllHighlights();
-        setStartMarker(null);
+        player.clearAllHighlights();
+        player.clearStartMarker();
       }
     };
     sequencer.onBufferChange = (state) => {
@@ -161,14 +156,6 @@ export default defineContentScript({
     };
 
     let widget: DitaWidget | null = null;
-    let chunks: Chunk[] = [];
-    let activeElement: Element | null = null;
-    let currentIndex = 0;
-    let currentBreakpoints: number[] = [];
-    let paragraphJumper: JumpStrategy = createParagraphJumper([]);
-    let highlightWordsEnabled = true;
-    let playbackRate = 1;
-    let playbackVolume = 1;
     let substitutions: Substitutions = {};
     let pronunciationsEnabled = true;
     let linksEnabled = true;
@@ -181,25 +168,39 @@ export default defineContentScript({
     let activeScope: ReadScope | null = null;
     let activeAccessibilityText: string[] | null = null;
     let readableElements: Set<Element> = new Set();
-    let markedStart: Element | null = null;
     const startAffordance = new ParagraphStartAffordance({
       isReadable: (el) => readableElements.has(el),
       onStartFrom: (element) => {
         logInteraction(logger, 'page', 'start-from-position', {
-          segmentIndex: chunks.findIndex((chunk) => chunk.element === element),
+          segmentIndex: player.chunkList.findIndex((chunk) => chunk.element === element),
         });
-        startFromPosition(element);
+        player.startFrom(element);
       },
+    });
+    const player = new PagePlayer({
+      sequencer,
+      getChunks: () => buildChunksFiltered(document),
+      getWidget: () => widget,
+      highlight: {
+        clear: clearHighlight,
+        clearParagraph,
+        highlightParagraph,
+        highlightWord,
+      },
+      marker: { mark: markStartPoint, clear: clearStartPoint },
+      saveRate: savePlaybackRate,
+      saveVolume: savePlaybackVolume,
+      log: logger,
     });
 
     void loadHighlightEnabled().then((value) => {
-      highlightWordsEnabled = value;
+      player.setHighlightWordsEnabled(value);
     });
     void loadPlaybackRate().then((value) => {
-      playbackRate = value;
+      player.setRate(value);
     });
     void loadPlaybackVolume().then((value) => {
-      playbackVolume = value;
+      player.setVolume(value);
     });
     void selectorStore.load(hostname).then(async (scope) => {
       activeScope = scope;
@@ -259,11 +260,7 @@ export default defineContentScript({
     });
 
     function clearAllHighlights(): void {
-      if (activeElement) {
-        clearHighlight(activeElement);
-        clearParagraph(activeElement);
-        activeElement = null;
-      }
+      player.clearAllHighlights();
     }
 
     /** Recompute the set of readable paragraph elements (after selector changes).
@@ -271,13 +268,6 @@ export default defineContentScript({
      * fallback — so the start affordance matches what playback will actually read. */
     function refreshReadable(): void {
       readableElements = new Set(buildChunksFiltered(document).map((c) => c.element));
-    }
-
-    /** Show/clear the persistent start-point marker. */
-    function setStartMarker(element: Element | null): void {
-      if (markedStart && markedStart !== element) clearStartPoint(markedStart);
-      if (element) markStartPoint(element);
-      markedStart = element;
     }
 
     function buildChunksFiltered(doc: Document): Chunk[] {
@@ -349,111 +339,18 @@ export default defineContentScript({
       }
     }
 
-    function playAction(
-      fromElement?: Element | null,
-      word?: { index: number; char: number },
-    ): void {
-      chunks = buildChunksFiltered(document);
-      const texts = chunks.map((chunk) => chunk.text);
-      if (texts.length === 0) return;
-
-      // Start position: an explicit word (char-precise) wins over a paragraph.
-      let startIndex: number;
-      let startChar: number;
-      let marker: Element | null = null;
-      if (word) {
-        startIndex = Math.max(0, Math.min(word.index, texts.length - 1));
-        startChar = Math.max(0, word.char);
-        marker = chunks[startIndex]?.element ?? null;
-      } else {
-        const foundIndex = fromElement
-          ? chunks.findIndex((chunk) => chunk.element === fromElement)
-          : -1;
-        startIndex = Math.max(0, foundIndex);
-        startChar = 0;
-        marker = foundIndex >= 0 && fromElement ? fromElement : null;
-      }
-      setStartMarker(marker);
-
-      logger.info(
-        `segments ${JSON.stringify({
-          count: texts.length,
-          totalChars: texts.reduce((n, t) => n + t.length, 0),
-          first: texts[0]?.slice(0, 80),
-        })}`,
-      );
-
-      sequencer.load(texts, startIndex, startChar);
-      currentBreakpoints = paragraphBreakpoints(chunks);
-      paragraphJumper = createParagraphJumper(currentBreakpoints);
-      widget?.setParagraphs(paragraphOptions(chunks, currentBreakpoints));
-      widget?.setCurrentParagraph(paragraphIndexForSegment(currentBreakpoints, startIndex));
-
-      sequencer.onSegmentChange = (index) => {
-        currentIndex = index;
-        widget?.setCurrentParagraph(paragraphIndexForSegment(currentBreakpoints, index));
-        clearAllHighlights();
-        activeElement = chunks[index]?.element ?? null;
-        if (activeElement) highlightParagraph(activeElement);
-        logger.info(
-          `segment ${JSON.stringify({
-            index,
-            chars: texts[index]?.length ?? 0,
-            rate: playbackRate,
-            volume: playbackVolume,
-          })}`,
-        );
-      };
-
-      void sequencer.play({
-        rate: playbackRate,
-        volume: playbackVolume,
-        onBoundary: (event) => {
-          const chunk = chunks[currentIndex];
-          logger.info(
-            `boundary ${JSON.stringify(describeBoundary(chunk?.text ?? '', currentIndex, event))}`,
-          );
-          if (highlightWordsEnabled && activeElement && chunk) {
-            highlightWord(activeElement, event.charIndex + chunk.base, event.charLength);
-          }
-        },
-      });
-    }
-
-    /** Begin (or restart) reading from a paragraph, or a precise word within it. */
-    function startFromPosition(
-      element: Element | null,
-      word?: { index: number; char: number },
-    ): void {
-      if (sequencer.getState().playing) {
-        const idx = word
-          ? word.index
-          : element
-            ? chunks.findIndex((c) => c.element === element)
-            : -1;
-        if (idx >= 0) {
-          setStartMarker(chunks[idx]?.element ?? element);
-          sequencer.seek(idx);
-        }
-        return;
-      }
-      sequencer.stop();
-      clearAllHighlights();
-      playAction(element, word);
-    }
-
     // ── Shared playback controls (widget buttons + keyboard shortcuts) ──────
 
     function pausePlayback(): void {
-      sequencer.pause();
+      player.pause();
     }
 
     function resumePlayback(): void {
-      sequencer.resume();
+      player.resume();
     }
 
     function stopPlayback(): void {
-      sequencer.stop();
+      player.stop();
     }
 
     // Real document unload (refresh, navigating away, close). Same-document /
@@ -466,54 +363,24 @@ export default defineContentScript({
     });
 
     function jumpPlayback(direction: JumpDirection): void {
-      const target = paragraphJumper.jump(currentIndex, direction, chunks.length);
-      if (target !== currentIndex) sequencer.seek(target);
+      player.jump(direction);
     }
 
     /** Idle → play; playing → pause; paused → resume. */
     function togglePlay(): void {
-      const state = sequencer.getState();
-      if (state.playing) pausePlayback();
-      else if (state.paused) resumePlayback();
-      else playAction();
-    }
-
-    const SLIDER_RESTART_MS = 200;
-    let sliderRestartTimer: ReturnType<typeof setTimeout> | null = null;
-
-    /** Coalesce rapid slider drags into one live restart, so dragging the
-     * volume or rate slider doesn't cancel-and-respeak on every input tick. */
-    function scheduleSliderRestart(restart: () => void): void {
-      if (sliderRestartTimer) clearTimeout(sliderRestartTimer);
-      sliderRestartTimer = setTimeout(() => {
-        sliderRestartTimer = null;
-        restart();
-      }, SLIDER_RESTART_MS);
+      player.toggle();
     }
 
     function applyVolume(volume: number): void {
-      playbackVolume = clampVolume(volume);
-      void savePlaybackVolume(playbackVolume);
-      widget?.setVolume(playbackVolume);
-      logger.info(`applyVolume ${JSON.stringify({ volume: playbackVolume })}`);
-      scheduleSliderRestart(() => {
-        logger.info(`restart(volume) ${JSON.stringify({ volume: playbackVolume })}`);
-        sequencer.setVolume(playbackVolume);
-      });
+      player.applyVolume(volume);
     }
 
     function applyRate(rate: number): void {
-      playbackRate = clampRate(rate);
-      void savePlaybackRate(playbackRate);
-      logger.info(`applyRate ${JSON.stringify({ rate: playbackRate })}`);
-      scheduleSliderRestart(() => {
-        logger.info(`restart(rate) ${JSON.stringify({ rate: playbackRate })}`);
-        sequencer.setRate(playbackRate);
-      });
+      player.applyRate(rate);
     }
 
     function adjustVolume(delta: number): void {
-      applyVolume(playbackVolume + delta);
+      player.adjustVolume(delta);
     }
 
     /** Build a widget wired to the current-closure callbacks. */
@@ -522,7 +389,7 @@ export default defineContentScript({
         {
           onPlay: () => {
             logInteraction(logger, 'widget', 'play');
-            playAction();
+            player.play();
           },
           onPause: () => {
             logInteraction(logger, 'widget', 'pause');
@@ -533,16 +400,15 @@ export default defineContentScript({
             resumePlayback();
           },
           onJump: (direction) => {
-            logInteraction(logger, 'widget', 'jump', { direction, currentSegment: currentIndex });
+            logInteraction(logger, 'widget', 'jump', {
+              direction,
+              currentSegment: player.currentSegmentIndex,
+            });
             jumpPlayback(direction);
           },
           onJumpToParagraph: (paragraphIndex) => {
-            const start = currentBreakpoints[paragraphIndex] ?? 0;
-            logInteraction(logger, 'widget', 'jump-to-paragraph', {
-              paragraphIndex,
-              targetSegment: start,
-            });
-            sequencer.seek(start);
+            logInteraction(logger, 'widget', 'jump-to-paragraph', { paragraphIndex });
+            player.jumpToParagraph(paragraphIndex);
           },
           onStop: () => {
             logInteraction(logger, 'widget', 'stop');
@@ -550,9 +416,9 @@ export default defineContentScript({
           },
           onClose: () => {
             logInteraction(logger, 'widget', 'close');
-            sequencer.stop();
-            clearAllHighlights();
-            setStartMarker(null);
+            player.stop();
+            player.clearAllHighlights();
+            player.clearStartMarker();
             unmountWidget();
           },
           onSettings: () => {
@@ -623,9 +489,8 @@ export default defineContentScript({
           },
           onToggleHighlight: (enabled) => {
             logInteraction(logger, 'widget', 'toggle-highlight', { enabled });
-            highlightWordsEnabled = enabled;
+            player.setHighlightWordsEnabled(enabled);
             void saveHighlightEnabled(enabled);
-            if (!enabled && activeElement) clearHighlight(activeElement);
           },
           onChangeRate: (rate) => {
             logInteraction(logger, 'widget', 'change-rate', { rate });
@@ -637,9 +502,9 @@ export default defineContentScript({
           },
         },
         {
-          highlightEnabled: highlightWordsEnabled,
-          rate: playbackRate,
-          volume: playbackVolume,
+          highlightEnabled: player.wordsHighlighted,
+          rate: player.playbackRate,
+          volume: player.playbackVolume,
           selection: activeSelector,
         },
       );
@@ -665,7 +530,7 @@ export default defineContentScript({
       if (widget?.isMounted()) {
         reader.stop();
         clearAllHighlights();
-        setStartMarker(null);
+        player.clearStartMarker();
         unmountWidget();
         return;
       }
@@ -728,7 +593,7 @@ export default defineContentScript({
         word,
         spoken: substitutions[word] ?? undefined,
         onPreview: (_word, spoken) => {
-          void reader.speak(spoken, { volume: playbackVolume });
+          void reader.speak(spoken, { volume: player.playbackVolume });
         },
         onSave: (word, spoken) => {
           substitutions = { ...substitutions, [word]: spoken };
@@ -774,7 +639,7 @@ export default defineContentScript({
           refreshOpenManager();
         },
         onPreview: (spoken) => {
-          void reader.speak(spoken, { volume: playbackVolume });
+          void reader.speak(spoken, { volume: player.playbackVolume });
         },
         onToggleEnabled: (enabled) => {
           pronunciationsEnabled = enabled;
@@ -843,7 +708,7 @@ export default defineContentScript({
           segmentIndex: word?.index,
           charIndex: word?.char,
         });
-        startFromPosition(paragraph, word ?? undefined);
+        player.startFrom(paragraph, word ?? undefined);
         sendResponse({ ok: true });
         return false;
       }
