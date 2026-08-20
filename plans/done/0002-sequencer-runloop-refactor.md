@@ -1,7 +1,7 @@
 ---
 id: TASK-0002
 title: "Refactor: sequencer runLoop (complexity 17 -> <10)"
-status: doing
+status: done
 depends_on: []
 priority: normal
 tags: [refactor, audio]
