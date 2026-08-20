@@ -2,6 +2,7 @@
 // Page-level composition root: widget UI + text extraction + playback + highlighting.
 
 import { describeBoundary } from '../content/boundary-diagnostics';
+import { type Chunk, buildChunks, paragraphBreakpoints, paragraphOptions } from '../content/chunks';
 import { FakeBoundaryReader } from '../content/fake-reader';
 import {
   clearHighlight,
@@ -55,64 +56,6 @@ import { ParagraphStartAffordance } from '../ui/paragraph-start-affordance';
 import { PronunciationManager, type PronunciationManagerEntry } from '../ui/pronunciation-manager';
 import { PronunciationPopover } from '../ui/pronunciation-popover';
 import { DitaWidget } from '../ui/widget';
-import type { ParagraphOption } from '../ui/widget';
-
-/** A spoken chunk and its source paragraph. `base` is the chunk's offset within
- * collapseWhitespace(element.textContent).trim(), so word boundaries (which are
- * chunk-relative) can be translated back to full-paragraph offsets for the
- * highlighter. Keeps chunk <-> element aligned even when a paragraph splits. */
-interface Chunk {
-  text: string;
-  element: Element;
-  base: number;
-}
-
-function buildChunks(
-  doc: Document,
-  substitutions: Substitutions = {},
-  linksEnabled = true,
-): Chunk[] {
-  const paragraphs: ParagraphSegment[] = extractParagraphs(doc);
-  const chunks: Chunk[] = [];
-  for (const paragraph of paragraphs) {
-    const cleaned = collapseWhitespace(paragraph.text).trim();
-    if (!cleaned) continue;
-    let searchFrom = 0;
-    for (const text of splitText(cleaned)) {
-      const found = cleaned.indexOf(text, searchFrom);
-      const base = found === -1 ? searchFrom : found;
-      chunks.push({
-        text: applySubstitutions(linksEnabled ? simplifyLinks(text) : text, substitutions),
-        element: paragraph.element,
-        base,
-      });
-      searchFrom = base + text.length;
-    }
-  }
-  return chunks;
-}
-
-/** First chunk index of each paragraph — used as jump breakpoints. */
-function paragraphBreakpoints(chunks: Chunk[]): number[] {
-  if (chunks.length === 0) return [];
-  const breaks = [0];
-  for (let i = 1; i < chunks.length; i++) {
-    const prev = chunks[i - 1];
-    const curr = chunks[i];
-    if (prev && curr && curr.element !== prev.element) breaks.push(i);
-  }
-  return breaks;
-}
-
-/** Dropdown entries for the paragraph picker — one per paragraph, labeled with
- * a short preview of its first spoken chunk. */
-function paragraphOptions(chunks: Chunk[], breakpoints: number[]): ParagraphOption[] {
-  const PREVIEW = 60;
-  return breakpoints.map((start, i) => {
-    const preview = (chunks[start]?.text ?? '').slice(0, PREVIEW).trim();
-    return { value: i, label: preview ? `¶ ${i + 1} — ${preview}` : `¶ ${i + 1}` };
-  });
-}
 
 const HIGHLIGHT_PREF = 'highlightWords';
 
