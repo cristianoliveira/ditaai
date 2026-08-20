@@ -41,17 +41,19 @@ test.describe('widget parts counter', () => {
       });
 
       await expect(page.locator('.dita-widget')).toBeVisible({ timeout: 5_000 });
-      const progress = page.locator('.dita-progress');
+      const paragraphPosition = page.locator('.dita-paragraph-pos');
 
-      // Opened before playback: no parts counter yet.
-      await expect(progress).toHaveText('');
+      // Opened before playback: the paragraph position is empty.
+      await expect(paragraphPosition).toHaveText('');
 
       // Start playback via the widget — the first segment must surface "1/2".
       await page.locator('.dita-btn-play').click();
-      await expect(progress).toHaveText('1/2', { timeout: 2_000 });
+      await expect(paragraphPosition).toHaveText('1/2', { timeout: 2_000 });
 
       // As the sequencer moves to the second paragraph, the counter advances.
-      await expect.poll(async () => await progress.textContent(), { timeout: 5_000 }).toBe('2/2');
+      await expect
+        .poll(async () => await paragraphPosition.textContent(), { timeout: 5_000 })
+        .toBe('2/2');
 
       expect(errors).toEqual([]);
     } finally {

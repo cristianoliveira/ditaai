@@ -142,17 +142,7 @@ export class SegmentSequencer {
       this.onSegmentChange?.(this.index);
       this.emitState();
 
-      // Wrap onBoundary to track word position for precise resume
-      const speakOptions: SpeakOptions = {
-        ...options,
-        rate: this.rate,
-        volume: this.volume,
-        resumeFromChar: this.resumeCharIndex,
-        onBoundary: (event: BoundaryEvent) => {
-          this.lastCharIndex = event.charIndex + event.charLength;
-          options?.onBoundary?.(event);
-        },
-      };
+      const speakOptions = this.buildSpeakOptions(options);
 
       if (initialBufferPending) {
         initialBufferPending = false;
@@ -160,61 +150,67 @@ export class SegmentSequencer {
       } else {
         await this.prepareSegment(segment, speakOptions);
       }
-      if (this.stopped) break;
-      if (this.seeking) {
-        this.seeking = false;
-        continue; // playhead moved during prepare — re-evaluate at the new index
-      }
-      if (this.restarting) {
-        this.restarting = false;
-        continue; // rate/volume changed during prepare — re-speak with new options
-      }
-      // Pause can land during the async prepare gap — the reader had nothing to
-      // cancel yet, so gate here instead of speaking a segment the user paused.
-      if (this.paused) {
-        this.resumeCharIndex = this.lastCharIndex;
-        await this.waitWhilePaused();
-        if (this.stopped) break;
-        continue; // re-speak the same segment once resumed
-      }
+
+      const prepared = await this.checkpoint();
+      if (prepared === 'break') break;
+      if (prepared === 'retry') continue;
 
       const speaking = this.reader.speak(segment, speakOptions);
-      const nextSegment = this.segments[this.index + 1];
-      if (nextSegment) {
-        const nextOptions = { ...speakOptions, resumeFromChar: 0 };
-        if (this.bufferSeconds > 0) {
-          void this.prepareBuffer(this.index + 1, nextOptions);
-        } else {
-          void this.prepareSegment(nextSegment, nextOptions);
-        }
-      }
+      this.startLookahead(this.index, speakOptions);
       await speaking;
 
-      if (this.stopped) break;
-      if (this.seeking) {
-        this.seeking = false;
-        continue; // playhead moved during speak — re-evaluate at the new index
-      }
-      if (this.restarting) {
-        this.restarting = false;
-        continue; // rate/volume changed mid-segment — re-speak from the last word
-      }
+      const spoken = await this.checkpoint();
+      if (spoken === 'break') break;
+      if (spoken === 'retry') continue;
 
-      // Paused mid-segment: save exact word position, wait for resume
-      if (this.paused) {
-        this.resumeCharIndex = this.lastCharIndex;
-        await this.waitWhilePaused();
-        if (this.stopped) break;
-        continue; // re-speak from resumeCharIndex
-      }
-
-      // Segment completed — reset and advance
       this.resumeCharIndex = 0;
       this.lastCharIndex = 0;
       this.index++;
     }
 
     this.playing = false;
+  }
+
+  private buildSpeakOptions(options?: SpeakOptions): SpeakOptions {
+    return {
+      ...options,
+      rate: this.rate,
+      volume: this.volume,
+      resumeFromChar: this.resumeCharIndex,
+      onBoundary: (event: BoundaryEvent) => {
+        this.lastCharIndex = event.charIndex + event.charLength;
+        options?.onBoundary?.(event);
+      },
+    };
+  }
+
+  private startLookahead(index: number, speakOptions: SpeakOptions): void {
+    const nextSegment = this.segments[index + 1];
+    if (!nextSegment) return;
+
+    const nextOptions = { ...speakOptions, resumeFromChar: 0 };
+    if (this.bufferSeconds > 0) {
+      void this.prepareBuffer(index + 1, nextOptions);
+      return;
+    }
+    void this.prepareSegment(nextSegment, nextOptions);
+  }
+
+  private async checkpoint(): Promise<'break' | 'retry' | 'continue'> {
+    if (this.stopped) return 'break';
+    if (this.seeking) {
+      this.seeking = false;
+      return 'retry';
+    }
+    if (this.restarting) {
+      this.restarting = false;
+      return 'retry';
+    }
+    if (!this.paused) return 'continue';
+
+    this.resumeCharIndex = this.lastCharIndex;
+    await this.waitWhilePaused();
+    return this.stopped ? 'break' : 'retry';
   }
 
   pause(): void {

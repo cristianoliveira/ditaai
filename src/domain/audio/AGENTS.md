@@ -49,9 +49,11 @@ without lookahead.
 ```
 play() → for each segment:
   → onSegmentChange?(index)        // highlighter picks up the element
-  → reader.speak(segment, { resumeFromChar, onBoundary })
-  → if paused: save position, waitWhilePaused(), re-speak same segment
-  → else: advance index
+  → prepare segment or initial buffer
+  → checkpoint()                    // stop, seek, rate/volume restart, or pause
+  → reader.speak(segment, { resumeFromChar, onBoundary }) + begin lookahead
+  → checkpoint()                    // same gate after speech resolves
+  → advance, or retry the current/newly-seeked segment
 ```
 
 ## Depends on

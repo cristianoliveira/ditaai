@@ -316,6 +316,44 @@ describe('SegmentSequencer', () => {
     expect(reader.calls).toEqual(['one', 'two']);
   });
 
+  it('seeks to the target without speaking when seek lands during preparation', async () => {
+    const reader = makePrepareDelayedReader();
+    const seq = new SegmentSequencer(reader);
+    seq.load(['one', 'two']);
+
+    const playback = seq.play();
+    await vi.waitFor(() => expect(reader.prepare).toHaveBeenCalledWith('one', expect.anything()));
+
+    seq.seek(1);
+    reader.resolvePrepare();
+
+    await vi.waitFor(() => expect(reader.calls).toEqual(['two']));
+    expect(reader.calls).not.toContain('one');
+
+    reader.resolveSpeak();
+    await playback;
+  });
+
+  it('restarts preparation with the new rate when setRate lands during preparation', async () => {
+    const reader = makePrepareDelayedReader();
+    const seq = new SegmentSequencer(reader);
+    seq.load(['one']);
+
+    const playback = seq.play({ rate: 1 });
+    await vi.waitFor(() =>
+      expect(reader.prepare).toHaveBeenCalledWith('one', expect.objectContaining({ rate: 1 })),
+    );
+
+    seq.setRate(1.5);
+    reader.resolvePrepare();
+
+    await vi.waitFor(() =>
+      expect(reader.speak).toHaveBeenCalledWith('one', expect.objectContaining({ rate: 1.5 })),
+    );
+    reader.resolveSpeak();
+    await playback;
+  });
+
   it('stop halts playback', async () => {
     const reader = makeDelayedReader();
     const seq = new SegmentSequencer(reader);
