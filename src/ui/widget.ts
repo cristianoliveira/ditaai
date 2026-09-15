@@ -233,6 +233,21 @@ const STYLES = `
   }
 
   .dita-paragraph-popover[hidden] { display: none; }
+  .dita-paragraph-search {
+    display: block;
+    width: 100%;
+    margin-bottom: 6px;
+    padding: 7px 9px;
+    border: 1px solid #3a3a5a;
+    border-radius: 7px;
+    background: #121226;
+    color: #fff;
+    font: inherit;
+    font-size: 12px;
+  }
+  .dita-paragraph-search:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .dita-paragraph-empty { padding: 10px; color: #8b8ba7; font-size: 12px; }
+
   .dita-paragraph-popover {
     position: absolute;
     bottom: calc(100% + 8px);
@@ -263,7 +278,7 @@ const STYLES = `
     cursor: pointer;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
   }
   .dita-paragraph-item:hover { background: #2a2a4a; color: #fff; }
   .dita-paragraph-item[aria-current='true'] {
@@ -314,6 +329,8 @@ export class DitaWidget {
   private bufferProgress: HTMLDivElement;
   private bufferProgressFill: HTMLDivElement;
   private paragraphOptions: ParagraphOption[] = [];
+  private paragraphSearchTexts: string[] = [];
+  private paragraphSearchInput: HTMLInputElement;
   private currentParagraph = 0;
   private state: WidgetState = 'idle';
   private highlightEnabled = true;
@@ -422,8 +439,32 @@ export class DitaWidget {
     this.paragraphPopover.hidden = true;
     this.paragraphPopover.setAttribute('role', 'listbox');
     this.paragraphPopover.setAttribute('aria-label', 'Jump to paragraph');
+    this.paragraphSearchInput = document.createElement('input');
+    this.paragraphSearchInput.className = 'dita-paragraph-search';
+    this.paragraphSearchInput.type = 'search';
+    this.paragraphSearchInput.placeholder = 'Find a paragraph';
+    this.paragraphSearchInput.setAttribute('aria-label', 'Find a paragraph');
+    this.paragraphSearchInput.setAttribute('aria-controls', 'dita-paragraph-results');
+    this.paragraphSearchInput.addEventListener('input', () => this.renderParagraphResults());
+    this.paragraphPopover.append(this.paragraphSearchInput);
     this.paragraphPopover.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') this.closeParagraphPopover();
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        this.closeParagraphPopover();
+        return;
+      }
+      if (event.key === 'Enter' && event.target === this.paragraphSearchInput) {
+        this.visibleParagraphItems()[0]?.click();
+        return;
+      }
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      const items = this.visibleParagraphItems();
+      if (items.length === 0) return;
+      event.preventDefault();
+      const current = items.indexOf(document.activeElement as HTMLButtonElement);
+      items[
+        Math.max(0, Math.min(items.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)))
+      ]?.focus();
     });
 
     const selectBtn = document.createElement('button');
@@ -632,29 +673,62 @@ export class DitaWidget {
    * `value` is reported back via onJumpToParagraph. */
   setParagraphs(options: readonly ParagraphOption[] | null): void {
     this.paragraphOptions = options ? [...options] : [];
-    this.paragraphPopover.replaceChildren();
+    this.paragraphSearchTexts = [];
+    this.paragraphPopover.replaceChildren(this.paragraphSearchInput);
     if (this.paragraphOptions.length === 0) {
       this.paragraphGroup.hidden = true;
       this.closeParagraphPopover();
       return;
     }
-    for (const opt of this.paragraphOptions) {
+    this.paragraphGroup.hidden = false;
+    this.renderParagraphResults();
+    this.setCurrentParagraph(this.currentParagraph);
+  }
+
+  /** Attach full paragraph text without changing the compact visible labels. */
+  setParagraphSearchData(texts: readonly string[]): void {
+    this.paragraphSearchTexts = [...texts];
+    this.renderParagraphResults();
+  }
+
+  private visibleParagraphItems(): HTMLButtonElement[] {
+    return Array.from(
+      this.paragraphPopover.querySelectorAll<HTMLButtonElement>('.dita-paragraph-item'),
+    );
+  }
+
+  private renderParagraphResults(): void {
+    if (!this.paragraphSearchInput || this.paragraphOptions.length === 0) return;
+    const query = normalizeSearch(this.paragraphSearchInput.value);
+    const matches = this.paragraphOptions.filter((option) =>
+      normalizeSearch(this.paragraphSearchTexts[option.value] ?? option.label).includes(query),
+    );
+    for (const item of this.visibleParagraphItems()) item.remove();
+    this.paragraphPopover.querySelector('.dita-paragraph-empty')?.remove();
+    for (const option of matches) {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'dita-paragraph-item';
       item.setAttribute('role', 'option');
-      item.setAttribute('data-value', String(opt.value));
-      item.textContent = opt.label;
+      item.setAttribute('data-value', String(option.value));
+      const source = this.paragraphSearchTexts[option.value];
+      item.textContent =
+        source === undefined ? option.label : `¶ ${option.value + 1} — ${excerpt(source, query)}`;
       item.addEventListener('click', (event) => {
         event.stopPropagation();
-        this.callbacks.onJumpToParagraph?.(opt.value);
-        this.setCurrentParagraph(opt.value);
+        this.callbacks.onJumpToParagraph?.(option.value);
+        this.setCurrentParagraph(option.value);
         this.closeParagraphPopover();
       });
       this.paragraphPopover.append(item);
     }
-    this.paragraphGroup.hidden = false;
-    this.setCurrentParagraph(this.currentParagraph);
+    if (matches.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'dita-paragraph-empty';
+      empty.textContent = 'No paragraphs found';
+      this.paragraphPopover.append(empty);
+    }
+    this.markActiveParagraphItem();
   }
 
   /** Reflect the paragraph currently being read. Updates the compact readout
@@ -675,6 +749,8 @@ export class DitaWidget {
     this.paragraphPopover.hidden = false;
     this.paragraphBtn.setAttribute('aria-expanded', 'true');
     document.addEventListener('click', this.onDocumentClick);
+    this.renderParagraphResults();
+    this.paragraphSearchInput.focus({ preventScroll: true });
     this.markActiveParagraphItem();
   }
 
@@ -696,4 +772,18 @@ export class DitaWidget {
     }
     if (active && !this.paragraphPopover.hidden) active.scrollIntoView({ block: 'nearest' });
   }
+}
+
+function normalizeSearch(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+}
+
+function excerpt(text: string, query: string): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (!query) return clean.slice(0, 100);
+  const index = normalizeSearch(clean).indexOf(query);
+  if (index < 0) return clean.slice(0, 100);
+  const start = Math.max(0, index - 38);
+  const end = Math.min(clean.length, index + query.length + 62);
+  return `${start > 0 ? '…' : ''}${clean.slice(start, end)}${end < clean.length ? '…' : ''}`;
 }
