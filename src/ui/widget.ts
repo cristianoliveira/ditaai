@@ -461,7 +461,7 @@ export class DitaWidget {
       const items = this.visibleParagraphItems();
       if (items.length === 0) return;
       event.preventDefault();
-      const current = items.indexOf(document.activeElement as HTMLButtonElement);
+      const current = this.focusedItemIndex(items);
       items[
         Math.max(0, Math.min(items.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)))
       ]?.focus();
@@ -695,6 +695,15 @@ export class DitaWidget {
     return Array.from(
       this.paragraphPopover.querySelectorAll<HTMLButtonElement>('.dita-paragraph-item'),
     );
+  }
+
+  /** Locate the focused result. `document.activeElement` points at the shadow
+   * host while focus lives inside the widget, so read the focused element from
+   * the popover's own root node. Returns -1 when focus is elsewhere. */
+  private focusedItemIndex(items: HTMLButtonElement[]): number {
+    const root = this.paragraphPopover.getRootNode();
+    const active = root instanceof ShadowRoot ? root.activeElement : document.activeElement;
+    return items.indexOf(active as HTMLButtonElement);
   }
 
   private renderParagraphResults(): void {

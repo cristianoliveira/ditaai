@@ -27,9 +27,11 @@ function makePlayer(sequencer = makeSequencer()) {
   ];
   const widget = {
     setParagraphs: vi.fn(),
+    setParagraphSearchData: vi.fn(),
     setCurrentParagraph: vi.fn(),
     setVolume: vi.fn(),
   };
+  const marker = { mark: vi.fn(), clear: vi.fn() };
   const player = new PagePlayer({
     sequencer,
     getChunks: () => chunks,
@@ -40,12 +42,12 @@ function makePlayer(sequencer = makeSequencer()) {
       highlightParagraph: vi.fn(),
       highlightWord: vi.fn(),
     },
-    marker: { mark: vi.fn(), clear: vi.fn() },
+    marker,
     saveRate: vi.fn(),
     saveVolume: vi.fn(),
     log: { info: vi.fn() },
   });
-  return { player, sequencer, chunks, first, second, widget };
+  return { player, sequencer, chunks, first, second, widget, marker };
 }
 
 describe('PagePlayer', () => {
@@ -118,5 +120,77 @@ describe('PagePlayer', () => {
     expect(sequencer.setRate).not.toHaveBeenCalled();
     expect(sequencer.setVolume).toHaveBeenCalledWith(0.4);
     expect(widget.setVolume).toHaveBeenCalledWith(0.4);
+  });
+});
+
+describe('PagePlayer paragraph preparation and idle jumps', () => {
+  it('prepareParagraphs exposes paragraph metadata for search without starting audio', () => {
+    const { player, sequencer, widget } = makePlayer();
+
+    player.prepareParagraphs();
+
+    expect(widget.setParagraphs).toHaveBeenCalledWith([
+      { value: 0, label: '¶ 1 — first' },
+      { value: 1, label: '¶ 2 — second' },
+    ]);
+    expect(widget.setParagraphSearchData).toHaveBeenCalledWith(['first', 'second']);
+    expect(sequencer.load).not.toHaveBeenCalled();
+    expect(sequencer.play).not.toHaveBeenCalled();
+  });
+
+  it('jumpToParagraph while idle lazily loads metadata and starts at the paragraph', () => {
+    const { player, sequencer, second, widget, marker } = makePlayer();
+
+    player.jumpToParagraph(1);
+
+    expect(widget.setParagraphSearchData).toHaveBeenCalledWith(['first', 'second']);
+    expect(sequencer.load).toHaveBeenCalledWith(['first', 'second'], 1, 0);
+    expect(sequencer.play).toHaveBeenCalledWith(expect.objectContaining({ rate: 1, volume: 1 }));
+    expect(marker.mark).toHaveBeenCalledWith(second);
+    expect(sequencer.seek).not.toHaveBeenCalled();
+  });
+
+  it('jumpToParagraph while playing seeks to the paragraph start instead of restarting', () => {
+    const sequencer = makeSequencer();
+    const { player } = makePlayer(sequencer);
+    vi.mocked(sequencer.getState).mockReturnValue({
+      current: 1,
+      total: 2,
+      playing: true,
+      paused: false,
+    });
+
+    player.jumpToParagraph(0);
+
+    expect(sequencer.seek).toHaveBeenCalledWith(0);
+    expect(sequencer.play).not.toHaveBeenCalled();
+    expect(sequencer.load).not.toHaveBeenCalled();
+  });
+
+  it('jumpToParagraph while paused seeks to the paragraph start instead of restarting', () => {
+    const sequencer = makeSequencer();
+    const { player } = makePlayer(sequencer);
+    vi.mocked(sequencer.getState).mockReturnValue({
+      current: 1,
+      total: 2,
+      playing: false,
+      paused: true,
+    });
+
+    player.jumpToParagraph(0);
+
+    expect(sequencer.seek).toHaveBeenCalledWith(0);
+    expect(sequencer.play).not.toHaveBeenCalled();
+  });
+
+  it('ignores jumps to invalid paragraph indexes', () => {
+    const { player, sequencer, widget } = makePlayer();
+
+    player.jumpToParagraph(-1);
+    expect(widget.setParagraphs).not.toHaveBeenCalled();
+
+    player.jumpToParagraph(9);
+    expect(sequencer.seek).not.toHaveBeenCalled();
+    expect(sequencer.play).not.toHaveBeenCalled();
   });
 });

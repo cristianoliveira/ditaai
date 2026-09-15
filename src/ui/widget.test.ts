@@ -734,3 +734,123 @@ describe('DitaWidget paragraph picker', () => {
     expect(picker()?.hidden).toBe(true);
   });
 });
+
+describe('DitaWidget paragraph search', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  const options = [
+    { value: 0, label: '¶ 1 — Alpha intro' },
+    { value: 1, label: '¶ 2 — Beta content' },
+    { value: 2, label: '¶ 3 — Gamma closing' },
+  ];
+  const texts = ['Alpha intro sentence', 'Beta content with needle deep inside', 'Gamma closing'];
+
+  function widgetRoot(): ShadowRoot | null {
+    return document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+  }
+  function searchInput(): HTMLInputElement {
+    const input = widgetRoot()?.querySelector<HTMLInputElement>('.dita-paragraph-search');
+    if (!input) throw new Error('search input missing');
+    return input;
+  }
+  function popoverItems(): HTMLButtonElement[] {
+    return Array.from(
+      widgetRoot()?.querySelectorAll<HTMLButtonElement>('.dita-paragraph-item') ?? [],
+    );
+  }
+  function noResults(): HTMLElement | null {
+    return widgetRoot()?.querySelector<HTMLElement>('.dita-paragraph-empty') ?? null;
+  }
+  function type(query: string): void {
+    searchInput().value = query;
+    searchInput().dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function mountedWidget(onJumpToParagraph = vi.fn()): DitaWidget {
+    const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
+    widget.mount();
+    widget.setParagraphs(options);
+    widget.setParagraphSearchData(texts);
+    return widget;
+  }
+
+  it('filters case-insensitively across the full paragraph text, beyond the compact label', () => {
+    mountedWidget();
+    type('NEEDLE');
+
+    const items = popoverItems();
+    expect(items.map((item) => item.getAttribute('data-value'))).toEqual(['1']);
+    expect(items[0]?.textContent).toContain('Beta content with needle deep inside');
+  });
+
+  it('matches queries containing repeated whitespace', () => {
+    mountedWidget();
+    type('  beta  \n   content ');
+
+    expect(popoverItems().map((item) => item.getAttribute('data-value'))).toEqual(['1']);
+  });
+
+  it('keeps every paragraph for a whitespace-only query', () => {
+    mountedWidget();
+    type('   ');
+
+    expect(popoverItems()).toHaveLength(options.length);
+  });
+
+  it('shows a no-results message when nothing matches', () => {
+    mountedWidget();
+    type('zzz');
+
+    expect(popoverItems()).toEqual([]);
+    expect(noResults()?.textContent).toBe('No paragraphs found');
+  });
+
+  it('focuses the search field when the popover opens', () => {
+    mountedWidget();
+    widgetRoot()?.querySelector<HTMLButtonElement>('.dita-btn-paragraphs')?.click();
+
+    expect(widgetRoot()?.activeElement).toBe(searchInput());
+  });
+
+  it('Enter activates the first visible result and closes the popover', () => {
+    const onJumpToParagraph = vi.fn();
+    mountedWidget(onJumpToParagraph);
+    widgetRoot()?.querySelector<HTMLButtonElement>('.dita-btn-paragraphs')?.click();
+    type('gamma');
+
+    searchInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(onJumpToParagraph).toHaveBeenCalledTimes(1);
+    expect(onJumpToParagraph).toHaveBeenCalledWith(2);
+    expect(widgetRoot()?.querySelector<HTMLElement>('.dita-paragraph-popover')?.hidden).toBe(true);
+  });
+
+  it('Enter with no visible results does not jump', () => {
+    const onJumpToParagraph = vi.fn();
+    mountedWidget(onJumpToParagraph);
+    widgetRoot()?.querySelector<HTMLButtonElement>('.dita-btn-paragraphs')?.click();
+    type('zzz');
+
+    searchInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(onJumpToParagraph).not.toHaveBeenCalled();
+    expect(widgetRoot()?.querySelector<HTMLElement>('.dita-paragraph-popover')?.hidden).toBe(false);
+  });
+
+  it('ArrowDown and ArrowUp walk the visible results from the focused item', () => {
+    mountedWidget();
+    widgetRoot()?.querySelector<HTMLButtonElement>('.dita-btn-paragraphs')?.click();
+    const items = popoverItems();
+
+    searchInput().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(widgetRoot()?.activeElement).toBe(items[0]);
+
+    items[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(widgetRoot()?.activeElement).toBe(items[1]);
+
+    items[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    expect(widgetRoot()?.activeElement).toBe(items[0]);
+  });
+});

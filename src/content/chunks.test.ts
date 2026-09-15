@@ -1,6 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildChunks, paragraphBreakpoints, paragraphOptions } from './chunks';
+import {
+  buildChunks,
+  paragraphBreakpoints,
+  paragraphOptions,
+  paragraphSearchTexts,
+} from './chunks';
 
 describe('buildChunks', () => {
   afterEach(() => {
@@ -52,6 +57,26 @@ describe('paragraph chunk metadata', () => {
     expect(paragraphOptions(chunks, [0, 2])).toEqual([
       { value: 0, label: '¶ 1 — First part' },
       { value: 1, label: '¶ 2 — Final paragraph' },
+    ]);
+  });
+
+  it('aggregates every chunk of a paragraph into its full search text', () => {
+    expect(paragraphSearchTexts(chunks, [0, 2])).toEqual([
+      'First part Second part',
+      'Final paragraph',
+    ]);
+  });
+
+  it('extends the last paragraph through the final chunk', () => {
+    const tail = [
+      { text: 'Opening line', element: first, base: 0 },
+      { text: 'Middle line', element: second, base: 0 },
+      { text: 'Closing line', element: second, base: 12 },
+    ];
+
+    expect(paragraphSearchTexts(tail, [0, 1])).toEqual([
+      'Opening line',
+      'Middle line Closing line',
     ]);
   });
 });
