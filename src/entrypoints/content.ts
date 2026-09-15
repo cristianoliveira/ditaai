@@ -203,10 +203,18 @@ export default defineContentScript({
       player.setVolume(value);
     });
     void selectorStore.load(hostname).then(async (scope) => {
+      // A restored scope changes what is readable: refresh the readable region
+      // and let the idle widget expose its paragraphs for search again.
+      const refreshAfterScopeRestore = (): void => {
+        if (!widget?.isMounted()) return;
+        refreshReadable();
+        player.prepareParagraphs();
+      };
       activeScope = scope;
       if (scope?.source === 'dom') {
         activeSelector = scope.selector;
         logger.info(`restored selector for ${hostname}: ${scope.selector}`);
+        refreshAfterScopeRestore();
         return;
       }
       if (scope?.source !== 'accessibility') return;
@@ -230,6 +238,7 @@ export default defineContentScript({
         logger.warn(`accessibility scope unavailable: ${String(error)}`);
       } finally {
         await accessibilityPort.close().catch(() => {});
+        refreshAfterScopeRestore();
       }
     });
     void substitutionStore.load().then((dict) => {
@@ -517,6 +526,7 @@ export default defineContentScript({
       // fresh widget must reflect current sequencer state instead of idle.
       widget.reflect(sequencer.getState());
       refreshReadable();
+      player.prepareParagraphs();
       startAffordance.enable();
     }
 

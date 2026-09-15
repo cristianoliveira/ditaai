@@ -9,7 +9,7 @@ import {
 import type { Logger } from '../lib/logger';
 import type { ParagraphOption } from '../ui/widget';
 import { describeBoundary } from './boundary-diagnostics';
-import { type Chunk, paragraphBreakpoints, paragraphOptions } from './chunks';
+import { type Chunk, paragraphBreakpoints, paragraphOptions, paragraphSearchTexts } from './chunks';
 
 type WordPosition = { index: number; char: number };
 
@@ -27,7 +27,7 @@ export interface PageSequencer {
 }
 
 interface PlayerWidget {
-  setParagraphs(options: ParagraphOption[] | null): void;
+  setParagraphs(options: ParagraphOption[] | null, searchTexts?: readonly string[]): void;
   setCurrentParagraph(index: number): void;
   setVolume(volume: number): void;
 }
@@ -84,6 +84,11 @@ export class PagePlayer {
     return this.chunks;
   }
 
+  /** Discover paragraphs without starting audio, so the idle widget can search. */
+  prepareParagraphs(): void {
+    this.loadParagraphMetadata();
+  }
+
   setRate(rate: number): void {
     this.rate = clampRate(rate);
   }
@@ -107,9 +112,7 @@ export class PagePlayer {
     this.logSegments(texts);
 
     this.deps.sequencer.load(texts, startIndex, startChar);
-    this.breakpoints = paragraphBreakpoints(this.chunks);
-    this.paragraphJumper = createParagraphJumper(this.breakpoints);
-    this.deps.getWidget()?.setParagraphs(paragraphOptions(this.chunks, this.breakpoints));
+    this.loadParagraphMetadata();
     this.deps
       .getWidget()
       ?.setCurrentParagraph(paragraphIndexForSegment(this.breakpoints, startIndex));
@@ -171,7 +174,28 @@ export class PagePlayer {
   }
 
   jumpToParagraph(paragraphIndex: number): void {
-    this.deps.sequencer.seek(this.breakpoints[paragraphIndex] ?? 0);
+    if (paragraphIndex < 0) return;
+    if (this.breakpoints.length === 0) this.loadParagraphMetadata();
+    const target = this.breakpoints[paragraphIndex];
+    if (target === undefined) return;
+    const state = this.deps.sequencer.getState();
+    if (!state.playing && !state.paused) {
+      this.play(this.chunks[target]?.element ?? null);
+      return;
+    }
+    this.deps.sequencer.seek(target);
+  }
+
+  private loadParagraphMetadata(): void {
+    this.chunks = this.deps.getChunks();
+    this.breakpoints = paragraphBreakpoints(this.chunks);
+    this.paragraphJumper = createParagraphJumper(this.breakpoints);
+    this.deps
+      .getWidget()
+      ?.setParagraphs(
+        paragraphOptions(this.chunks, this.breakpoints),
+        paragraphSearchTexts(this.chunks, this.breakpoints),
+      );
   }
 
   applyRate(rate: number): void {

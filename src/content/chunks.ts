@@ -61,3 +61,14 @@ export function paragraphOptions(chunks: Chunk[], breakpoints: number[]): Paragr
     return { value: index, label: preview ? `¶ ${index + 1} — ${preview}` : `¶ ${index + 1}` };
   });
 }
+
+/** Full spoken text for paragraph search, kept separate from compact labels. */
+export function paragraphSearchTexts(chunks: Chunk[], breakpoints: number[]): string[] {
+  return breakpoints.map((start, index) => {
+    const end = breakpoints[index + 1] ?? chunks.length;
+    return chunks
+      .slice(start, end)
+      .map((chunk) => chunk.text)
+      .join(' ');
+  });
+}
