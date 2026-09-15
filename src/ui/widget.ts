@@ -436,6 +436,7 @@ export class DitaWidget {
 
     this.paragraphPopover = document.createElement('div');
     this.paragraphPopover.className = 'dita-paragraph-popover';
+    this.paragraphPopover.id = 'dita-paragraph-results';
     this.paragraphPopover.hidden = true;
     this.paragraphPopover.setAttribute('role', 'listbox');
     this.paragraphPopover.setAttribute('aria-label', 'Jump to paragraph');
@@ -790,7 +791,8 @@ function normalizeSearch(value: string): string {
 function excerpt(text: string, query: string): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   if (!query) return clean.slice(0, 100);
-  const index = normalizeSearch(clean).indexOf(query);
+  const normalized = clean.toLocaleLowerCase();
+  const index = normalized.indexOf(query);
   if (index < 0) return clean.slice(0, 100);
   const start = Math.max(0, index - 38);
   const end = Math.min(clean.length, index + query.length + 62);
