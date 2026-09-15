@@ -771,10 +771,19 @@ describe('DitaWidget paragraph search', () => {
   function mountedWidget(onJumpToParagraph = vi.fn()): DitaWidget {
     const widget = new DitaWidget({ ...noopCallbacks, onJumpToParagraph });
     widget.mount();
-    widget.setParagraphs(options);
-    widget.setParagraphSearchData(texts);
+    widget.setParagraphs(options, texts);
     return widget;
   }
+
+  it('exposes the results container referenced by the search field aria-controls', () => {
+    mountedWidget();
+
+    const controls = searchInput().getAttribute('aria-controls');
+    const results = controls ? widgetRoot()?.querySelector<HTMLElement>(`#${controls}`) : null;
+
+    expect(results).not.toBeNull();
+    expect(results?.getAttribute('role')).toBe('listbox');
+  });
 
   it('filters case-insensitively across the full paragraph text, beyond the compact label', () => {
     mountedWidget();

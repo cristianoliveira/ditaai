@@ -462,10 +462,10 @@ export class DitaWidget {
       const items = this.visibleParagraphItems();
       if (items.length === 0) return;
       event.preventDefault();
+      const step = event.key === 'ArrowDown' ? 1 : -1;
       const current = this.focusedItemIndex(items);
-      items[
-        Math.max(0, Math.min(items.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)))
-      ]?.focus();
+      const next = Math.max(0, Math.min(items.length - 1, current + step));
+      items[next]?.focus();
     });
 
     const selectBtn = document.createElement('button');
@@ -669,12 +669,15 @@ export class DitaWidget {
     }
   }
 
-  /** Populate the paragraph list. Pass null (or an empty list) to hide the
-   * control. `label` is the full text shown for each entry in the popover;
-   * `value` is reported back via onJumpToParagraph. */
-  setParagraphs(options: readonly ParagraphOption[] | null): void {
+  /** Populate the paragraph list with its compact labels plus the full texts
+   * used for search. Pass null (or an empty list) to hide the control. `value`
+   * is reported back via onJumpToParagraph. */
+  setParagraphs(
+    options: readonly ParagraphOption[] | null,
+    searchTexts: readonly string[] = [],
+  ): void {
     this.paragraphOptions = options ? [...options] : [];
-    this.paragraphSearchTexts = [];
+    this.paragraphSearchTexts = [...searchTexts];
     this.paragraphPopover.replaceChildren(this.paragraphSearchInput);
     if (this.paragraphOptions.length === 0) {
       this.paragraphGroup.hidden = true;
@@ -684,12 +687,6 @@ export class DitaWidget {
     this.paragraphGroup.hidden = false;
     this.renderParagraphResults();
     this.setCurrentParagraph(this.currentParagraph);
-  }
-
-  /** Attach full paragraph text without changing the compact visible labels. */
-  setParagraphSearchData(texts: readonly string[]): void {
-    this.paragraphSearchTexts = [...texts];
-    this.renderParagraphResults();
   }
 
   private visibleParagraphItems(): HTMLButtonElement[] {

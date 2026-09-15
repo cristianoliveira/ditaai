@@ -59,10 +59,13 @@ describe('PagePlayer', () => {
     player.play(second, { index: 1, char: 3 });
 
     expect(sequencer.load).toHaveBeenCalledWith(['first', 'second'], 1, 3);
-    expect(widget.setParagraphs).toHaveBeenCalledWith([
-      { value: 0, label: '¶ 1 — first' },
-      { value: 1, label: '¶ 2 — second' },
-    ]);
+    expect(widget.setParagraphs).toHaveBeenCalledWith(
+      [
+        { value: 0, label: '¶ 1 — first' },
+        { value: 1, label: '¶ 2 — second' },
+      ],
+      ['first', 'second'],
+    );
     expect(widget.setCurrentParagraph).toHaveBeenCalledWith(1);
     expect(sequencer.play).toHaveBeenCalledWith(expect.objectContaining({ rate: 1, volume: 1 }));
   });
@@ -129,11 +132,13 @@ describe('PagePlayer paragraph preparation and idle jumps', () => {
 
     player.prepareParagraphs();
 
-    expect(widget.setParagraphs).toHaveBeenCalledWith([
-      { value: 0, label: '¶ 1 — first' },
-      { value: 1, label: '¶ 2 — second' },
-    ]);
-    expect(widget.setParagraphSearchData).toHaveBeenCalledWith(['first', 'second']);
+    expect(widget.setParagraphs).toHaveBeenCalledWith(
+      [
+        { value: 0, label: '¶ 1 — first' },
+        { value: 1, label: '¶ 2 — second' },
+      ],
+      ['first', 'second'],
+    );
     expect(sequencer.load).not.toHaveBeenCalled();
     expect(sequencer.play).not.toHaveBeenCalled();
   });
@@ -143,7 +148,13 @@ describe('PagePlayer paragraph preparation and idle jumps', () => {
 
     player.jumpToParagraph(1);
 
-    expect(widget.setParagraphSearchData).toHaveBeenCalledWith(['first', 'second']);
+    expect(widget.setParagraphs).toHaveBeenCalledWith(
+      [
+        { value: 0, label: '¶ 1 — first' },
+        { value: 1, label: '¶ 2 — second' },
+      ],
+      ['first', 'second'],
+    );
     expect(sequencer.load).toHaveBeenCalledWith(['first', 'second'], 1, 0);
     expect(sequencer.play).toHaveBeenCalledWith(expect.objectContaining({ rate: 1, volume: 1 }));
     expect(marker.mark).toHaveBeenCalledWith(second);

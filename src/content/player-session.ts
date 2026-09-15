@@ -27,8 +27,7 @@ export interface PageSequencer {
 }
 
 interface PlayerWidget {
-  setParagraphs(options: ParagraphOption[] | null): void;
-  setParagraphSearchData?(texts: readonly string[]): void;
+  setParagraphs(options: ParagraphOption[] | null, searchTexts?: readonly string[]): void;
   setCurrentParagraph(index: number): void;
   setVolume(volume: number): void;
 }
@@ -113,12 +112,7 @@ export class PagePlayer {
     this.logSegments(texts);
 
     this.deps.sequencer.load(texts, startIndex, startChar);
-    this.breakpoints = paragraphBreakpoints(this.chunks);
-    this.paragraphJumper = createParagraphJumper(this.breakpoints);
-    this.deps.getWidget()?.setParagraphs(paragraphOptions(this.chunks, this.breakpoints));
-    this.deps
-      .getWidget()
-      ?.setParagraphSearchData?.(paragraphSearchTexts(this.chunks, this.breakpoints));
+    this.loadParagraphMetadata();
     this.deps
       .getWidget()
       ?.setCurrentParagraph(paragraphIndexForSegment(this.breakpoints, startIndex));
@@ -196,9 +190,12 @@ export class PagePlayer {
     this.chunks = this.deps.getChunks();
     this.breakpoints = paragraphBreakpoints(this.chunks);
     this.paragraphJumper = createParagraphJumper(this.breakpoints);
-    const widget = this.deps.getWidget();
-    widget?.setParagraphs(paragraphOptions(this.chunks, this.breakpoints));
-    widget?.setParagraphSearchData?.(paragraphSearchTexts(this.chunks, this.breakpoints));
+    this.deps
+      .getWidget()
+      ?.setParagraphs(
+        paragraphOptions(this.chunks, this.breakpoints),
+        paragraphSearchTexts(this.chunks, this.breakpoints),
+      );
   }
 
   applyRate(rate: number): void {
