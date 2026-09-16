@@ -1,5 +1,9 @@
 # DitaAi
 
+<p align="center">
+  <img src="public/dita-play.svg" alt="DitaAi Dita Play logo" width="128" height="128">
+</p>
+
 **DitaAi** is a play on Brazilian Portuguese **“dita aí”** (“say it out”) and
 **Dita + AI**.
 

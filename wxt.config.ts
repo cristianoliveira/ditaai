@@ -8,16 +8,26 @@ export default defineConfig({
   manifest: {
     name: 'DitaAi',
     version: '0.3.0',
-    version_name: '0.3.0-407ce52-1789473019',
+    version_name: '0.3.0-0b06ec7-1789538248',
     description: 'Turn web pages into private, local audio',
     permissions: ['storage', 'tabs', 'offscreen', 'contextMenus', 'debugger'],
     host_permissions: ['<all_urls>'],
     content_security_policy: {
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
     },
+    icons: {
+      16: '/icons/dita-play-16.png',
+      32: '/icons/dita-play-32.png',
+      48: '/icons/dita-play-48.png',
+      128: '/icons/dita-play-128.png',
+    },
     action: {
       default_title: 'DitaAi — Listen to this page',
       default_popup: 'popup.html',
+      default_icon: {
+        16: '/icons/dita-play-16.png',
+        32: '/icons/dita-play-32.png',
+      },
     },
   },
 });
