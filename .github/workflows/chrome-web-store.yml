@@ -42,12 +42,17 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Audit release dependencies
+        run: pnpm audit --audit-level high
       - run: pnpm ci
       - name: Test release helpers
         run: |
           PYTHONDONTWRITEBYTECODE=1 python -m unittest scripts/test_publish_cws_release.py
           node --test scripts/package-cws-release.test.mjs scripts/bump-version.test.mjs
-      - run: pnpm build
+      - name: Install Chromium for extension tests
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test the built extension in Chromium
+        run: pnpm test:e2e
       - name: Package and verify Chrome extension
         run: node scripts/package-cws-release.mjs "$RELEASE_VERSION"
         env:

@@ -44,6 +44,11 @@ def check_archive_version(archive, expected_version):
         fail(f"Cannot read release ZIP manifest: {error}")
     if manifest.get("manifest_version") != 3 or manifest.get("version") != expected_version:
         fail(f"ZIP manifest version must equal release {expected_version}")
+    display_version = manifest.get("version_name")
+    if display_version != expected_version and not (
+        isinstance(display_version, str) and display_version.startswith(f"{expected_version}-")
+    ):
+        fail(f"ZIP manifest version_name must match release {expected_version}")
 
 
 def published_versions(status):

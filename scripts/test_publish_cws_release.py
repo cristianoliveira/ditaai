@@ -2,6 +2,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -104,7 +105,11 @@ class UploadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             archive = Path(directory) / "release.zip"
             with ZipFile(archive, "w") as zipped:
-                zipped.writestr("manifest.json", json.dumps({"manifest_version": 3, "version": "1.2.2"}))
+                zipped.writestr("manifest.json", json.dumps({
+                    "manifest_version": 3,
+                    "version": "1.2.2",
+                    "version_name": "1.2.2-hash-123",
+                }))
             with self.assertRaisesRegex(SystemExit, "ZIP manifest version"):
                 release.check_archive_version(archive, "1.2.3")
 
@@ -112,15 +117,33 @@ class UploadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             archive = Path(directory) / "release.zip"
             with ZipFile(archive, "w") as zipped:
-                zipped.writestr("manifest.json", json.dumps({"manifest_version": 3, "version": "1.2.3"}))
+                zipped.writestr("manifest.json", json.dumps({
+                    "manifest_version": 3,
+                    "version": "1.2.3",
+                    "version_name": "1.2.3-hash-123",
+                }))
             release.check_archive_version(archive, "1.2.3")
+
+    def test_rejects_artifact_with_old_display_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / "release.zip"
+            with ZipFile(archive, "w") as zipped:
+                zipped.writestr("manifest.json", json.dumps({
+                    "manifest_version": 3,
+                    "version": "1.2.3",
+                    "version_name": "1.2.2-hash-123",
+                }))
+            with self.assertRaisesRegex(SystemExit, "ZIP manifest version_name"):
+                release.check_archive_version(archive, "1.2.3")
 
     def test_rejects_duplicate_manifest_in_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             archive = Path(directory) / "release.zip"
-            with ZipFile(archive, "w") as zipped:
-                zipped.writestr("manifest.json", '{"version":"1.2.3"}')
-                zipped.writestr("manifest.json", '{"version":"1.2.3"}')
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                with ZipFile(archive, "w") as zipped:
+                    zipped.writestr("manifest.json", '{"version":"1.2.3"}')
+                    zipped.writestr("manifest.json", '{"version":"1.2.3"}')
             with self.assertRaisesRegex(SystemExit, "exactly one root manifest"):
                 release.check_archive_version(archive, "1.2.3")
 

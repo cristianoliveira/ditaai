@@ -18,6 +18,9 @@ if (manifest.version !== version) {
     `Built manifest version ${manifest.version} does not match requested release version ${version}; bump source config before tagging`,
   );
 }
+if (manifest.version_name !== version && !manifest.version_name?.startsWith(`${version}-`)) {
+  throw new Error(`Built manifest version_name does not match release ${version}`);
+}
 
 const outputDir = path.resolve('.tmp');
 await mkdir(outputDir, { recursive: true });

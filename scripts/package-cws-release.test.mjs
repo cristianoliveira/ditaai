@@ -15,7 +15,12 @@ async function fixture(t, version = '1.2.3') {
   await mkdir(extensionDir, { recursive: true });
   await writeFile(
     path.join(extensionDir, 'manifest.json'),
-    JSON.stringify({ manifest_version: 3, version, name: 'test' }),
+    JSON.stringify({
+      manifest_version: 3,
+      version,
+      version_name: `${version}-hash-123`,
+      name: 'test',
+    }),
   );
   await writeFile(path.join(extensionDir, 'index.html'), 'release');
   return { root, extensionDir, archive: path.join(root, '.tmp/cws-release.zip') };
@@ -38,6 +43,17 @@ test('rejects a requested version that differs from the built manifest', async (
   const result = spawnSync(process.execPath, [script, '1.2.3'], { cwd: root, encoding: 'utf8' });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /does not match requested release version/);
+});
+
+test('rejects a display version from another release', async (t) => {
+  const { root, extensionDir } = await fixture(t);
+  await writeFile(
+    path.join(extensionDir, 'manifest.json'),
+    JSON.stringify({ manifest_version: 3, version: '1.2.3', version_name: '1.2.2-hash-123' }),
+  );
+  const result = spawnSync(process.execPath, [script, '1.2.3'], { cwd: root, encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /version_name does not match release/);
 });
 
 test('replaces a stale archive rather than retaining removed entries', async (t) => {
