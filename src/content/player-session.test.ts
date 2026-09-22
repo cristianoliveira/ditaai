@@ -29,9 +29,12 @@ function makePlayer(sequencer = makeSequencer()) {
     setParagraphs: vi.fn(),
     setParagraphSearchData: vi.fn(),
     setCurrentParagraph: vi.fn(),
+    setRate: vi.fn(),
     setVolume: vi.fn(),
   };
   const marker = { mark: vi.fn(), clear: vi.fn() };
+  const saveRate = vi.fn(async () => {});
+  const saveVolume = vi.fn(async () => {});
   const player = new PagePlayer({
     sequencer,
     getChunks: () => chunks,
@@ -43,11 +46,11 @@ function makePlayer(sequencer = makeSequencer()) {
       highlightWord: vi.fn(),
     },
     marker,
-    saveRate: vi.fn(),
-    saveVolume: vi.fn(),
+    saveRate,
+    saveVolume,
     log: { info: vi.fn() },
   });
-  return { player, sequencer, chunks, first, second, widget, marker };
+  return { player, sequencer, chunks, first, second, widget, marker, saveRate, saveVolume };
 }
 
 describe('PagePlayer', () => {
@@ -113,16 +116,33 @@ describe('PagePlayer', () => {
     expect(sequencer.resume).toHaveBeenCalledOnce();
   });
 
-  it('coalesces rate and volume restarts while persisting the latest values', () => {
+  it('applies rate live without persisting, and reflects it into a mounted widget', () => {
     const { player, sequencer, widget } = makePlayer();
 
     player.applyRate(1.5);
     player.applyVolume(0.4);
     vi.advanceTimersByTime(200);
 
-    expect(sequencer.setRate).not.toHaveBeenCalled();
-    expect(sequencer.setVolume).toHaveBeenCalledWith(0.4);
+    // The widget follows the live value; nothing is written yet.
+    expect(widget.setRate).toHaveBeenCalledWith(1.5);
     expect(widget.setVolume).toHaveBeenCalledWith(0.4);
+    expect(sequencer.setVolume).toHaveBeenCalledWith(0.4);
+  });
+
+  it('persists only the committed value, so an input event cannot race a reload', async () => {
+    const { player, saveRate, saveVolume } = makePlayer();
+
+    player.applyRate(1.25);
+    player.applyRate(1.5);
+    expect(saveRate).not.toHaveBeenCalled();
+
+    await player.commitRate();
+    await player.commitVolume();
+
+    // One write, of the latest value, and only when the user committed.
+    expect(saveRate).toHaveBeenCalledOnce();
+    expect(saveRate).toHaveBeenCalledWith(1.5);
+    expect(saveVolume).toHaveBeenCalledOnce();
   });
 });
 

@@ -863,3 +863,78 @@ describe('DitaWidget paragraph search', () => {
     expect(widgetRoot()?.activeElement).toBe(items[0]);
   });
 });
+
+describe('DitaWidget persisted preference controls', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function root(): ShadowRoot | null {
+    return document.querySelector('#dita-widget-host')?.shadowRoot ?? null;
+  }
+
+  it('reflects a hydrated rate and volume after mount', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+
+    // A widget mounted before hydration must not keep the default as final
+    // state: the slider and label have to show the stored value.
+    widget.setRate(1.25);
+    widget.setVolume(0.4);
+
+    const rate = root()?.querySelector<HTMLInputElement>('.dita-rate');
+    expect(rate?.value).toBe('1.25');
+    expect(root()?.querySelector('.dita-rate-label')?.textContent).toBe('1.25×');
+    expect(root()?.querySelector<HTMLInputElement>('.dita-volume')?.value).toBe('40');
+  });
+
+  it('persists only on the committed change, not on every input event', () => {
+    const onChangeRate = vi.fn();
+    const onCommitRate = vi.fn();
+    const onChangeVolume = vi.fn();
+    const onCommitVolume = vi.fn();
+    const widget = new DitaWidget({
+      ...noopCallbacks,
+      onChangeRate,
+      onCommitRate,
+      onChangeVolume,
+      onCommitVolume,
+    });
+    widget.mount();
+
+    const rate = root()?.querySelector<HTMLInputElement>('.dita-rate');
+    const volume = root()?.querySelector<HTMLInputElement>('.dita-volume');
+    if (!rate || !volume) throw new Error('sliders missing');
+
+    rate.value = '1.5';
+    rate.dispatchEvent(new Event('input'));
+    volume.value = '30';
+    volume.dispatchEvent(new Event('input'));
+
+    // Live feedback only: nothing writes to storage while the user drags.
+    expect(onChangeRate).toHaveBeenLastCalledWith(1.5);
+    expect(onCommitRate).not.toHaveBeenCalled();
+    expect(onChangeVolume).toHaveBeenLastCalledWith(0.3);
+    expect(onCommitVolume).not.toHaveBeenCalled();
+
+    rate.dispatchEvent(new Event('change'));
+    volume.dispatchEvent(new Event('change'));
+
+    expect(onCommitRate).toHaveBeenCalledWith(1.5);
+    expect(onCommitVolume).toHaveBeenCalledWith(0.3);
+  });
+
+  it('never lets a failed write look saved', () => {
+    const widget = new DitaWidget(noopCallbacks);
+    widget.mount();
+    const status = root()?.querySelector<HTMLElement>('.dita-status-line');
+    expect(status?.hidden).toBe(true);
+
+    widget.setPersistenceError('Reading speed could not be saved');
+    expect(status?.hidden).toBe(false);
+    expect(status?.textContent).toBe('Reading speed could not be saved');
+
+    widget.setPersistenceError(null);
+    expect(status?.hidden).toBe(true);
+  });
+});

@@ -166,6 +166,10 @@ export default defineContentScript({
     const hostname = window.location.hostname;
     let activeSelector: string | null = null;
     let activeScope: ReadScope | null = null;
+    /** Last value known to be in storage, so `pagehide` can flush a pending
+     * committed change instead of dropping it. */
+    let persistedRate: number | null = null;
+    let persistedVolume: number | null = null;
     let activeAccessibilityText: string[] | null = null;
     let readableElements: Set<Element> = new Set();
     const startAffordance = new ParagraphStartAffordance({
@@ -193,14 +197,62 @@ export default defineContentScript({
       log: logger,
     });
 
+    // Push the persisted content preferences into a mounted widget. The widget
+    // renders rate/volume/highlight/selection from constructor options, so a
+    // widget built before hydration finished used to keep its defaults as final
+    // state — and the rate slider had no setter at all, so it stayed at 1×.
+    function reflectPreferencesIntoWidget(): void {
+      if (!widget) return;
+      widget.setRate(player.playbackRate);
+      widget.setVolume(player.playbackVolume);
+      widget.setHighlightEnabled(player.wordsHighlighted);
+      widget.setSelection(activeSelector);
+    }
+
+    /** Report a failed write. A storage failure must never look saved. */
+    function reportPersistenceFailure(what: string, error: unknown): void {
+      const reason = error instanceof Error ? error.message : String(error);
+      logger.warn(`[prefs] ${what} not saved ${JSON.stringify({ reason })}`);
+      widget?.setPersistenceError(`${what} could not be saved — changes may be lost on reload`);
+    }
+
+    /** Persist the committed rate and observe the write. */
+    async function persistPlaybackRate(): Promise<void> {
+      try {
+        await player.commitRate();
+        persistedRate = player.playbackRate;
+        widget?.setPersistenceError(null);
+      } catch (error) {
+        reportPersistenceFailure('Reading speed', error);
+      }
+    }
+
+    /** Persist the committed volume and observe the write. */
+    async function persistPlaybackVolume(): Promise<void> {
+      try {
+        await player.commitVolume();
+        persistedVolume = player.playbackVolume;
+        widget?.setPersistenceError(null);
+      } catch (error) {
+        reportPersistenceFailure('Volume', error);
+      }
+    }
+
     void loadHighlightEnabled().then((value) => {
       player.setHighlightWordsEnabled(value);
+      // Reflect after EACH preference: a mounted widget shows the value as soon
+      // as it is known instead of waiting for the slowest read.
+      reflectPreferencesIntoWidget();
     });
     void loadPlaybackRate().then((value) => {
       player.setRate(value);
+      persistedRate = value;
+      reflectPreferencesIntoWidget();
     });
     void loadPlaybackVolume().then((value) => {
       player.setVolume(value);
+      persistedVolume = value;
+      reflectPreferencesIntoWidget();
     });
     void selectorStore.load(hostname).then(async (scope) => {
       // A restored scope changes what is readable: refresh the readable region
@@ -214,6 +266,9 @@ export default defineContentScript({
       if (scope?.source === 'dom') {
         activeSelector = scope.selector;
         logger.info(`restored selector for ${hostname}: ${scope.selector}`);
+        // A restored scope used to set the model only, so it never appeared in
+        // the widget. Show it.
+        reflectPreferencesIntoWidget();
         refreshAfterScopeRestore();
         return;
       }
@@ -238,6 +293,7 @@ export default defineContentScript({
         logger.warn(`accessibility scope unavailable: ${String(error)}`);
       } finally {
         await accessibilityPort.close().catch(() => {});
+        reflectPreferencesIntoWidget();
         refreshAfterScopeRestore();
       }
     });
@@ -367,6 +423,13 @@ export default defineContentScript({
     // won't cut playback here. This replaces the old chrome.tabs.onUpdated
     // 'loading' stop, which couldn't tell churn from a real unload.
     window.addEventListener('pagehide', () => {
+      // Flush a committed-but-unsaved preference: a navigation must not drop it.
+      if (persistedRate !== null && player.playbackRate !== persistedRate) {
+        void persistPlaybackRate();
+      }
+      if (persistedVolume !== null && player.playbackVolume !== persistedVolume) {
+        void persistPlaybackVolume();
+      }
       const state = sequencer.getState();
       if (state.playing || state.paused) stopPlayback();
     });
@@ -455,7 +518,13 @@ export default defineContentScript({
               activeScope = { source: 'dom', selector: result };
               activeAccessibilityText = null;
               activeSelector = result;
-              void selectorStore.save(hostname, activeScope);
+              // Persist the confirmation before remounting, and observe the
+              // write: a failed save must not look saved.
+              try {
+                await selectorStore.save(hostname, activeScope);
+              } catch (error) {
+                reportPersistenceFailure('Reading area', error);
+              }
             } else if (result?.source === 'accessibility') {
               activeScope = result;
               activeSelector = result.anchorSelector;
@@ -489,7 +558,9 @@ export default defineContentScript({
           },
           onClearSelection: () => {
             logInteraction(logger, 'widget', 'clear-reading-area');
-            void selectorStore.clear(hostname);
+            selectorStore.clear(hostname).catch((error) => {
+              reportPersistenceFailure('Reading area', error);
+            });
             activeScope = null;
             activeAccessibilityText = null;
             activeSelector = null;
@@ -499,11 +570,21 @@ export default defineContentScript({
           onToggleHighlight: (enabled) => {
             logInteraction(logger, 'widget', 'toggle-highlight', { enabled });
             player.setHighlightWordsEnabled(enabled);
-            void saveHighlightEnabled(enabled);
+            saveHighlightEnabled(enabled).catch((error) => {
+              reportPersistenceFailure('Word highlighting', error);
+            });
           },
           onChangeRate: (rate) => {
             logInteraction(logger, 'widget', 'change-rate', { rate });
             applyRate(rate);
+          },
+          // Persist on the committed change only: an intermediate input must not
+          // race the reload that follows it.
+          onCommitRate: () => {
+            void persistPlaybackRate();
+          },
+          onCommitVolume: () => {
+            void persistPlaybackVolume();
           },
           onChangeVolume: (volume) => {
             logInteraction(logger, 'widget', 'change-volume', { volume });
@@ -522,6 +603,9 @@ export default defineContentScript({
     function mountWidget(): void {
       widget = buildWidget();
       widget.mount();
+      // A widget may mount before hydration finishes; reflect now and again when
+      // each read resolves, so it never keeps defaults as final state.
+      reflectPreferencesIntoWidget();
       // Playback may already be running (started via keyboard shortcut) — the
       // fresh widget must reflect current sequencer state instead of idle.
       widget.reflect(sequencer.getState());

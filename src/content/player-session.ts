@@ -29,6 +29,7 @@ export interface PageSequencer {
 interface PlayerWidget {
   setParagraphs(options: ParagraphOption[] | null, searchTexts?: readonly string[]): void;
   setCurrentParagraph(index: number): void;
+  setRate(rate: number): void;
   setVolume(volume: number): void;
 }
 
@@ -198,19 +199,32 @@ export class PagePlayer {
       );
   }
 
+  /** Apply a rate live (slider input): playback follows at once, and a mounted
+   * widget stays in sync. Persistence is a separate committed decision — see
+   * `commitRate`. */
   applyRate(rate: number): void {
     this.rate = clampRate(rate);
-    void this.deps.saveRate(this.rate);
+    this.deps.getWidget()?.setRate(this.rate);
     this.deps.log.info(`applyRate ${JSON.stringify({ rate: this.rate })}`);
     this.scheduleRestart(() => this.deps.sequencer.setRate(this.rate));
   }
 
+  /** Persist the committed rate. The caller awaits it, so a reload immediately
+   * after the change cannot outrun the write. */
+  commitRate(): Promise<void> {
+    return this.deps.saveRate(this.rate);
+  }
+
   applyVolume(volume: number): void {
     this.volume = clampVolume(volume);
-    void this.deps.saveVolume(this.volume);
     this.deps.getWidget()?.setVolume(this.volume);
     this.deps.log.info(`applyVolume ${JSON.stringify({ volume: this.volume })}`);
     this.scheduleRestart(() => this.deps.sequencer.setVolume(this.volume));
+  }
+
+  /** Persist the committed volume. Awaited by the caller, like `commitRate`. */
+  commitVolume(): Promise<void> {
+    return this.deps.saveVolume(this.volume);
   }
 
   adjustVolume(delta: number): void {

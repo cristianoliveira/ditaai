@@ -29,7 +29,10 @@ export interface WidgetCallbacks {
   onClearSelection?(): void;
   onDictionary?(): void;
   onChangeRate?(rate: number): void;
+  /** Committed (slider released): the value to persist. */
+  onCommitRate?(rate: number): void;
   onChangeVolume?(volume: number): void;
+  onCommitVolume?(volume: number): void;
 }
 
 const STYLES = `
@@ -309,6 +312,12 @@ const STYLES = `
     min-width: 36px;
     text-align: center;
   }
+  .dita-status-line[hidden] { display: none; }
+  .dita-status-line {
+    font-size: 11px;
+    color: #ffb4b4;
+    max-width: 240px;
+  }
 `;
 
 export class DitaWidget {
@@ -334,6 +343,10 @@ export class DitaWidget {
   private currentParagraph = 0;
   private state: WidgetState = 'idle';
   private highlightEnabled = true;
+  /** Compact status line for failures the reader must know about — a preference
+   * that could not be saved must never look saved. */
+  private statusLine: HTMLSpanElement;
+  private persistenceError: string | null = null;
   private readonly callbacks: WidgetCallbacks;
   private readonly onDocumentClick = (): void => this.closeParagraphPopover();
 
@@ -533,6 +546,11 @@ export class DitaWidget {
       this.rateLabel.textContent = `${rate}×`;
       callbacks.onChangeRate?.(rate);
     });
+    // Persist on the committed change, never on every intermediate input event:
+    // a reload right after the drag must not outrun the write.
+    this.rateInput.addEventListener('change', () => {
+      callbacks.onCommitRate?.(Number(this.rateInput.value));
+    });
 
     this.rateLabel = document.createElement('span');
     this.rateLabel.className = 'dita-rate-label';
@@ -551,10 +569,19 @@ export class DitaWidget {
       this.volumeLabel.textContent = `${percent}%`;
       callbacks.onChangeVolume?.(percent / 100);
     });
+    this.volumeInput.addEventListener('change', () => {
+      callbacks.onCommitVolume?.(Number(this.volumeInput.value) / 100);
+    });
 
     this.volumeLabel = document.createElement('span');
     this.volumeLabel.className = 'dita-volume-label';
     this.volumeLabel.textContent = `${Math.round(initialVolume * 100)}%`;
+
+    this.statusLine = document.createElement('span');
+    this.statusLine.className = 'dita-status-line';
+    this.statusLine.setAttribute('role', 'status');
+    this.statusLine.setAttribute('aria-live', 'polite');
+    this.statusLine.hidden = true;
 
     widget.append(
       label,
@@ -567,6 +594,7 @@ export class DitaWidget {
       this.rateLabel,
       this.volumeInput,
       this.volumeLabel,
+      this.statusLine,
       selectBtn,
       this.selectionChip,
       dictBtn,
@@ -643,6 +671,21 @@ export class DitaWidget {
   setHighlightEnabled(enabled: boolean): void {
     this.highlightEnabled = enabled;
     this.applyHighlightVisual();
+  }
+
+  /** Mirror an external rate change (hydration, another tab) into the slider and
+   * label without re-notifying the caller. The widget and the player must never
+   * disagree about the value in use. */
+  setRate(rate: number): void {
+    this.rateInput.value = String(rate);
+    this.rateLabel.textContent = `${rate}×`;
+  }
+
+  /** Report a failed write. Pass null after a successful one to clear it. */
+  setPersistenceError(text: string | null): void {
+    this.persistenceError = text;
+    this.statusLine.textContent = text ?? '';
+    this.statusLine.hidden = text === null;
   }
 
   /** Mirror an external volume change (e.g. keyboard shortcut) into the slider
