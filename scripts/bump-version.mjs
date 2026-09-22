@@ -19,21 +19,31 @@ const currentVersion = pkg.version || "0.0.0";
 const overrideBase = process.argv[2];
 const currentBase = currentVersion.replace(/-.*$/, "");
 const baseVersion = overrideBase ?? currentBase;
+if (!/^\d+\.\d+\.\d+$/.test(baseVersion)) {
+  throw new Error(`Invalid base version: ${baseVersion}`);
+}
 
 const hash = execSync("git rev-parse --short HEAD").toString().trim();
 const timestamp = Math.floor(Date.now() / 1000);
 const newVersion = `${baseVersion}-${hash}-${timestamp}`;
 
-// Update package.json
-pkg.version = newVersion;
-writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
-
-// Update wxt.config.ts version_name (display string)
+// Validate and prepare both files before writing either one.
 const config = readFileSync("wxt.config.ts", "utf8");
-const updated = config.replace(
+const manifestVersionPattern = /(manifest:\s*\{[\s\S]*?\bversion:\s*['"])(\d+(?:\.\d+){0,3})(['"])/;
+if (!manifestVersionPattern.test(config)) {
+  throw new Error("Could not find numeric manifest version in wxt.config.ts");
+}
+const withManifestVersion = config.replace(
+  manifestVersionPattern,
+  `$1${baseVersion}$3`,
+);
+const updatedConfig = withManifestVersion.replace(
   /version_name:\s*"[^"]*"|version_name:\s*'[^']*'/,
   `version_name: '${newVersion}'`,
 );
-writeFileSync("wxt.config.ts", updated);
+
+pkg.version = newVersion;
+writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+writeFileSync("wxt.config.ts", updatedConfig);
 
 console.log(`bumped: ${currentVersion} → ${newVersion}`);
