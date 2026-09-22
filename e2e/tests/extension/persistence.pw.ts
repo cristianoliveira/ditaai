@@ -87,6 +87,33 @@ test.describe('persisted content preferences across reload', () => {
     }
   });
 
+  test('reflects a rate changed by another context into the open widget', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+
+      const page = await context.newPage();
+      await page.goto(`${server.base}/fake-tts-article.html`);
+      await openWidget(context, extensionId, '/fake-tts-article.html');
+      await expect(page.locator('.dita-widget')).toBeVisible({ timeout: 5_000 });
+
+      // Another context (an extension page, another tab) writes the preference.
+      // Two open tabs must not drift, so the mounted widget follows.
+      const ext = await context.newPage();
+      await ext.goto(testHarnessUrl(extensionId));
+      await ext.evaluate(async () => {
+        await chrome.storage.local.set({ playbackRate: 1.5 });
+      });
+
+      await expect(page.locator('.dita-rate')).toHaveValue('1.5');
+      await expect(page.locator('.dita-rate-label')).toHaveText('1.5×');
+
+      expect(errors).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
   test('restores a saved read scope visibly and applies it on another same-host page', async () => {
     const harness = await launchExtensionContext();
     try {

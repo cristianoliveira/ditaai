@@ -15,6 +15,7 @@ import { nearestReadable } from '../content/nearest-readable';
 import { extractParagraphs } from '../content/paragraph-extractor';
 import { Picker } from '../content/picker/picker';
 import { PagePlayer } from '../content/player-session';
+import { hydratePreferences } from '../content/preference-hydration';
 import { ShortcutController } from '../content/shortcuts';
 import { locateWord } from '../content/word-locator';
 import { buildTreeIndex, orderedStaticText } from '../domain/accessibility/tree';
@@ -238,23 +239,9 @@ export default defineContentScript({
       }
     }
 
-    void loadHighlightEnabled().then((value) => {
-      player.setHighlightWordsEnabled(value);
-      // Reflect after EACH preference: a mounted widget shows the value as soon
-      // as it is known instead of waiting for the slowest read.
-      reflectPreferencesIntoWidget();
-    });
-    void loadPlaybackRate().then((value) => {
-      player.setRate(value);
-      persistedRate = value;
-      reflectPreferencesIntoWidget();
-    });
-    void loadPlaybackVolume().then((value) => {
-      player.setVolume(value);
-      persistedVolume = value;
-      reflectPreferencesIntoWidget();
-    });
-    void selectorStore.load(hostname).then(async (scope) => {
+    /** Restore a saved read scope: set the model, then make the mounted widget
+     * show it (a restored scope used to set `activeSelector` only). */
+    async function applyRestoredScope(scope: ReadScope | null): Promise<void> {
       // A restored scope changes what is readable: refresh the readable region
       // and let the idle widget expose its paragraphs for search again.
       const refreshAfterScopeRestore = (): void => {
@@ -266,9 +253,6 @@ export default defineContentScript({
       if (scope?.source === 'dom') {
         activeSelector = scope.selector;
         logger.info(`restored selector for ${hostname}: ${scope.selector}`);
-        // A restored scope used to set the model only, so it never appeared in
-        // the widget. Show it.
-        reflectPreferencesIntoWidget();
         refreshAfterScopeRestore();
         return;
       }
@@ -293,10 +277,62 @@ export default defineContentScript({
         logger.warn(`accessibility scope unavailable: ${String(error)}`);
       } finally {
         await accessibilityPort.close().catch(() => {});
-        reflectPreferencesIntoWidget();
         refreshAfterScopeRestore();
       }
+    }
+
+    /** One isolated preference per loader: a failure in one (the read scope is
+     * the usual suspect) must never stop another from applying. A single
+     * `Promise.all` applied nothing when any read rejected, so a stored rate of
+     * 1.25 never reached the player or the widget. */
+    const contentPreferencesLoaded = hydratePreferences(
+      [
+        {
+          name: 'rate',
+          load: loadPlaybackRate,
+          apply: (value: unknown) => {
+            player.setRate(value as number);
+            persistedRate = value as number;
+          },
+          describe: (value: unknown) => value,
+        },
+        {
+          name: 'volume',
+          load: loadPlaybackVolume,
+          apply: (value: unknown) => {
+            player.setVolume(value as number);
+            persistedVolume = value as number;
+          },
+          describe: (value: unknown) => value,
+        },
+        {
+          name: 'highlight',
+          load: loadHighlightEnabled,
+          apply: (value: unknown) => player.setHighlightWordsEnabled(value as boolean),
+          describe: (value: unknown) => value,
+        },
+        {
+          // The selector itself is not logged: only its source.
+          name: 'read-scope',
+          load: () => selectorStore.load(hostname),
+          apply: (value: unknown) => applyRestoredScope(value as ReadScope | null),
+          describe: (value: unknown) => (value as ReadScope | null)?.source ?? 'none',
+        },
+      ],
+      logger,
+      // Reflect after EACH preference, so a mounted widget shows the value as
+      // soon as it is known rather than waiting for the slowest read.
+      { onApplied: () => reflectPreferencesIntoWidget() },
+    );
+
+    // Diagnostics with the exact build under test, so a report can never be
+    // explained by a stale bundle. Contains no page text.
+    logger.info('[dita] build', {
+      version: chrome.runtime.getManifest().version,
+      versionName: chrome.runtime.getManifest().version_name,
     });
+    void contentPreferencesLoaded;
+
     void substitutionStore.load().then((dict) => {
       substitutions = dict;
     });
@@ -321,6 +357,28 @@ export default defineContentScript({
       }
       if (changes[SIMPLIFY_LINKS_KEY]) {
         linksEnabled = changes[SIMPLIFY_LINKS_KEY].newValue !== false;
+      }
+      // Another context (another tab, an extension page) changed a content
+      // preference: reflect it here too, so two open tabs cannot drift.
+      const rate = changes[RATE_PREF]?.newValue;
+      if (typeof rate === 'number') {
+        player.setRate(rate);
+        persistedRate = rate;
+        reflectPreferencesIntoWidget();
+        logger.info('[prefs] rate changed elsewhere', { rate });
+      }
+      const volume = changes[VOLUME_PREF]?.newValue;
+      if (typeof volume === 'number') {
+        player.setVolume(volume);
+        persistedVolume = volume;
+        reflectPreferencesIntoWidget();
+        logger.info('[prefs] volume changed elsewhere', { volume });
+      }
+      const highlight = changes[HIGHLIGHT_PREF]?.newValue;
+      if (typeof highlight === 'boolean') {
+        player.setHighlightWordsEnabled(highlight);
+        reflectPreferencesIntoWidget();
+        logger.info('[prefs] highlight changed elsewhere', { highlight });
       }
     });
 
