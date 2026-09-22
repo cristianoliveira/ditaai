@@ -18,6 +18,4 @@ The repository has a registered Chrome Web Store developer account and the one-t
 
 Chrome manifest versions are numeric dotted components (no `v`, hash, or prerelease suffix). The packaging step never rewrites the built manifest: it verifies that the source tag, dispatch input, and artifact version agree. The workflow serializes releases to avoid concurrent uploads to one item. Never put service-account credentials in repository variables, build steps, artifacts, or source control.
 
-The current lockfile has a high-severity transitive development/build dependency finding for `nanoid` 3.3.17 (GHSA-2v37-7h3g-55p8, fixed in 3.3.18). Resolve it and verify the audit gate before the first release; do not bypass the gate silently.
-
 See [Using the Chrome Web Store API](https://developer.chrome.com/docs/webstore/using-api) for API behavior and dashboard setup.
