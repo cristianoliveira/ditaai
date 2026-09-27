@@ -123,7 +123,7 @@ export class SupertonicOnnxReader implements TextReader {
       resumeFromChar: options?.resumeFromChar ?? 0,
       chars: text.length,
     });
-    await this.playAudioWithBoundaries(prepared, options?.volume);
+    await this.playAudioWithBoundaries(prepared, options?.volume, playbackStartedAt);
     const durationMs = Date.now() - playbackStartedAt;
     const rate = speechRate(spokenChars, durationMs);
     logger.info(`[supertonic:${speechId}] playback:complete`, { durationMs, ...rate });
@@ -296,7 +296,11 @@ export class SupertonicOnnxReader implements TextReader {
     }
   }
 
-  private playAudioWithBoundaries(prepared: PreparedSpeech, volume?: number): Promise<void> {
+  private playAudioWithBoundaries(
+    prepared: PreparedSpeech,
+    volume?: number,
+    playbackStartedAt = Date.now(),
+  ): Promise<void> {
     const ctx = this.getAudioContext();
     const { audioBuffer, words } = prepared;
     const audioDuration = audioBuffer.duration;
@@ -355,6 +359,9 @@ export class SupertonicOnnxReader implements TextReader {
 
       source.start();
       startTime = ctx.currentTime;
+      this.onPerformance?.('audio.source:scheduled', {
+        durationMs: Date.now() - playbackStartedAt,
+      });
     });
   }
 

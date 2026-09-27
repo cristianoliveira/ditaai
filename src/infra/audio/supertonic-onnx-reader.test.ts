@@ -80,6 +80,23 @@ describe('SupertonicOnnxReader preparation', () => {
     });
   });
 
+  it('reports when the audio source is scheduled, not when audio is audible', async () => {
+    const audio = audioContext();
+    const onPerformance = vi.fn();
+    const subject = new SupertonicOnnxReader({
+      modelAssets: {},
+      voiceStyle: new ArrayBuffer(1),
+      audioContextFactory: () => audio.context as unknown as AudioContext,
+      onPerformance,
+    });
+
+    await subject.speak('first segment');
+
+    expect(onPerformance).toHaveBeenCalledWith('audio.source:scheduled', {
+      durationMs: expect.any(Number),
+    });
+  });
+
   it('plays prepared speech without repeating inference', async () => {
     const audio = audioContext();
     const subject = new SupertonicOnnxReader({

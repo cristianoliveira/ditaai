@@ -29,6 +29,7 @@ const PERFORMANCE_EVENTS = new Set([
   'speak:complete',
   'models:ready',
   'inference:complete',
+  'audio.source:scheduled',
 ]);
 const PERFORMANCE_FIELDS = new Set([
   'durationMs',

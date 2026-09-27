@@ -114,6 +114,7 @@ export default defineBackground(() => {
         'reader:ready',
         'prepare:complete',
         'speak:complete',
+        'audio.source:scheduled',
         'models:ready',
         'inference:complete',
       ]);
