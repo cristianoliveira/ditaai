@@ -106,6 +106,7 @@ async function getReader(
 }
 
 async function createReader(voiceId: string): Promise<SupertonicOnnxReader> {
+  const cacheStartedAt = Date.now();
   log('cache:load', { voiceId });
   const cache = await openCache();
   const [modelAssets, voiceStyle] = await Promise.all([
@@ -113,7 +114,9 @@ async function createReader(voiceId: string): Promise<SupertonicOnnxReader> {
     loadVoiceStyleBuffer(cache, voiceId),
   ]);
   log('cache:loaded', {
+    durationMs: Date.now() - cacheStartedAt,
     modelAssetCount: Object.keys(modelAssets).length,
+    modelBytes: Object.values(modelAssets).reduce((total, asset) => total + asset.byteLength, 0),
     voiceBytes: voiceStyle.byteLength,
   });
   return new SupertonicOnnxReader({ modelAssets, voiceStyle });

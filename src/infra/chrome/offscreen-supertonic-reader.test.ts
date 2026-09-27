@@ -59,6 +59,7 @@ function subject(
 
 describe('OffscreenSupertonicReader', () => {
   it('creates offscreen document before checking installed voices', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
     const chrome = chromeApi();
     chrome.runtime.sendMessage.mockResolvedValue({ ok: true, available: true });
     const reader = subject(chrome);
@@ -70,6 +71,11 @@ describe('OffscreenSupertonicReader', () => {
       reasons: ['AUDIO_PLAYBACK'],
       justification: 'Play installed text-to-speech voices',
     });
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('offscreen.document:created'),
+      expect.objectContaining({ durationMs: expect.any(Number) }),
+    );
+    info.mockRestore();
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       dest: 'offscreen',
       method: 'isAvailable',

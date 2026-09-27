@@ -197,13 +197,16 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
   }
 
   private async createDocumentIfMissing(): Promise<void> {
+    const startedAt = Date.now();
     const url = this.chromeApi.runtime.getURL('offscreen.html');
     const contexts = await this.chromeApi.runtime.getContexts({
       contextTypes: ['OFFSCREEN_DOCUMENT' as chrome.runtime.ContextType],
       documentUrls: [url],
     });
     if (contexts.length > 0) {
-      logger.info('[installed-voice][service-worker] offscreen.document:reuse');
+      logger.info('[installed-voice][service-worker] offscreen.document:reuse', {
+        durationMs: Date.now() - startedAt,
+      });
       return;
     }
 
@@ -212,6 +215,9 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
       url: 'offscreen.html',
       reasons: ['AUDIO_PLAYBACK' as chrome.offscreen.Reason],
       justification: 'Play installed text-to-speech voices',
+    });
+    logger.info('[installed-voice][service-worker] offscreen.document:created', {
+      durationMs: Date.now() - startedAt,
     });
   }
 
