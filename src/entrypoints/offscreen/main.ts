@@ -22,16 +22,26 @@ const pageVoiceRotations = new Map<string, PageVoiceRotation>();
 const PAGE_VISIT_VOICES_KEY = 'pageVisitVoices';
 
 function reportPerformance(event: string, details: Record<string, unknown> = {}): void {
-  chrome.runtime.sendMessage({
-    dest: 'serviceWorker',
-    method: 'installedVoiceTelemetry',
-    args: [event, details],
-  }).catch(() => {});
+  chrome.runtime
+    .sendMessage({
+      dest: 'serviceWorker',
+      method: 'installedVoiceTelemetry',
+      args: [event, details],
+    })
+    .catch(() => {});
 }
 
 function log(event: string, details?: Record<string, unknown>): void {
   logger.info(`[installed-voice][offscreen] ${event}`, details);
-  if (['cache:loaded', 'reader:initialize', 'reader:ready', 'prepare:complete', 'speak:complete'].includes(event)) {
+  if (
+    [
+      'cache:loaded',
+      'reader:initialize',
+      'reader:ready',
+      'prepare:complete',
+      'speak:complete',
+    ].includes(event)
+  ) {
     reportPerformance(event, details);
   }
 }
