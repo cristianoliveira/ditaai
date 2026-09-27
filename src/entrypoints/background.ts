@@ -105,8 +105,7 @@ export default defineBackground(() => {
 
   // Forward word-boundary events from offscreen → the originating content tab.
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg?.dest !== 'serviceWorker') return false;
-    if (msg.method === 'installedVoiceTelemetry') {
+    if (msg?.dest === 'performanceTelemetry' && msg.method === 'installedVoiceTelemetry') {
       const [event, details] = msg.args ?? [];
       const allowedEvents = new Set([
         'cache:loaded',
@@ -144,6 +143,7 @@ export default defineBackground(() => {
       sendResponse({ ok: true });
       return true;
     }
+    if (msg?.dest !== 'serviceWorker') return false;
     if (msg.method === 'installedVoiceBoundary') {
       boundaryRelay.deliver(msg.args?.[0]);
       sendResponse({ ok: true });

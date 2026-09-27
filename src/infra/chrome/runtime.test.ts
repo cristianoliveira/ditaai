@@ -32,6 +32,34 @@ describe('attachRuntimeListener', () => {
     expect(keepOpen).toBe(false);
   });
 
+  it('ignores performance telemetry messages owned by the dedicated telemetry listener', () => {
+    let listener:
+      | ((message: unknown, sender: unknown, respond: (value: unknown) => void) => boolean)
+      | undefined;
+    vi.stubGlobal('chrome', {
+      runtime: {
+        onMessage: {
+          addListener: vi.fn((value) => {
+            listener = value;
+          }),
+        },
+      },
+    });
+    const router = vi.fn();
+    const respond = vi.fn();
+    attachRuntimeListener(router);
+
+    const keepOpen = listener?.(
+      { dest: 'performanceTelemetry', method: 'installedVoiceTelemetry', args: [] },
+      {},
+      respond,
+    );
+
+    expect(router).not.toHaveBeenCalled();
+    expect(respond).not.toHaveBeenCalled();
+    expect(keepOpen).toBe(false);
+  });
+
   it('ignores messages addressed to offscreen document', () => {
     let listener:
       | ((message: unknown, sender: unknown, respond: (value: unknown) => void) => boolean)

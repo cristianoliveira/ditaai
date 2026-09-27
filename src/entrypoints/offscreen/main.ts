@@ -51,7 +51,7 @@ function reportPerformance(event: string, details: Record<string, unknown> = {})
   );
   chrome.runtime
     .sendMessage({
-      dest: 'serviceWorker',
+      dest: 'performanceTelemetry',
       method: 'installedVoiceTelemetry',
       args: [event, metrics],
     })
