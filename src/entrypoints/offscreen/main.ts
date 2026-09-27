@@ -21,12 +21,38 @@ let readerInitialization: Promise<SupertonicOnnxReader> | null = null;
 const pageVoiceRotations = new Map<string, PageVoiceRotation>();
 const PAGE_VISIT_VOICES_KEY = 'pageVisitVoices';
 
+const PERFORMANCE_EVENTS = new Set([
+  'cache:loaded',
+  'reader:initialize',
+  'reader:ready',
+  'prepare:complete',
+  'speak:complete',
+  'models:ready',
+  'inference:complete',
+]);
+const PERFORMANCE_FIELDS = new Set([
+  'durationMs',
+  'modelAssetCount',
+  'modelBytes',
+  'voiceBytes',
+  'sampleCount',
+  'durationSum',
+  'textLength',
+]);
+
 function reportPerformance(event: string, details: Record<string, unknown> = {}): void {
+  if (!PERFORMANCE_EVENTS.has(event)) return;
+  const metrics = Object.fromEntries(
+    Object.entries(details).filter(
+      ([key, value]) =>
+        PERFORMANCE_FIELDS.has(key) && typeof value === 'number' && Number.isFinite(value),
+    ),
+  );
   chrome.runtime
     .sendMessage({
       dest: 'serviceWorker',
       method: 'installedVoiceTelemetry',
-      args: [event, details],
+      args: [event, metrics],
     })
     .catch(() => {});
 }

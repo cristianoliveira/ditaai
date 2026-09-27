@@ -108,8 +108,37 @@ export default defineBackground(() => {
     if (msg?.dest !== 'serviceWorker') return false;
     if (msg.method === 'installedVoiceTelemetry') {
       const [event, details] = msg.args ?? [];
-      if (typeof event === 'string' && details && typeof details === 'object') {
-        logger.info(`[installed-voice][telemetry] ${event}`, details);
+      const allowedEvents = new Set([
+        'cache:loaded',
+        'reader:initialize',
+        'reader:ready',
+        'prepare:complete',
+        'speak:complete',
+        'models:ready',
+        'inference:complete',
+      ]);
+      const allowedFields = new Set([
+        'durationMs',
+        'modelAssetCount',
+        'modelBytes',
+        'voiceBytes',
+        'sampleCount',
+        'durationSum',
+        'textLength',
+      ]);
+      if (
+        typeof event === 'string' &&
+        allowedEvents.has(event) &&
+        details &&
+        typeof details === 'object'
+      ) {
+        const metrics = Object.fromEntries(
+          Object.entries(details).filter(
+            ([key, value]) =>
+              allowedFields.has(key) && typeof value === 'number' && Number.isFinite(value),
+          ),
+        );
+        logger.info(`[installed-voice][telemetry] ${event}`, metrics);
       }
       sendResponse({ ok: true });
       return true;
