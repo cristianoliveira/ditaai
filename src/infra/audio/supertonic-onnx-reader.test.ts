@@ -58,6 +58,28 @@ describe('SupertonicOnnxReader preparation', () => {
     helper.writeWav.mockReturnValue(new ArrayBuffer(8));
   });
 
+  it('relays model initialization and inference timings to the observable context', async () => {
+    const audio = audioContext();
+    const onPerformance = vi.fn();
+    const subject = new SupertonicOnnxReader({
+      modelAssets: {},
+      voiceStyle: new ArrayBuffer(1),
+      audioContextFactory: () => audio.context as unknown as AudioContext,
+      onPerformance,
+    });
+
+    await subject.prepare('timed paragraph');
+
+    expect(onPerformance).toHaveBeenCalledWith('models:ready', {
+      durationMs: expect.any(Number),
+    });
+    expect(onPerformance).toHaveBeenCalledWith('inference:complete', {
+      durationMs: expect.any(Number),
+      sampleCount: 2,
+      durationSum: 1,
+    });
+  });
+
   it('plays prepared speech without repeating inference', async () => {
     const audio = audioContext();
     const subject = new SupertonicOnnxReader({

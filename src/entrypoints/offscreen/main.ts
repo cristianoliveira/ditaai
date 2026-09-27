@@ -21,8 +21,19 @@ let readerInitialization: Promise<SupertonicOnnxReader> | null = null;
 const pageVoiceRotations = new Map<string, PageVoiceRotation>();
 const PAGE_VISIT_VOICES_KEY = 'pageVisitVoices';
 
+function reportPerformance(event: string, details: Record<string, unknown> = {}): void {
+  chrome.runtime.sendMessage({
+    dest: 'serviceWorker',
+    method: 'installedVoiceTelemetry',
+    args: [event, details],
+  }).catch(() => {});
+}
+
 function log(event: string, details?: Record<string, unknown>): void {
   logger.info(`[installed-voice][offscreen] ${event}`, details);
+  if (['cache:loaded', 'reader:initialize', 'reader:ready', 'prepare:complete', 'speak:complete'].includes(event)) {
+    reportPerformance(event, details);
+  }
 }
 
 async function findInstalledVoiceId(
@@ -119,7 +130,11 @@ async function createReader(voiceId: string): Promise<SupertonicOnnxReader> {
     modelBytes: Object.values(modelAssets).reduce((total, asset) => total + asset.byteLength, 0),
     voiceBytes: voiceStyle.byteLength,
   });
-  return new SupertonicOnnxReader({ modelAssets, voiceStyle });
+  return new SupertonicOnnxReader({
+    modelAssets,
+    voiceStyle,
+    onPerformance: reportPerformance,
+  });
 }
 
 interface VoiceContext {

@@ -55,6 +55,8 @@ export interface SupertonicOnnxConfig {
   totalSteps?: number;
   /** Injected AudioContext factory for testing. */
   audioContextFactory?: () => AudioContext;
+  /** Relays bounded performance timings to an observable extension context. */
+  onPerformance?: (event: string, details: Record<string, unknown>) => void;
 }
 
 export class SupertonicOnnxReader implements TextReader {
@@ -64,6 +66,7 @@ export class SupertonicOnnxReader implements TextReader {
   private readonly speed: number;
   private readonly totalSteps: number;
   private readonly audioContextFactory: () => AudioContext;
+  private readonly onPerformance?: SupertonicOnnxConfig['onPerformance'];
 
   private tts: TextToSpeech | null = null;
   private ttsInitialization: Promise<TextToSpeech> | null = null;
@@ -94,6 +97,7 @@ export class SupertonicOnnxReader implements TextReader {
     this.totalSteps = config.totalSteps ?? 8;
     this.audioContextFactory =
       config.audioContextFactory ?? (() => new AudioContext({ sampleRate: 44100 }));
+    this.onPerformance = config.onPerformance;
   }
 
   async prepare(text: string, options?: SpeakOptions): Promise<void> {
@@ -202,11 +206,13 @@ export class SupertonicOnnxReader implements TextReader {
       () => undefined,
     );
     const { wav, duration } = await inference;
-    logger.info(`[supertonic:prepare:${preparationId}] inference:complete`, {
+    const inferenceDetails = {
       durationMs: Date.now() - inferenceStartedAt,
       sampleCount: wav.length,
       durationSum: duration.reduce((sum, d) => sum + d, 0),
-    });
+    };
+    logger.info(`[supertonic:prepare:${preparationId}] inference:complete`, inferenceDetails);
+    this.onPerformance?.('inference:complete', inferenceDetails);
 
     const wavBuffer = writeWav(new Float32Array(wav), tts.sampleRate);
     const audioBuffer = await this.getAudioContext().decodeAudioData(wavBuffer);
@@ -230,9 +236,9 @@ export class SupertonicOnnxReader implements TextReader {
     this.ttsInitialization = loadTextToSpeech(this.modelAssets)
       .then(({ tts }) => {
         this.tts = tts;
-        logger.info(`[supertonic:prepare:${preparationId}] models:ready`, {
-          durationMs: Date.now() - startedAt,
-        });
+        const details = { durationMs: Date.now() - startedAt };
+        logger.info(`[supertonic:prepare:${preparationId}] models:ready`, details);
+        this.onPerformance?.('models:ready', details);
         return tts;
       })
       .finally(() => {
