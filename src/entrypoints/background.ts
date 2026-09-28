@@ -8,6 +8,7 @@ import { ChromeDebuggerAccessibilityTree } from '../infra/chrome/debugger-access
 import { InstalledVoiceBoundaryRelay } from '../infra/chrome/installed-voice-boundary-relay';
 import { patchSendMessageCallback } from '../infra/chrome/messaging';
 import { OffscreenSupertonicReader } from '../infra/chrome/offscreen-supertonic-reader';
+import { attachPerformanceTelemetryListener } from '../infra/chrome/performance-telemetry';
 import { attachRuntimeListener, fetchTabText, resolveActiveTab } from '../infra/chrome/runtime';
 import { watchSpeakingTabLifecycle } from '../infra/chrome/tab-lifecycle-watcher';
 import { logger } from '../lib/logger';
@@ -15,6 +16,10 @@ import { logger } from '../lib/logger';
 export default defineBackground(() => {
   // Guard: swallow noisy "Receiving end does not exist" errors
   patchSendMessageCallback();
+
+  const manifestVersion =
+    chrome.runtime.getManifest().version_name ?? chrome.runtime.getManifest().version;
+  logger.info(`[installed-voice][service-worker] build:loaded ${manifestVersion}`);
 
   const controller = new PlaybackController();
   const installedReader = new OffscreenSupertonicReader();
@@ -104,45 +109,9 @@ export default defineBackground(() => {
   );
 
   // Forward word-boundary events from offscreen → the originating content tab.
+  attachPerformanceTelemetryListener(chrome.runtime.onMessage, (line) => logger.info(line));
+
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg?.dest === 'performanceTelemetry' && msg.method === 'installedVoiceTelemetry') {
-      const [event, details] = msg.args ?? [];
-      const allowedEvents = new Set([
-        'cache:loaded',
-        'reader:initialize',
-        'reader:ready',
-        'prepare:complete',
-        'speak:complete',
-        'audio.source:scheduled',
-        'models:ready',
-        'inference:complete',
-      ]);
-      const allowedFields = new Set([
-        'durationMs',
-        'modelAssetCount',
-        'modelBytes',
-        'voiceBytes',
-        'sampleCount',
-        'durationSum',
-        'textLength',
-      ]);
-      if (
-        typeof event === 'string' &&
-        allowedEvents.has(event) &&
-        details &&
-        typeof details === 'object'
-      ) {
-        const metrics = Object.fromEntries(
-          Object.entries(details).filter(
-            ([key, value]) =>
-              allowedFields.has(key) && typeof value === 'number' && Number.isFinite(value),
-          ),
-        );
-        logger.info(`[installed-voice][telemetry] ${event}`, metrics);
-      }
-      sendResponse({ ok: true });
-      return true;
-    }
     if (msg?.dest !== 'serviceWorker') return false;
     if (msg.method === 'installedVoiceBoundary') {
       boundaryRelay.deliver(msg.args?.[0]);
