@@ -1,10 +1,23 @@
 /**
  * @param {string} extensionDirectory
  */
-export async function reloadLoadedExtension(context, serviceWorker) {
-  const replacementWorker = context.waitForEvent('serviceworker', { timeout: 15_000 });
+export async function reloadLoadedExtension(serviceWorker) {
   await serviceWorker.evaluate(() => chrome.runtime.reload()).catch(() => {});
-  return replacementWorker;
+}
+
+export async function requestLoadedBuild(context, extensionId) {
+  const page = await context.newPage();
+  try {
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    return await page.evaluate(() =>
+      chrome.runtime.sendMessage({
+        dest: 'performanceTelemetry',
+        method: 'getBuild',
+      }),
+    );
+  } finally {
+    await page.close();
+  }
 }
 
 export async function runSyntheticAudioProbe(context, extensionId) {

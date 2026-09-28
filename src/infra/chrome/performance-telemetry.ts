@@ -33,9 +33,15 @@ interface RuntimeMessageEvent {
 export function attachPerformanceTelemetryListener(
   event: RuntimeMessageEvent,
   log: (line: string) => void,
+  buildVersion: string,
 ): void {
   event.addListener((message, _sender, sendResponse) => {
-    if (!isTelemetryMessage(message)) return false;
+    if (!isPerformanceMessage(message)) return false;
+    if (message.method === 'getBuild') {
+      sendResponse({ ok: true, buildVersion });
+      return true;
+    }
+    if (message.method !== 'installedVoiceTelemetry') return false;
 
     const [name, details] = message.args ?? [];
     if (typeof name === 'string' && ALLOWED_EVENTS.has(name)) {
@@ -48,9 +54,9 @@ export function attachPerformanceTelemetryListener(
   });
 }
 
-function isTelemetryMessage(message: unknown): message is {
+function isPerformanceMessage(message: unknown): message is {
   dest: 'performanceTelemetry';
-  method: 'installedVoiceTelemetry';
+  method: string;
   args?: unknown[];
 } {
   return (
@@ -59,7 +65,8 @@ function isTelemetryMessage(message: unknown): message is {
     'dest' in message &&
     message.dest === 'performanceTelemetry' &&
     'method' in message &&
-    message.method === 'installedVoiceTelemetry'
+    typeof message.method === 'string' &&
+    ['getBuild', 'installedVoiceTelemetry'].includes(message.method)
   );
 }
 

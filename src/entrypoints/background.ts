@@ -105,7 +105,13 @@ export default defineBackground(() => {
   );
 
   // Forward word-boundary events from offscreen → the originating content tab.
-  attachPerformanceTelemetryListener(chrome.runtime.onMessage, (line) => logger.info(line));
+  const buildVersion =
+    chrome.runtime.getManifest().version_name ?? chrome.runtime.getManifest().version;
+  attachPerformanceTelemetryListener(
+    chrome.runtime.onMessage,
+    (line) => logger.info(line),
+    buildVersion,
+  );
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.dest !== 'serviceWorker') return false;

@@ -12,6 +12,7 @@ import {
   loadedExtensionVersion,
   openRequestedPage,
   reloadLoadedExtension,
+  requestLoadedBuild,
   runSyntheticAudioProbe,
 } from './observe-browser.mjs';
 
@@ -75,26 +76,40 @@ attachBrowserObservability(context, writer);
 
 let serviceWorker = await waitForServiceWorker(context);
 const extensionId = serviceWorker.url().match(/^chrome-extension:\/\/([^/]+)\//)?.[1];
+let diagnosticBuild;
 if (process.env.DITA_OBSERVE_RELOAD_EXTENSION === '1') {
-  serviceWorker = await reloadLoadedExtension(context, serviceWorker);
+  await reloadLoadedExtension(serviceWorker);
+  const handshake = await requestLoadedBuild(context, extensionId);
+  if (!handshake?.ok || typeof handshake.buildVersion !== 'string') {
+    await context.close();
+    throw new Error('Reloaded extension did not answer the build diagnostic');
+  }
+  diagnosticBuild = handshake.buildVersion;
+  serviceWorker =
+    context
+      .serviceWorkers()
+      .find((worker) => worker.url().startsWith(`chrome-extension://${extensionId}/`)) ??
+    (await waitForServiceWorker(context));
 }
 const expectedManifest = JSON.parse(
   await fs.readFile(path.join(extensionDirectory, 'manifest.json'), 'utf8'),
 );
 const expectedBuild = expectedManifest.version_name ?? expectedManifest.version;
 const loadedBuild = await loadedExtensionVersion(serviceWorker);
-if (loadedBuild !== expectedBuild) {
+if (loadedBuild !== expectedBuild || (diagnosticBuild && diagnosticBuild !== expectedBuild)) {
   await writer.write({
     level: 'error',
     kind: 'extension.build-mismatch',
     source: 'observer',
     message: 'Loaded extension build does not match dist',
-    details: { expectedBuild, loadedBuild },
+    details: { expectedBuild, loadedBuild, diagnosticBuild },
   });
   await writeSession({ status: 'error', extensionId });
   await writer.flush();
   await context.close();
-  throw new Error(`Loaded extension build mismatch: expected ${expectedBuild}, got ${loadedBuild}`);
+  throw new Error(
+    `Loaded extension build mismatch: expected ${expectedBuild}, got ${loadedBuild}; diagnostic=${diagnosticBuild ?? 'not-run'}`,
+  );
 }
 await writeSession({ status: 'ready', extensionId });
 await writer.write({
@@ -103,7 +118,7 @@ await writer.write({
   source: 'observer',
   url: serviceWorker.url(),
   message: 'Dita extension and browser are ready',
-  details: { extensionId, loadedBuild },
+  details: { extensionId, loadedBuild, diagnosticBuild },
 });
 
 if (process.env.DITA_OBSERVE_SYNTHETIC_AUDIO_PROBE === '1') {

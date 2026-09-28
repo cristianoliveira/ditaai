@@ -4,28 +4,33 @@ import {
   loadedExtensionVersion,
   openRequestedPage,
   reloadLoadedExtension,
+  requestLoadedBuild,
   runSyntheticAudioProbe,
 } from './observe-browser.mjs';
 
 describe('reloadLoadedExtension', () => {
-  it('requests extension reload and resolves with the replacement worker', async () => {
-    let resolveWorker: ((worker: unknown) => void) | undefined;
-    const replacement = new Promise((resolve) => {
-      resolveWorker = resolve;
-    });
-    const waitForEvent = vi.fn(() => replacement);
+  it('requests extension reload without requiring worker startup before a message', async () => {
     const evaluate = vi.fn(async (callback) => {
       callback();
     });
-    const serviceWorker = { evaluate };
-    const context = { waitForEvent };
-    const nextWorker = { url: 'chrome-extension://id/background.js' };
-    const result = reloadLoadedExtension(context, serviceWorker);
-    resolveWorker?.(nextWorker);
 
-    await expect(result).resolves.toBe(nextWorker);
-    expect(waitForEvent).toHaveBeenCalledWith('serviceworker', { timeout: 15_000 });
+    await expect(reloadLoadedExtension({ evaluate })).resolves.toBeUndefined();
     expect(evaluate).toHaveBeenCalledOnce();
+  });
+});
+
+describe('requestLoadedBuild', () => {
+  it('queries the new worker through an extension page context', async () => {
+    const evaluate = vi.fn().mockResolvedValue({ ok: true, buildVersion: 'build-123' });
+    const page = { evaluate, goto: vi.fn(), close: vi.fn() };
+    const context = { newPage: vi.fn().mockResolvedValue(page) };
+
+    await expect(requestLoadedBuild(context, 'extension-id')).resolves.toEqual({
+      ok: true,
+      buildVersion: 'build-123',
+    });
+    expect(page.goto).toHaveBeenCalledWith('chrome-extension://extension-id/popup.html');
+    expect(page.close).toHaveBeenCalledOnce();
   });
 });
 

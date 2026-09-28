@@ -13,7 +13,7 @@ describe('attachPerformanceTelemetryListener', () => {
     };
     const log = vi.fn();
     const respond = vi.fn();
-    attachPerformanceTelemetryListener(event, log);
+    attachPerformanceTelemetryListener(event, log, 'test-build');
 
     const keepOpen = listener?.(
       {
@@ -35,6 +35,27 @@ describe('attachPerformanceTelemetryListener', () => {
     expect(keepOpen).toBe(true);
   });
 
+  it('returns the loaded build version to diagnostic extension pages', () => {
+    let listener:
+      | ((message: unknown, sender: unknown, respond: (value: unknown) => void) => boolean)
+      | undefined;
+    attachPerformanceTelemetryListener(
+      {
+        addListener: (value) => {
+          listener = value;
+        },
+      },
+      vi.fn(),
+      'runtime-build-7',
+    );
+    const respond = vi.fn();
+
+    const keepOpen = listener?.({ dest: 'performanceTelemetry', method: 'getBuild' }, {}, respond);
+
+    expect(respond).toHaveBeenCalledWith({ ok: true, buildVersion: 'runtime-build-7' });
+    expect(keepOpen).toBe(true);
+  });
+
   it('does not claim messages for other destinations', () => {
     let listener:
       | ((message: unknown, sender: unknown, respond: (value: unknown) => void) => boolean)
@@ -46,6 +67,7 @@ describe('attachPerformanceTelemetryListener', () => {
         },
       },
       vi.fn(),
+      'test-build',
     );
     const respond = vi.fn();
 
