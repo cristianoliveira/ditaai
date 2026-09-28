@@ -7,7 +7,11 @@ import process from 'node:process';
 import { chromium } from '@playwright/test';
 import { findChromiumExecutable } from './chromium-executable.mjs';
 import { attachBrowserObservability, createEventWriter } from './observability.mjs';
-import { chromiumLaunchArguments, openRequestedPage } from './observe-browser.mjs';
+import {
+  chromiumLaunchArguments,
+  loadedExtensionVersion,
+  openRequestedPage,
+} from './observe-browser.mjs';
 
 const HELP = `Dita local observability browser
 
@@ -69,6 +73,24 @@ attachBrowserObservability(context, writer);
 
 const serviceWorker = await waitForServiceWorker(context);
 const extensionId = serviceWorker.url().match(/^chrome-extension:\/\/([^/]+)\//)?.[1];
+const expectedManifest = JSON.parse(
+  await fs.readFile(path.join(extensionDirectory, 'manifest.json'), 'utf8'),
+);
+const expectedBuild = expectedManifest.version_name ?? expectedManifest.version;
+const loadedBuild = await loadedExtensionVersion(serviceWorker);
+if (loadedBuild !== expectedBuild) {
+  await writer.write({
+    level: 'error',
+    kind: 'extension.build-mismatch',
+    source: 'observer',
+    message: 'Loaded extension build does not match dist',
+    details: { expectedBuild, loadedBuild },
+  });
+  await writeSession({ status: 'error', extensionId });
+  await writer.flush();
+  await context.close();
+  throw new Error(`Loaded extension build mismatch: expected ${expectedBuild}, got ${loadedBuild}`);
+}
 await writeSession({ status: 'ready', extensionId });
 await writer.write({
   level: 'info',
@@ -76,7 +98,7 @@ await writer.write({
   source: 'observer',
   url: serviceWorker.url(),
   message: 'Dita extension and browser are ready',
-  details: { extensionId },
+  details: { extensionId, loadedBuild },
 });
 
 await openRequestedPage(context, process.env.DITA_OBSERVE_URL);

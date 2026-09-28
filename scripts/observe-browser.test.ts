@@ -1,5 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
-import { chromiumLaunchArguments, openRequestedPage } from './observe-browser.mjs';
+import {
+  chromiumLaunchArguments,
+  loadedExtensionVersion,
+  openRequestedPage,
+} from './observe-browser.mjs';
+
+describe('loadedExtensionVersion', () => {
+  it('reads the version of the service worker that Chromium actually loaded', async () => {
+    const evaluate = vi.fn().mockResolvedValue('0.3.0-build-123');
+
+    await expect(loadedExtensionVersion({ evaluate })).resolves.toBe('0.3.0-build-123');
+    expect(evaluate).toHaveBeenCalledOnce();
+  });
+});
 
 describe('chromiumLaunchArguments', () => {
   it('loads Dita and restores tabs from the persistent profile', () => {

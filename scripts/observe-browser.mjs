@@ -1,6 +1,13 @@
 /**
  * @param {string} extensionDirectory
  */
+export async function loadedExtensionVersion(serviceWorker) {
+  return serviceWorker.evaluate(() => {
+    const manifest = chrome.runtime.getManifest();
+    return manifest.version_name ?? manifest.version;
+  });
+}
+
 export function chromiumLaunchArguments(extensionDirectory) {
   return [
     `--disable-extensions-except=${extensionDirectory}`,
