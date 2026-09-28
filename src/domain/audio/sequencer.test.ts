@@ -134,7 +134,99 @@ describe('SegmentSequencer', () => {
     await playback;
   });
 
-  it('prebuffers enough short paragraphs before starting playback', async () => {
+  it('starts speaking after the first prepared segment while filling lookahead', async () => {
+    const events: string[] = [];
+    let finishFirstSpeak: (() => void) | undefined;
+    let finishSecondPreparation: (() => void) | undefined;
+    let secondPreparationCount = 0;
+    const reader: TextReader = {
+      prepare: vi.fn((text: string) => {
+        events.push(`prepare:${text}`);
+        if (text === 'second' && secondPreparationCount++ === 0) {
+          return new Promise<void>((resolve) => {
+            finishSecondPreparation = resolve;
+          });
+        }
+        return Promise.resolve();
+      }),
+      speak: vi.fn((text: string) => {
+        events.push(`speak:${text}`);
+        if (text === 'first') {
+          return new Promise<void>((resolve) => {
+            finishFirstSpeak = resolve;
+          });
+        }
+        return Promise.resolve();
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(() => finishFirstSpeak?.()),
+    };
+    const seq = new SegmentSequencer(reader);
+    seq.setBufferSeconds(5);
+    seq.load(['first', 'second', 'third']);
+
+    const playback = seq.play();
+    await vi.waitFor(() => expect(events).toContain('speak:first'));
+    await vi.waitFor(() => expect(events).toContain('prepare:second'));
+
+    expect(events.filter((event) => event === 'prepare:first')).toHaveLength(1);
+    expect(reader.speak).toHaveBeenCalledWith('first', expect.anything());
+
+    finishSecondPreparation?.();
+    finishFirstSpeak?.();
+    await playback;
+  });
+
+  it('caps lookahead at eight segments', async () => {
+    let finishSpeak: (() => void) | undefined;
+    const reader: TextReader = {
+      prepare: vi.fn().mockResolvedValue(undefined),
+      speak: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishSpeak = resolve;
+          }),
+      ),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(() => finishSpeak?.()),
+    };
+    const seq = new SegmentSequencer(reader);
+    seq.setBufferSeconds(15);
+    seq.load(Array.from({ length: 12 }, () => 'x'));
+
+    const playback = seq.play();
+    await vi.waitFor(() => expect(reader.prepare).toHaveBeenCalledTimes(9));
+    expect(reader.prepare).toHaveBeenCalledTimes(9);
+
+    seq.stop();
+    await playback;
+  });
+
+  it('does not count failed preparation as buffered audio', async () => {
+    const progress: Array<{ loading: boolean; bufferedSeconds: number; targetSeconds: number }> =
+      [];
+    const reader = makeFakeReader();
+    reader.prepare = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('first prepare failed'))
+      .mockResolvedValue(undefined);
+    const seq = new SegmentSequencer(reader);
+    seq.onBufferChange = (state) => progress.push(state);
+    seq.setBufferSeconds(5);
+    seq.load(['a'.repeat(75), 'b'.repeat(75)]);
+
+    await seq.play();
+
+    expect(reader.calls).toEqual(['a'.repeat(75), 'b'.repeat(75)]);
+    expect(progress).toEqual([
+      { loading: true, bufferedSeconds: 0, targetSeconds: 5 },
+      { loading: false, bufferedSeconds: 0, targetSeconds: 5 },
+    ]);
+  });
+
+  it('fills the configured lookahead while playback progresses', async () => {
     const events: string[] = [];
     const reader: TextReader = {
       prepare: vi.fn(async (text: string) => {
@@ -153,10 +245,10 @@ describe('SegmentSequencer', () => {
 
     await seq.play({ rate: 1 });
 
-    expect(events.slice(0, 3)).toEqual(['prepare:30', 'prepare:60', 'speak:30']);
+    expect(events.slice(0, 3)).toEqual(['prepare:30', 'speak:30', 'prepare:60']);
   });
 
-  it('reports initial audio buffer progress before playback', async () => {
+  it('reports progress only while preparing the first segment', async () => {
     const reader = makeFakeReader();
     reader.prepare = vi.fn().mockResolvedValue(undefined);
     const seq = new SegmentSequencer(reader);
@@ -170,29 +262,27 @@ describe('SegmentSequencer', () => {
 
     expect(progress).toEqual([
       { loading: true, bufferedSeconds: 0, targetSeconds: 5 },
-      { loading: true, bufferedSeconds: 2, targetSeconds: 5 },
-      { loading: true, bufferedSeconds: 5, targetSeconds: 5 },
-      { loading: false, bufferedSeconds: 5, targetSeconds: 5 },
+      { loading: false, bufferedSeconds: 0, targetSeconds: 5 },
     ]);
   });
 
-  it('logs initial and refill buffer lifecycle with correlated fill ids', async () => {
+  it('logs lookahead buffer lifecycle with correlated fill ids', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});
     const reader = makeFakeReader();
     reader.prepare = vi.fn().mockResolvedValue(undefined);
     const seq = new SegmentSequencer(reader);
     seq.setBufferSeconds(5);
-    seq.load(['a'.repeat(75), 'b'.repeat(75)]);
+    seq.load(['a'.repeat(75), 'b'.repeat(75), 'c'.repeat(75)]);
 
     await seq.play({ rate: 1 });
 
     expect(info).toHaveBeenCalledWith(
       expect.stringContaining('[audio-buffer] fill:start'),
-      expect.objectContaining({ fillId: 1, mode: 'initial', startIndex: 0, targetSeconds: 5 }),
+      expect.objectContaining({ fillId: 1, mode: 'refill', startIndex: 1, targetSeconds: 5 }),
     );
     expect(info).toHaveBeenCalledWith(
       expect.stringContaining('[audio-buffer] segment:complete'),
-      expect.objectContaining({ fillId: 1, segmentIndex: 0, chars: 75 }),
+      expect.objectContaining({ fillId: 1, segmentIndex: 1, chars: 75 }),
     );
     expect(info).toHaveBeenCalledWith(
       expect.stringContaining('[audio-buffer] fill:complete'),
@@ -200,13 +290,96 @@ describe('SegmentSequencer', () => {
     );
     expect(info).toHaveBeenCalledWith(
       expect.stringContaining('[audio-buffer] fill:start'),
-      expect.objectContaining({ fillId: 2, mode: 'refill', startIndex: 1 }),
+      expect.objectContaining({ fillId: 2, mode: 'refill', startIndex: 2 }),
     );
     info.mockRestore();
   });
 
-  it('stops filling the buffer when playback is cancelled', async () => {
+  it('does not let lookahead from a stopped session prepare newly loaded segments', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const prepared: string[] = [];
+    let finishSecondPreparation: (() => void) | undefined;
+    let finishSpeak: (() => void) | undefined;
+    const reader: TextReader = {
+      prepare: vi.fn((text: string) => {
+        prepared.push(text);
+        if (text === 'old-second') {
+          return new Promise<void>((resolve) => {
+            finishSecondPreparation = resolve;
+          });
+        }
+        return Promise.resolve();
+      }),
+      speak: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishSpeak = resolve;
+          }),
+      ),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(() => finishSpeak?.()),
+    };
+    const seq = new SegmentSequencer(reader);
+    seq.setBufferSeconds(5);
+    seq.load(['old-first', 'old-second', 'old-third']);
+
+    const playback = seq.play();
+    await vi.waitFor(() => expect(reader.speak).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(prepared).toContain('old-second'));
+
+    seq.stop();
+    await playback;
+    seq.load(['new-first', 'new-second', 'new-third']);
+    finishSecondPreparation?.();
+    await vi.waitFor(() =>
+      expect(info).toHaveBeenCalledWith(
+        expect.stringContaining('[audio-buffer] fill:complete'),
+        expect.anything(),
+      ),
+    );
+
+    expect(prepared).not.toContain('new-third');
+    info.mockRestore();
+  });
+
+  it('does not wait for an in-flight lookahead prepare when stopped', async () => {
+    let finishSecondPreparation: (() => void) | undefined;
+    let finishSpeak: (() => void) | undefined;
+    const reader: TextReader = {
+      prepare: vi.fn((text: string) => {
+        if (text === 'second') {
+          return new Promise<void>((resolve) => {
+            finishSecondPreparation = resolve;
+          });
+        }
+        return Promise.resolve();
+      }),
+      speak: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishSpeak = resolve;
+          }),
+      ),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      stop: vi.fn(() => finishSpeak?.()),
+    };
+    const seq = new SegmentSequencer(reader);
+    seq.setBufferSeconds(5);
+    seq.load(['first', 'second', 'third']);
+
+    const playback = seq.play();
+    await vi.waitFor(() => expect(reader.speak).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(reader.prepare).toHaveBeenCalledTimes(2));
+
+    seq.stop();
+    await playback;
+    expect(seq.getState().playing).toBe(false);
+    finishSecondPreparation?.();
+  });
+
+  it('does not speak after stop during the first segment preparation', async () => {
     let finishPreparation: (() => void) | undefined;
     const reader: TextReader = {
       prepare: vi.fn(
@@ -232,11 +405,6 @@ describe('SegmentSequencer', () => {
 
     expect(reader.prepare).toHaveBeenCalledOnce();
     expect(reader.speak).not.toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith(
-      expect.stringContaining('[audio-buffer] fill:complete'),
-      expect.objectContaining({ fillId: 1, outcome: 'stopped', preparedSegments: 1 }),
-    );
-    info.mockRestore();
   });
 
   it('continues playback when preparation fails', async () => {

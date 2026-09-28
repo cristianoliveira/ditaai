@@ -30,12 +30,13 @@ boundary word position. On resume, re-speak `text.substring(resumeCharIndex)`.
 
 **Prebuffering (audio-buffer feature):** optional lookahead. When
 `setBufferSeconds()` is set (persisted under `AUDIO_BUFFER_SECONDS_KEY` via
-`ChromeAudioBufferStorage`), the loop calls `reader.prepare(segment)` ahead of
-`speak()` — up to the configured seconds (estimated via
+`ChromeAudioBufferStorage`), the loop prepares the current segment and starts
+speaking it as soon as that preparation completes. While it speaks, lookahead
+fills ahead — up to the configured seconds (estimated via
 `audioBufferDurationMs` in `buffer.ts`) or `MAX_BUFFERED_SEGMENTS = 8`.
-The initial fill announces via `onBufferChange`; refill stays silent so
-playback UI stays calm. `prepare()` failures are non-fatal — speak continues
-without lookahead.
+`onBufferChange` reports only the first segment's preparation gate; background
+lookahead stays silent so it cannot delay first audio or leave progress tied to
+a detached task. `prepare()` failures are non-fatal — speak continues.
 
 **Callbacks:**
 - `onSegmentChange(index)` — per-segment; drives word/paragraph highlighting
@@ -49,9 +50,9 @@ without lookahead.
 ```
 play() → for each segment:
   → onSegmentChange?(index)        // highlighter picks up the element
-  → prepare segment or initial buffer
-  → checkpoint()                    // stop, seek, rate/volume restart, or pause
-  → reader.speak(segment, { resumeFromChar, onBoundary }) + begin lookahead
+  → prepare current segment (only this gates first audio)
+  → checkpoint()                      // stop, seek, rate/volume restart, or pause
+  → reader.speak(segment, { resumeFromChar, onBoundary }) + fill lookahead
   → checkpoint()                    // same gate after speech resolves
   → advance, or retry the current/newly-seeked segment
 ```

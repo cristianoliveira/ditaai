@@ -146,7 +146,17 @@ export class SegmentSequencer {
 
       if (initialBufferPending) {
         initialBufferPending = false;
-        await this.prepareBuffer(this.index, speakOptions, true);
+        this.onBufferChange?.({
+          loading: true,
+          bufferedSeconds: 0,
+          targetSeconds: this.bufferSeconds,
+        });
+        await this.prepareSegment(segment, speakOptions);
+        this.onBufferChange?.({
+          loading: false,
+          bufferedSeconds: 0,
+          targetSeconds: this.bufferSeconds,
+        });
       } else {
         await this.prepareSegment(segment, speakOptions);
       }
@@ -292,25 +302,15 @@ export class SegmentSequencer {
     this.reader.stop(); // cancel current utterance → loop re-evaluates at the new index
   }
 
-  private async prepareBuffer(
-    startIndex: number,
-    options: SpeakOptions,
-    announce = false,
-  ): Promise<void> {
+  private async prepareBuffer(startIndex: number, options: SpeakOptions): Promise<void> {
     const fillId = ++this.bufferFillCount;
-    const mode = announce ? 'initial' : 'refill';
+    const mode = 'refill';
     const startedAt = Date.now();
+    const segments = this.segments;
     const targetDurationMs = this.bufferSeconds * 1_000;
     let bufferedDurationMs = 0;
-    let bufferedSegments = 0;
-    const emitProgress = (loading: boolean): void => {
-      if (!announce) return;
-      this.onBufferChange?.({
-        loading,
-        bufferedSeconds: Math.min(bufferedDurationMs, targetDurationMs) / 1_000,
-        targetSeconds: this.bufferSeconds,
-      });
-    };
+    let preparedSegments = 0;
+    let attemptedSegments = 0;
 
     logger.info('[audio-buffer] fill:start', {
       fillId,
@@ -321,11 +321,14 @@ export class SegmentSequencer {
       resumeFromChar: options.resumeFromChar ?? 0,
       remainingSegments: Math.max(0, this.segments.length - startIndex),
     });
-    emitProgress(true);
     try {
-      for (let index = startIndex; index < this.segments.length; index++) {
-        if (this.bufferFillOutcome(bufferedDurationMs, bufferedSegments) !== 'in-progress') break;
-        const segment = this.segments[index];
+      for (let index = startIndex; index < segments.length; index++) {
+        if (
+          segments !== this.segments ||
+          this.bufferFillOutcome(bufferedDurationMs, attemptedSegments) !== 'in-progress'
+        )
+          break;
+        const segment = segments[index];
         if (!segment) break;
         const segmentOptions = {
           ...options,
@@ -345,8 +348,12 @@ export class SegmentSequencer {
           targetSeconds: this.bufferSeconds,
         });
         const prepared = await this.prepareSegment(segment, segmentOptions);
-        bufferedDurationMs += estimatedDurationMs;
-        bufferedSegments++;
+        if (segments !== this.segments) break;
+        attemptedSegments++;
+        if (prepared) {
+          bufferedDurationMs += estimatedDurationMs;
+          preparedSegments++;
+        }
         logger.info('[audio-buffer] segment:complete', {
           fillId,
           mode,
@@ -358,17 +365,16 @@ export class SegmentSequencer {
           bufferedSeconds: Math.min(bufferedDurationMs, targetDurationMs) / 1_000,
           targetSeconds: this.bufferSeconds,
         });
-        emitProgress(true);
       }
     } finally {
-      emitProgress(false);
       logger.info('[audio-buffer] fill:complete', {
         fillId,
         mode,
         startIndex,
-        outcome: this.bufferFillOutcome(bufferedDurationMs, bufferedSegments, true),
+        outcome: this.bufferFillOutcome(bufferedDurationMs, attemptedSegments, true),
         durationMs: Date.now() - startedAt,
-        preparedSegments: bufferedSegments,
+        preparedSegments,
+        attemptedSegments,
         estimatedBufferedSeconds: bufferedDurationMs / 1_000,
         targetSeconds: this.bufferSeconds,
       });
@@ -377,7 +383,7 @@ export class SegmentSequencer {
 
   private bufferFillOutcome(
     bufferedDurationMs: number,
-    bufferedSegments: number,
+    attemptedSegments: number,
     completed = false,
   ):
     | 'in-progress'
@@ -393,7 +399,7 @@ export class SegmentSequencer {
     if (this.restarting) return 'restarting';
     if (this.paused) return 'paused';
     if (bufferedDurationMs >= this.bufferSeconds * 1_000) return 'target-reached';
-    if (bufferedSegments >= MAX_BUFFERED_SEGMENTS) return 'segment-cap';
+    if (attemptedSegments >= MAX_BUFFERED_SEGMENTS) return 'segment-cap';
     return completed ? 'end-of-content' : 'in-progress';
   }
 
