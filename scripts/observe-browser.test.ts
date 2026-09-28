@@ -22,14 +22,15 @@ describe('reloadLoadedExtension', () => {
 describe('requestLoadedBuild', () => {
   it('queries the new worker through an extension page context', async () => {
     const evaluate = vi.fn().mockResolvedValue({ ok: true, buildVersion: 'build-123' });
-    const page = { evaluate, goto: vi.fn(), close: vi.fn() };
-    const context = { newPage: vi.fn().mockResolvedValue(page) };
+    const page = { evaluate, waitForLoadState: vi.fn(), close: vi.fn() };
+    const context = { waitForEvent: vi.fn().mockResolvedValue(page) };
+    const serviceWorker = { evaluate: vi.fn().mockResolvedValue(undefined) };
 
-    await expect(requestLoadedBuild(context, 'extension-id')).resolves.toEqual({
+    await expect(requestLoadedBuild(context, serviceWorker)).resolves.toEqual({
       ok: true,
       buildVersion: 'build-123',
     });
-    expect(page.goto).toHaveBeenCalledWith('chrome-extension://extension-id/popup.html');
+    expect(serviceWorker.evaluate).toHaveBeenCalledOnce();
     expect(page.close).toHaveBeenCalledOnce();
   });
 });
@@ -37,14 +38,16 @@ describe('requestLoadedBuild', () => {
 describe('runSyntheticAudioProbe', () => {
   it('prepares only a fixed synthetic sentence at bounded quality', async () => {
     const evaluate = vi.fn().mockResolvedValue({ ok: true });
-    const goto = vi.fn();
     const close = vi.fn();
-    const page = { evaluate, goto, close };
-    const context = { newPage: vi.fn().mockResolvedValue(page) };
+    const page = { evaluate, waitForLoadState: vi.fn(), close };
+    const context = { waitForEvent: vi.fn().mockResolvedValue(page) };
+    const serviceWorker = { evaluate: vi.fn().mockResolvedValue(undefined) };
 
-    await expect(runSyntheticAudioProbe(context, 'extension-id')).resolves.toEqual({ ok: true });
-    expect(context.newPage).toHaveBeenCalledOnce();
-    expect(goto).toHaveBeenCalledWith('chrome-extension://extension-id/popup.html');
+    await expect(runSyntheticAudioProbe(context, serviceWorker)).resolves.toEqual({
+      ok: true,
+    });
+    expect(context.waitForEvent).toHaveBeenCalledWith('page', { timeout: 15_000 });
+    expect(serviceWorker.evaluate).toHaveBeenCalledOnce();
     expect(evaluate.mock.calls[0]?.[0]).toBeTypeOf('function');
     expect(close).toHaveBeenCalledOnce();
   });

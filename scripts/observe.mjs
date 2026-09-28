@@ -79,7 +79,7 @@ const extensionId = serviceWorker.url().match(/^chrome-extension:\/\/([^/]+)\//)
 let diagnosticBuild;
 if (process.env.DITA_OBSERVE_RELOAD_EXTENSION === '1') {
   await reloadLoadedExtension(serviceWorker);
-  const handshake = await requestLoadedBuild(context, extensionId);
+  const handshake = await requestLoadedBuild(context, serviceWorker);
   if (!handshake?.ok || typeof handshake.buildVersion !== 'string') {
     await context.close();
     throw new Error('Reloaded extension did not answer the build diagnostic');
@@ -123,7 +123,7 @@ await writer.write({
 
 if (process.env.DITA_OBSERVE_SYNTHETIC_AUDIO_PROBE === '1') {
   try {
-    const result = await runSyntheticAudioProbe(context, extensionId);
+    const result = await runSyntheticAudioProbe(context, serviceWorker);
     await writer.write({
       level: result.ok ? 'info' : 'error',
       kind: 'synthetic.audio-probe.complete',

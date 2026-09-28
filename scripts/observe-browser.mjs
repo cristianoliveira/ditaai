@@ -5,10 +5,17 @@ export async function reloadLoadedExtension(serviceWorker) {
   await serviceWorker.evaluate(() => chrome.runtime.reload()).catch(() => {});
 }
 
-export async function requestLoadedBuild(context, extensionId) {
-  const page = await context.newPage();
+export async function requestLoadedBuild(context, serviceWorker) {
+  const pageEvent = context.waitForEvent('page', { timeout: 15_000 });
+  await serviceWorker.evaluate(async () => {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL('popup.html'),
+      active: false,
+    });
+  });
+  const page = await pageEvent;
   try {
-    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.waitForLoadState('domcontentloaded');
     return await page.evaluate(() =>
       chrome.runtime.sendMessage({
         dest: 'performanceTelemetry',
@@ -20,10 +27,17 @@ export async function requestLoadedBuild(context, extensionId) {
   }
 }
 
-export async function runSyntheticAudioProbe(context, extensionId) {
-  const page = await context.newPage();
+export async function runSyntheticAudioProbe(context, serviceWorker) {
+  const pageEvent = context.waitForEvent('page', { timeout: 15_000 });
+  await serviceWorker.evaluate(async () => {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL('popup.html'),
+      active: false,
+    });
+  });
+  const page = await pageEvent;
   try {
-    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.waitForLoadState('domcontentloaded');
     return await page.evaluate(async () => {
       const response = await chrome.runtime.sendMessage({
         dest: 'serviceWorker',
