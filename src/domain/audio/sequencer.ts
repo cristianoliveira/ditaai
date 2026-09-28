@@ -36,6 +36,7 @@ export class SegmentSequencer {
   private restarting = false;
   private bufferSeconds = 0;
   private bufferFillCount = 0;
+  private bufferFillRevision = 0;
   /** Promise of the currently running play loop, or null when idle. Used by the
    * re-entrancy guard so a second play() (e.g. a repeated click before the
    * prior loop unwound) never runs concurrently with the first — two loops
@@ -57,6 +58,7 @@ export class SegmentSequencer {
   constructor(private reader: TextReader) {}
 
   load(segments: string[], startIndex = 0, startChar = 0): void {
+    this.bufferFillRevision++;
     this.segments = segments;
     this.index = segments.length === 0 ? 0 : Math.max(0, Math.min(startIndex, segments.length - 1));
     this.playing = false;
@@ -102,6 +104,7 @@ export class SegmentSequencer {
       // Supersede: the prior loop is no longer active, so its own completion
       // must not signal idle — the newer loop owns that transition.
       this.currentPlay = null;
+      this.bufferFillRevision++;
       this.stopped = true;
       this.reader.stop();
       this.resolveResume?.();
@@ -241,6 +244,7 @@ export class SegmentSequencer {
   }
 
   stop(): void {
+    this.bufferFillRevision++;
     this.stopped = true;
     this.paused = false;
     this.seeking = false;
@@ -261,6 +265,7 @@ export class SegmentSequencer {
    * rate is heard immediately. */
   setRate(rate: number): void {
     this.rate = rate;
+    this.bufferFillRevision++;
     this.restartFromCurrentWord();
   }
 
@@ -269,6 +274,7 @@ export class SegmentSequencer {
    * the new volume is heard immediately. */
   setVolume(volume: number): void {
     this.volume = volume;
+    this.bufferFillRevision++;
     this.restartFromCurrentWord();
   }
 
@@ -290,6 +296,7 @@ export class SegmentSequencer {
   seek(target: number): void {
     if (this.segments.length === 0) return;
     if (!this.playing && !this.paused) return;
+    this.bufferFillRevision++;
     this.index = Math.max(0, Math.min(target, this.segments.length - 1));
     this.resumeCharIndex = 0;
     this.lastCharIndex = 0;
@@ -306,6 +313,7 @@ export class SegmentSequencer {
     const fillId = ++this.bufferFillCount;
     const mode = 'refill';
     const startedAt = Date.now();
+    const revision = this.bufferFillRevision;
     const segments = this.segments;
     const targetDurationMs = this.bufferSeconds * 1_000;
     let bufferedDurationMs = 0;
@@ -324,6 +332,7 @@ export class SegmentSequencer {
     try {
       for (let index = startIndex; index < segments.length; index++) {
         if (
+          revision !== this.bufferFillRevision ||
           segments !== this.segments ||
           this.bufferFillOutcome(bufferedDurationMs, attemptedSegments) !== 'in-progress'
         )
@@ -348,7 +357,7 @@ export class SegmentSequencer {
           targetSeconds: this.bufferSeconds,
         });
         const prepared = await this.prepareSegment(segment, segmentOptions);
-        if (segments !== this.segments) break;
+        if (revision !== this.bufferFillRevision || segments !== this.segments) break;
         attemptedSegments++;
         if (prepared) {
           bufferedDurationMs += estimatedDurationMs;
@@ -371,7 +380,10 @@ export class SegmentSequencer {
         fillId,
         mode,
         startIndex,
-        outcome: this.bufferFillOutcome(bufferedDurationMs, attemptedSegments, true),
+        outcome:
+          revision !== this.bufferFillRevision
+            ? 'superseded'
+            : this.bufferFillOutcome(bufferedDurationMs, attemptedSegments, true),
         durationMs: Date.now() - startedAt,
         preparedSegments,
         attemptedSegments,

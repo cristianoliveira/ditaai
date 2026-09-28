@@ -343,6 +343,70 @@ describe('SegmentSequencer', () => {
     info.mockRestore();
   });
 
+  it.each(['seek', 'rate'] as const)(
+    'abandons stale lookahead after a %s change',
+    async (change) => {
+      const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const prepared: Array<{ text: string; rate: number | undefined }> = [];
+      const spoken: Array<{ text: string; rate: number | undefined }> = [];
+      let finishOldSecondPreparation: (() => void) | undefined;
+      let finishSpeak: (() => void) | undefined;
+      const reader: TextReader = {
+        prepare: vi.fn((text: string, options?: SpeakOptions) => {
+          prepared.push({ text, rate: options?.rate });
+          if (text === 'second' && options?.rate === 1) {
+            return new Promise<void>((resolve) => {
+              finishOldSecondPreparation = resolve;
+            });
+          }
+          return Promise.resolve();
+        }),
+        speak: vi.fn((text: string, options?: SpeakOptions) => {
+          spoken.push({ text, rate: options?.rate });
+          return new Promise<void>((resolve) => {
+            finishSpeak = resolve;
+          });
+        }),
+        pause: vi.fn(),
+        resume: vi.fn(),
+        stop: vi.fn(() => finishSpeak?.()),
+      };
+      const seq = new SegmentSequencer(reader);
+      seq.setBufferSeconds(5);
+      seq.load(['first', 'second', 'target', 'tail']);
+
+      const playback = seq.play({ rate: 1 });
+      await vi.waitFor(() => expect(spoken).toContainEqual({ text: 'first', rate: 1 }));
+      await vi.waitFor(() => expect(prepared).toContainEqual({ text: 'second', rate: 1 }));
+
+      if (change === 'seek') {
+        seq.seek(2);
+        await vi.waitFor(() => expect(spoken).toContainEqual({ text: 'target', rate: 1 }));
+      } else {
+        seq.setRate(1.5);
+        await vi.waitFor(() => expect(spoken).toContainEqual({ text: 'first', rate: 1.5 }));
+      }
+
+      finishOldSecondPreparation?.();
+      await vi.waitFor(() =>
+        expect(info).toHaveBeenCalledWith(
+          expect.stringContaining('[audio-buffer] fill:complete'),
+          expect.objectContaining({ fillId: 1 }),
+        ),
+      );
+
+      if (change === 'seek') {
+        expect(prepared.filter(({ text }) => text === 'target')).toHaveLength(1);
+      } else {
+        expect(prepared).not.toContainEqual({ text: 'target', rate: 1 });
+      }
+
+      seq.stop();
+      await playback;
+      info.mockRestore();
+    },
+  );
+
   it('does not wait for an in-flight lookahead prepare when stopped', async () => {
     let finishSecondPreparation: (() => void) | undefined;
     let finishSpeak: (() => void) | undefined;
