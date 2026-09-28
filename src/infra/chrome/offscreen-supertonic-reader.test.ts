@@ -24,6 +24,7 @@ function chromeApi() {
   return {
     runtime: {
       getURL: vi.fn((path: string) => `chrome-extension://test/${path}`),
+      getManifest: vi.fn(() => ({ version: '1.0.0', version_name: 'test-build-123' })),
       getContexts: vi.fn().mockResolvedValue([]),
       sendMessage: vi.fn(),
     },
@@ -81,6 +82,24 @@ describe('OffscreenSupertonicReader', () => {
       method: 'isAvailable',
       args: ['F2', { pageVisitId: 'unknown-page-visit', rotateVoices: false }],
     });
+  });
+
+  it('logs the loaded build once when playback is first requested', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const chrome = chromeApi();
+    chrome.runtime.getContexts.mockResolvedValue([{}]);
+    chrome.runtime.sendMessage.mockResolvedValue({ ok: true });
+    const reader = subject(chrome);
+
+    await reader.prepare('synthetic fixture');
+    await reader.speak('synthetic fixture');
+
+    const buildMarkers = info.mock.calls.filter(([message]) =>
+      String(message).includes('[installed-voice][service-worker] build:playback'),
+    );
+    expect(buildMarkers).toHaveLength(1);
+    expect(buildMarkers[0]?.[0]).toContain('test-build-123');
+    info.mockRestore();
   });
 
   it('forwards speech preparation to offscreen document', async () => {

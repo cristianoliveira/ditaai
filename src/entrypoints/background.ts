@@ -17,10 +17,6 @@ export default defineBackground(() => {
   // Guard: swallow noisy "Receiving end does not exist" errors
   patchSendMessageCallback();
 
-  const manifestVersion =
-    chrome.runtime.getManifest().version_name ?? chrome.runtime.getManifest().version;
-  logger.info(`[installed-voice][service-worker] build:loaded ${manifestVersion}`);
-
   const controller = new PlaybackController();
   const installedReader = new OffscreenSupertonicReader();
   const accessibilityTrees = new Map<number, ChromeDebuggerAccessibilityTree>();

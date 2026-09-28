@@ -30,6 +30,7 @@ interface OffscreenResponse {
 interface OffscreenChromeApi {
   runtime: {
     getURL(path: string): string;
+    getManifest(): { version: string; version_name?: string };
     getContexts(filter: {
       contextTypes: chrome.runtime.ContextType[];
       documentUrls: string[];
@@ -45,6 +46,7 @@ interface OffscreenChromeApi {
 export class OffscreenSupertonicReader implements AvailableTextReader {
   private creation: Promise<void> | null = null;
   private pageVisitId = 'unknown-page-visit';
+  private hasLoggedPlaybackBuild = false;
 
   constructor(
     private readonly chromeApi: OffscreenChromeApi = chrome,
@@ -127,6 +129,12 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
     attempt = 0,
   ): Promise<OffscreenResponse> {
     const startedAt = Date.now();
+    if (!this.hasLoggedPlaybackBuild && (method === 'prepare' || method === 'speak')) {
+      this.hasLoggedPlaybackBuild = true;
+      const manifest = this.chromeApi.runtime.getManifest();
+      const version = manifest.version_name ?? manifest.version;
+      logger.info(`[installed-voice][service-worker] build:playback ${version}`);
+    }
     logger.info(`[installed-voice][service-worker] offscreen.${method}:start`);
     try {
       await this.ensureDocument();
