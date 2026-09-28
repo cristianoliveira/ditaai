@@ -9,10 +9,16 @@ import {
 describe('runSyntheticAudioProbe', () => {
   it('prepares only a fixed synthetic sentence at bounded quality', async () => {
     const evaluate = vi.fn().mockResolvedValue({ ok: true });
+    const goto = vi.fn();
+    const close = vi.fn();
+    const page = { evaluate, goto, close };
+    const context = { newPage: vi.fn().mockResolvedValue(page) };
 
-    await expect(runSyntheticAudioProbe({ evaluate })).resolves.toEqual({ ok: true });
-    expect(evaluate).toHaveBeenCalledOnce();
+    await expect(runSyntheticAudioProbe(context, 'extension-id')).resolves.toEqual({ ok: true });
+    expect(context.newPage).toHaveBeenCalledOnce();
+    expect(goto).toHaveBeenCalledWith('chrome-extension://extension-id/popup.html');
     expect(evaluate.mock.calls[0]?.[0]).toBeTypeOf('function');
+    expect(close).toHaveBeenCalledOnce();
   });
 });
 

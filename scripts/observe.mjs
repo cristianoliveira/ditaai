@@ -104,7 +104,7 @@ await writer.write({
 
 if (process.env.DITA_OBSERVE_SYNTHETIC_AUDIO_PROBE === '1') {
   try {
-    const result = await runSyntheticAudioProbe(serviceWorker);
+    const result = await runSyntheticAudioProbe(context, extensionId);
     await writer.write({
       level: result.ok ? 'info' : 'error',
       kind: 'synthetic.audio-probe.complete',

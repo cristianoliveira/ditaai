@@ -1,18 +1,24 @@
 /**
  * @param {string} extensionDirectory
  */
-export async function runSyntheticAudioProbe(serviceWorker) {
-  return serviceWorker.evaluate(async () => {
-    const response = await chrome.runtime.sendMessage({
-      dest: 'serviceWorker',
-      method: 'prepareInstalledVoice',
-      args: [
-        'The quick brown fox jumps over the lazy dog. Dita synthetic audio diagnostic.',
-        { quality: 4 },
-      ],
+export async function runSyntheticAudioProbe(context, extensionId) {
+  const page = await context.newPage();
+  try {
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    return await page.evaluate(async () => {
+      const response = await chrome.runtime.sendMessage({
+        dest: 'serviceWorker',
+        method: 'prepareInstalledVoice',
+        args: [
+          'The quick brown fox jumps over the lazy dog. Dita synthetic audio diagnostic.',
+          { quality: 4 },
+        ],
+      });
+      return { ok: response?.ok === true };
     });
-    return { ok: response?.ok === true };
-  });
+  } finally {
+    await page.close();
+  }
 }
 
 export async function loadedExtensionVersion(serviceWorker) {
