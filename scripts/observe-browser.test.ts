@@ -3,8 +3,31 @@ import {
   chromiumLaunchArguments,
   loadedExtensionVersion,
   openRequestedPage,
+  reloadLoadedExtension,
   runSyntheticAudioProbe,
 } from './observe-browser.mjs';
+
+describe('reloadLoadedExtension', () => {
+  it('requests extension reload and resolves with the replacement worker', async () => {
+    let resolveWorker: ((worker: unknown) => void) | undefined;
+    const replacement = new Promise((resolve) => {
+      resolveWorker = resolve;
+    });
+    const waitForEvent = vi.fn(() => replacement);
+    const evaluate = vi.fn(async (callback) => {
+      callback();
+    });
+    const serviceWorker = { evaluate };
+    const context = { waitForEvent };
+    const nextWorker = { url: 'chrome-extension://id/background.js' };
+    const result = reloadLoadedExtension(context, serviceWorker);
+    resolveWorker?.(nextWorker);
+
+    await expect(result).resolves.toBe(nextWorker);
+    expect(waitForEvent).toHaveBeenCalledWith('serviceworker', { timeout: 15_000 });
+    expect(evaluate).toHaveBeenCalledOnce();
+  });
+});
 
 describe('runSyntheticAudioProbe', () => {
   it('prepares only a fixed synthetic sentence at bounded quality', async () => {

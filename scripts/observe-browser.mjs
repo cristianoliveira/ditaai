@@ -1,6 +1,12 @@
 /**
  * @param {string} extensionDirectory
  */
+export async function reloadLoadedExtension(context, serviceWorker) {
+  const replacementWorker = context.waitForEvent('serviceworker', { timeout: 15_000 });
+  await serviceWorker.evaluate(() => chrome.runtime.reload()).catch(() => {});
+  return replacementWorker;
+}
+
 export async function runSyntheticAudioProbe(context, extensionId) {
   const page = await context.newPage();
   try {

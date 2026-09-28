@@ -11,6 +11,7 @@ import {
   chromiumLaunchArguments,
   loadedExtensionVersion,
   openRequestedPage,
+  reloadLoadedExtension,
   runSyntheticAudioProbe,
 } from './observe-browser.mjs';
 
@@ -72,8 +73,11 @@ const context = await chromium.launchPersistentContext(profileDirectory, {
 });
 attachBrowserObservability(context, writer);
 
-const serviceWorker = await waitForServiceWorker(context);
+let serviceWorker = await waitForServiceWorker(context);
 const extensionId = serviceWorker.url().match(/^chrome-extension:\/\/([^/]+)\//)?.[1];
+if (process.env.DITA_OBSERVE_RELOAD_EXTENSION === '1') {
+  serviceWorker = await reloadLoadedExtension(context, serviceWorker);
+}
 const expectedManifest = JSON.parse(
   await fs.readFile(path.join(extensionDirectory, 'manifest.json'), 'utf8'),
 );
