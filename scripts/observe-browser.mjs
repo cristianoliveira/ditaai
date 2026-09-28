@@ -1,6 +1,20 @@
 /**
  * @param {string} extensionDirectory
  */
+export async function runSyntheticAudioProbe(serviceWorker) {
+  return serviceWorker.evaluate(async () => {
+    const response = await chrome.runtime.sendMessage({
+      dest: 'serviceWorker',
+      method: 'prepareInstalledVoice',
+      args: [
+        'The quick brown fox jumps over the lazy dog. Dita synthetic audio diagnostic.',
+        { quality: 4 },
+      ],
+    });
+    return { ok: response?.ok === true };
+  });
+}
+
 export async function loadedExtensionVersion(serviceWorker) {
   return serviceWorker.evaluate(() => {
     const manifest = chrome.runtime.getManifest();

@@ -11,6 +11,7 @@ import {
   chromiumLaunchArguments,
   loadedExtensionVersion,
   openRequestedPage,
+  runSyntheticAudioProbe,
 } from './observe-browser.mjs';
 
 const HELP = `Dita local observability browser
@@ -100,6 +101,27 @@ await writer.write({
   message: 'Dita extension and browser are ready',
   details: { extensionId, loadedBuild },
 });
+
+if (process.env.DITA_OBSERVE_SYNTHETIC_AUDIO_PROBE === '1') {
+  try {
+    const result = await runSyntheticAudioProbe(serviceWorker);
+    await writer.write({
+      level: result.ok ? 'info' : 'error',
+      kind: 'synthetic.audio-probe.complete',
+      source: 'observer',
+      message: 'Synthetic audio preparation probe completed',
+      details: result,
+    });
+  } catch (error) {
+    await writer.write({
+      level: 'error',
+      kind: 'synthetic.audio-probe.failed',
+      source: 'observer',
+      message: 'Synthetic audio preparation probe failed',
+      details: { errorName: error instanceof Error ? error.name : 'UnknownError' },
+    });
+  }
+}
 
 await openRequestedPage(context, process.env.DITA_OBSERVE_URL);
 

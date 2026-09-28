@@ -3,7 +3,18 @@ import {
   chromiumLaunchArguments,
   loadedExtensionVersion,
   openRequestedPage,
+  runSyntheticAudioProbe,
 } from './observe-browser.mjs';
+
+describe('runSyntheticAudioProbe', () => {
+  it('prepares only a fixed synthetic sentence at bounded quality', async () => {
+    const evaluate = vi.fn().mockResolvedValue({ ok: true });
+
+    await expect(runSyntheticAudioProbe({ evaluate })).resolves.toEqual({ ok: true });
+    expect(evaluate).toHaveBeenCalledOnce();
+    expect(evaluate.mock.calls[0]?.[0]).toBeTypeOf('function');
+  });
+});
 
 describe('loadedExtensionVersion', () => {
   it('reads the version of the service worker that Chromium actually loaded', async () => {
