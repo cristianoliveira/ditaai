@@ -1,4 +1,6 @@
 import { type BrowserContext, type Page, expect, test } from '@playwright/test';
+import { SUPERTONIC_ENGINE_ASSETS, SUPERTONIC_VOICES } from '../../../src/domain/voices/catalog';
+import { sourceUrl } from '../../../src/domain/voices/voice';
 import { launchExtensionContext, testHarnessUrl } from '../../helpers/extension';
 import { type FixtureServer, startFixtureServer } from '../../helpers/fixture-server';
 
@@ -42,23 +44,23 @@ test.describe('PDF dictation', () => {
   });
 
   /**
-   * Enable the viewer's deterministic fake reader (contract: `testReader=fake`
-   * only pins voice/timing; PDF parsing still runs on the real fixture).
-   * Runs before the viewer's scripts, so the one-use request token in the URL
-   * is re-used on the redirected load and never consumed twice.
+   * Enable the viewer's deterministic fake reader via the same
+   * `data-dita-test-reader` attribute the content-script contract uses
+   * (least brittle with the action-generated viewer URL — no rewriting).
+   * Safe to set on every page in this context: the PDF tab is the native
+   * viewer (no content script) and the harness is an extension page.
    */
   async function enableFakeReader(context: BrowserContext): Promise<void> {
     await context.addInitScript(() => {
-      // Structural cast: the e2e tsconfig has no DOM lib, but this callback is
-      // serialized and runs inside the viewer page.
-      const nav = globalThis as unknown as {
-        location: { pathname: string; search: string; replace(url: string): void };
-      };
-      if (!nav.location.pathname.endsWith('/pdf-reader.html')) return;
-      const search = new URLSearchParams(nav.location.search);
-      if (search.get('testReader') === 'fake') return;
-      search.set('testReader', 'fake');
-      nav.location.replace(`${nav.location.pathname}?${search.toString()}`);
+      const document = (
+        globalThis as unknown as {
+          document: {
+            documentElement: { setAttribute(name: string, value: string): void } | null;
+          };
+        }
+      ).document;
+      // The native PDF viewer tab has no accessible documentElement — skip it.
+      document.documentElement?.setAttribute('data-dita-test-reader', 'fake');
     });
   }
 
@@ -277,6 +279,101 @@ test.describe('PDF dictation', () => {
     }
   });
 
+  test('renders the visual PDF page with highlight on the page text, not a transcript', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+      await enableFakeReader(context);
+
+      const reader = await openReaderFromAction(context, extensionId, 'two-page-text.pdf');
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'ready', {
+        timeout: 20_000,
+      });
+
+      // Product requirement: the original PDF page layout must be rendered
+      // (one visual page per data-page-number section), and the spoken-word
+      // highlight must live on that page's text layer — a text-only
+      // transcript does not satisfy the user's opt-in.
+      for (const pageNumber of ['1', '2']) {
+        const page = reader.locator(`[data-page-number="${pageNumber}"]`);
+        await expect(page.locator('canvas')).toBeVisible();
+      }
+      const canvasWidth = await reader
+        .locator('[data-page-number="1"] canvas')
+        .evaluate((element) => (element as unknown as { width: number }).width);
+      expect(canvasWidth).toBeGreaterThan(0);
+      await expect(reader.locator('[data-page-number="1"] .textLayer span').first()).toBeVisible();
+
+      await recordActiveWords(reader);
+      await reader.locator('button[data-action="play"]').click();
+      await expect
+        .poll(async () => reader.locator('.textLayer mark[data-active-word="true"]').count(), {
+          timeout: 10_000,
+        })
+        .toBeGreaterThan(0);
+      const activeMark = reader.locator('.textLayer mark[data-active-word="true"]').first();
+      // The highlighted word must live in the PDF.js text layer over the
+      // rendered page — not in a standalone transcript block.
+      await expect(activeMark).toBeVisible();
+      const markBox = await activeMark.boundingBox();
+      const pageBox = await reader.locator('[data-page-number="1"]').boundingBox();
+      expect(markBox).not.toBeNull();
+      expect(pageBox).not.toBeNull();
+      if (markBox && pageBox) {
+        expect(markBox.x).toBeGreaterThanOrEqual(pageBox.x);
+        expect(markBox.y).toBeGreaterThanOrEqual(pageBox.y);
+        expect(markBox.x + markBox.width).toBeLessThanOrEqual(pageBox.x + pageBox.width);
+        expect(markBox.y + markBox.height).toBeLessThanOrEqual(pageBox.y + pageBox.height);
+      }
+
+      await reader.locator('button[data-action="stop"]').click();
+      expect(errors).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test('bounds canvas painting to the pages around the current one', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+      await enableFakeReader(context);
+
+      const reader = await openReaderFromAction(context, extensionId, 'five-page-text.pdf');
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'ready', {
+        timeout: 20_000,
+      });
+      const canvas = reader.locator('canvas.pdf-page-canvas');
+
+      // Initially on page 1: only the ±1 window (pages 1–2) is painted.
+      await expect(canvas).toHaveCount(2, { timeout: 20_000 });
+      await expect(reader.locator('[data-page-number="5"] canvas')).toHaveCount(0);
+
+      // Pause to freeze state, then walk to page 5: the window follows and the
+      // early canvases are released — memory stays bounded on any page count.
+      await reader.locator('button[data-action="play"]').click();
+      await expect
+        .poll(async () => reader.locator('mark[data-active-word="true"]').count(), {
+          timeout: 10_000,
+        })
+        .toBeGreaterThan(0);
+      await reader.locator('button[data-action="pause"]').click();
+      for (let i = 0; i < 4; i++) {
+        await reader.locator('button[data-action="next"]').click();
+      }
+      await expect(reader.locator('[data-page-number="5"] canvas')).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(reader.locator('[data-page-number="1"] canvas')).toHaveCount(0);
+      await expect(canvas).toHaveCount(2);
+
+      await reader.locator('button[data-action="stop"]').click();
+      expect(errors).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
   test('image-only PDF shows a non-speaking error state', async () => {
     const harness = await launchExtensionContext();
     try {
@@ -327,4 +424,281 @@ test.describe('PDF dictation', () => {
       await harness.close();
     }
   });
+
+  test('previous/next jump pages while paused and start at the target when idle', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+      await enableFakeReader(context);
+
+      const reader = await openReaderFromAction(context, extensionId, 'two-page-text.pdf');
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'ready', {
+        timeout: 20_000,
+      });
+      const position = reader.locator('#pdf-page-position');
+
+      await recordActiveWords(reader);
+      await reader.locator('button[data-action="play"]').click();
+      await expect
+        .poll(async () => (await observedWords(reader)).length, { timeout: 10_000 })
+        .toBeGreaterThan(0);
+
+      // Paused: jumps move the position without narrating (deterministic — the
+      // DOM and sequencer state are frozen).
+      await reader.locator('button[data-action="pause"]').click();
+      await expect(reader.locator('#pdf-status')).toHaveText('Paused');
+      await reader.locator('button[data-action="next"]').click();
+      await expect(position).toHaveText('Page 2 of 2');
+      await expect(reader.locator('#pdf-status')).toHaveText('Paused');
+      await reader.locator('button[data-action="previous"]').click();
+      await expect(position).toHaveText('Page 1 of 2');
+
+      // Resume after jumping: narration continues from the targeted page.
+      await reader.locator('button[data-action="next"]').click();
+      await expect(position).toHaveText('Page 2 of 2');
+      const wordsBeforeResume = (await observedWords(reader)).length;
+      await reader.locator('button[data-action="play"]').click();
+      await expect
+        .poll(
+          async () => {
+            const words = await observedWords(reader);
+            return words.slice(wordsBeforeResume).some((w) => w.page === '2');
+          },
+          { timeout: 10_000 },
+        )
+        .toBe(true);
+
+      // Idle after stop: next starts playback directly at page 2.
+      await reader.locator('button[data-action="stop"]').click();
+      await expect(reader.locator('#pdf-status')).toHaveText('Ready to listen');
+      const wordsBeforeIdleJump = (await observedWords(reader)).length;
+      await reader.locator('button[data-action="next"]').click();
+      await expect(position).toHaveText('Page 2 of 2');
+      // Started at the target: only page-2 words are spoken — a restart would
+      // resurface page-1 words here.
+      await expect
+        .poll(
+          async () => {
+            const words = await observedWords(reader);
+            return words.slice(wordsBeforeIdleJump);
+          },
+          { timeout: 10_000 },
+        )
+        .toEqual(expect.arrayContaining([expect.objectContaining({ page: '2' })]));
+      const idleJumpWords = (await observedWords(reader)).slice(wordsBeforeIdleJump);
+      expect(idleJumpWords.every((entry) => entry.page === '2')).toBe(true);
+      expect(idleJumpWords.length).toBeGreaterThan(0);
+
+      await reader.locator('button[data-action="stop"]').click();
+      expect(errors).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test('rate slider hydrates from storage and persists committed changes', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+      await enableFakeReader(context);
+
+      // Seed the shared rate preference before the reader hydrates it.
+      const ext = await context.newPage();
+      await ext.goto(testHarnessUrl(extensionId));
+      await ext.evaluate(async () => {
+        await chrome.storage.local.set({ playbackRate: 1.5 });
+      });
+      await ext.close();
+
+      const reader = await openReaderFromAction(context, extensionId, 'two-page-text.pdf');
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'ready', {
+        timeout: 20_000,
+      });
+
+      const slider = reader.locator('#pdf-rate[data-role="rate"]');
+      await expect(slider).toHaveValue('1.5');
+
+      // Range inputs don't accept fill(); set the value and dispatch the same
+      // input/change events a real drag produces.
+      await slider.evaluate((element, value) => {
+        const input = element as unknown as {
+          value: string;
+          dispatchEvent(event: unknown): boolean;
+        };
+        const EventCtor = (
+          globalThis as unknown as {
+            Event: new (type: string, init?: { bubbles?: boolean }) => unknown;
+          }
+        ).Event;
+        input.value = value;
+        input.dispatchEvent(new EventCtor('input', { bubbles: true }));
+        input.dispatchEvent(new EventCtor('change', { bubbles: true }));
+      }, '0.8');
+      await expect
+        .poll(
+          async () =>
+            await reader.evaluate(async () => {
+              const stored = await chrome.storage.local.get('playbackRate');
+              return stored.playbackRate;
+            }),
+          { timeout: 5_000 },
+        )
+        .toBe(0.8);
+
+      expect(errors).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test('narrates with the installed-voice path selected (seeded cache, native fallback)', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+
+      // Seed the installed-voice cache so the reader selects the installed
+      // path; synthesis with placeholder assets fails and the reader falls
+      // back to browser speech, whose native boundaries drive the highlight.
+      const ext = await context.newPage();
+      await ext.goto(testHarnessUrl(extensionId));
+      await ext.evaluate(async (cacheUrls) => {
+        const browser = globalThis as unknown as {
+          caches: {
+            open(name: string): Promise<{ put(url: string, response: Response): Promise<void> }>;
+          };
+        };
+        const cache = await browser.caches.open('dita-voices');
+        await Promise.all(cacheUrls.map((url) => cache.put(url, new Response('cached'))));
+      }, voiceCacheUrls());
+      await ext.close();
+
+      // No testReader=fake: the production reader stack runs.
+      const reader = await openReaderFromAction(context, extensionId, 'two-page-text.pdf');
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'ready', {
+        timeout: 20_000,
+      });
+
+      await recordActiveWords(reader);
+      await reader.locator('button[data-action="play"]').click();
+      await expect
+        .poll(async () => (await observedWords(reader)).at(0), { timeout: 30_000 })
+        .toEqual({ page: '1', word: 'Orchid' });
+      await expect
+        .poll(
+          async () => {
+            const words = await observedWords(reader);
+            return words.some((w) => w.page === '2' && w.word === 'Cedar');
+          },
+          { timeout: 30_000 },
+        )
+        .toBe(true);
+      await expect(reader.locator('#pdf-page-position')).toHaveText('Page 2 of 2', {
+        timeout: 10_000,
+      });
+
+      await reader.locator('button[data-action="stop"]').click();
+      // The designed installed→fallback transition logs an error; anything
+      // else must fail the test.
+      const unexpected = errors.filter((line) => !line.includes('installed-voice'));
+      expect(unexpected).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test('background relays installed-voice boundaries to the extension reader tab', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+
+      const reader = await openReaderFromAction(context, extensionId, 'two-page-text.pdf');
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'ready', {
+        timeout: 20_000,
+      });
+
+      // Probe listener in the reader page: records every runtime message the
+      // tab receives (the page-side InstalledVoiceReader hook relies on this
+      // transport).
+      await reader.evaluate(() => {
+        const scope = globalThis as unknown as {
+          ditaRelayProbe?: string[];
+          chrome: {
+            runtime: {
+              onMessage: {
+                addListener(fn: (msg: { method?: string } | undefined) => void): void;
+              };
+              sendMessage(msg: unknown): Promise<unknown>;
+            };
+          };
+        };
+        scope.ditaRelayProbe = [];
+        scope.chrome.runtime.onMessage.addListener((msg) => {
+          if (msg?.method) scope.ditaRelayProbe?.push(msg.method);
+        });
+      });
+
+      // The reader tab identifies itself as the speak origin (exactly what
+      // RuntimeInstalledVoiceReader sends; the SW remembers sender.tab.id).
+      await reader.evaluate(async () => {
+        const scope = globalThis as unknown as {
+          chrome: {
+            runtime: {
+              sendMessage(msg: unknown): Promise<unknown>;
+            };
+          };
+        };
+        await scope.chrome.runtime.sendMessage({
+          dest: 'serviceWorker',
+          method: 'speakWithInstalledVoice',
+          args: ['relay probe', undefined, 'probe-visit'],
+        });
+      });
+
+      // Mimic the offscreen document reporting a word boundary; the SW must
+      // route it back to the reader tab via tabs.sendMessage.
+      const ext = await context.newPage();
+      await ext.goto(testHarnessUrl(extensionId));
+      await ext.evaluate(async () => {
+        const browser = globalThis as unknown as {
+          chrome: {
+            runtime: {
+              sendMessage(msg: unknown): Promise<unknown>;
+            };
+          };
+        };
+        await browser.chrome.runtime.sendMessage({
+          dest: 'serviceWorker',
+          method: 'installedVoiceBoundary',
+          args: [{ charIndex: 0, charLength: 5 }],
+        });
+      });
+      await ext.close();
+
+      await expect
+        .poll(
+          async () => {
+            return reader.evaluate(() => {
+              const scope = globalThis as unknown as { ditaRelayProbe?: string[] };
+              return scope.ditaRelayProbe ?? [];
+            });
+          },
+          { timeout: 10_000 },
+        )
+        .toContain('installedVoiceBoundary');
+
+      expect(errors).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
 });
+
+/** Engine + first-voice cache entries that mark the installed voice available. */
+function voiceCacheUrls(): string[] {
+  const voice = SUPERTONIC_VOICES[0];
+  if (!voice) throw new Error('voice catalog is empty');
+  return [
+    ...SUPERTONIC_ENGINE_ASSETS.assets.map((asset) => sourceUrl(asset.source)),
+    sourceUrl(voice.source),
+  ];
+}
