@@ -65,17 +65,21 @@ describe('domLayer', () => {
     expect(domLayer(layer).spans()).toEqual(['Orchid opens ', 'the story.']);
   });
 
-  it('wraps the requested word in an active mark', () => {
+  it('overlays the requested word without mutating span text', () => {
     const layer = layerWith('Orchid opens ', 'the story.');
     const port = domLayer(layer);
 
     port.markWord(1, 0, 3);
 
     const mark = layer.querySelector('mark[data-active-word="true"]');
+    expect(mark).not.toBeNull();
     expect(mark?.textContent).toBe('the');
+    expect(mark?.className).toContain('dita-word-highlight');
+    // Overlay positioning does not reflow the layer span.
+    expect(layer.querySelectorAll('span')[1]?.textContent).toBe('the story.');
   });
 
-  it('clears marks and restores plain text', () => {
+  it('clears overlays without touching layer text', () => {
     const layer = layerWith('Orchid opens the story.');
     const port = domLayer(layer);
     port.markWord(0, 0, 6);

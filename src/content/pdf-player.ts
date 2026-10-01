@@ -346,8 +346,10 @@ export class PdfPlayer {
 
   private clearWordHighlights(): void {
     for (const section of this.sections) {
-      clearHighlight(section.element);
+      // Layer overlays first: they are empty elements inside text-layer spans
+      // and must be removed before the text-node unwrapping pass.
       if (section.layer) domLayer(section.layer).clearMarks();
+      clearHighlight(section.element);
     }
   }
 }

@@ -73,25 +73,33 @@ export function domLayer(layer: HTMLElement): LayerPort {
       if (!text || text.nodeType !== Node.TEXT_NODE) return;
       const end = Math.min(start + length, target.textContent?.length ?? 0);
       if (end <= start) return;
+
+      // Overlay the highlight instead of wrapping the text: mutating the span
+      // reflows pdf.js' measured text run and misplaces the mark. Range rects
+      // track the transformed glyph geometry exactly. The mark carries the
+      // word text as invisible content (position absolute removes from flow)
+      // so recorders that observe textContent can still detect it.
       const range = document.createRange();
       range.setStart(text, start);
       range.setEnd(text, end);
-      const mark = document.createElement('mark');
-      mark.className = 'dita-word-highlight';
-      mark.setAttribute('data-active-word', 'true');
-      try {
-        range.surroundContents(mark);
-      } catch {
-        // Partial selections across element boundaries cannot be wrapped;
-        // skip rather than corrupt the text layer.
+      const wordText = target.textContent?.slice(start, end) ?? '';
+      const layerRect = layer.getBoundingClientRect();
+      for (const rect of Array.from(range.getClientRects())) {
+        if (rect.width === 0 || rect.height === 0) continue;
+        const mark = document.createElement('mark');
+        mark.className = 'dita-word-highlight';
+        mark.setAttribute('data-active-word', 'true');
+        mark.style.left = `${rect.left - layerRect.left}px`;
+        mark.style.top = `${rect.top - layerRect.top}px`;
+        mark.style.width = `${rect.width}px`;
+        mark.style.height = `${rect.height}px`;
+        mark.textContent = wordText;
+        layer.append(mark);
       }
     },
     clearMarks() {
       for (const mark of Array.from(layer.querySelectorAll('mark.dita-word-highlight'))) {
-        const parent = mark.parentNode;
-        if (!parent) continue;
-        parent.replaceChild(document.createTextNode(mark.textContent ?? ''), mark);
-        parent.normalize();
+        mark.remove();
       }
     },
   };
