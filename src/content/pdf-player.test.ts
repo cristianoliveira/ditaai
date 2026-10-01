@@ -21,19 +21,29 @@ function fakeSequencer(): PdfSequencer & {
     speakOptions,
     loaded,
     onSegmentChange: undefined as ((index: number) => void) | undefined,
-    load(segments: string[]) {
+    load(segments: string[], startIndex = 0) {
       loaded.push(segments);
-      sequencer.state = { current: 0, total: segments.length, playing: false, paused: false };
+      sequencer.state = {
+        current: startIndex,
+        total: segments.length,
+        playing: false,
+        paused: false,
+      };
     },
     async play(options?: SpeakOptions) {
       speakOptions.push(options ?? {});
       listeners.boundary = options?.onBoundary;
       sequencer.state = { ...sequencer.state, playing: true };
     },
-    pause: vi.fn(),
+    pause: vi.fn(() => {
+      sequencer.state = { ...sequencer.state, playing: false, paused: true };
+    }),
     resume: vi.fn(),
     stop: vi.fn(() => {
       sequencer.state = { ...sequencer.state, playing: false };
+    }),
+    seek: vi.fn((target: number) => {
+      sequencer.state = { ...sequencer.state, current: target };
     }),
     setRate: vi.fn(),
     getState: () => sequencer.state,
@@ -92,7 +102,7 @@ describe('PdfPlayer', () => {
     document.body.replaceChildren();
     sequencer = fakeSequencer();
     elements = viewerElements();
-    player = new PdfPlayer(sequencer, elements);
+    player = new PdfPlayer(sequencer, { elements, saveRate: vi.fn(async () => {}) });
   });
 
   it('renders readable pages in document order and reports the page position', () => {
@@ -165,5 +175,91 @@ describe('PdfPlayer', () => {
     expect(elements.status.textContent).toContain('damaged');
     expect(elements.pages.children).toHaveLength(0);
     expect(sequencer.loaded).toHaveLength(0);
+  });
+
+  it('returns to idle with a finished status when narration ends naturally', async () => {
+    player.show(twoPageDocument());
+    const finished = player.play();
+    await vi.waitFor(() => expect(sequencer.speakOptions).toHaveLength(1));
+
+    sequencer.state = { current: 1, total: 2, playing: false, paused: false };
+    await finished;
+
+    expect(elements.status.textContent).toBe('Finished');
+    expect(elements.pages.querySelector('mark[data-active-word="true"]')).toBeNull();
+  });
+
+  it('keeps the paused status when playback is suspended before the end', async () => {
+    player.show(twoPageDocument());
+    const finished = player.play();
+    await vi.waitFor(() => expect(sequencer.speakOptions).toHaveLength(1));
+
+    player.pause();
+    await finished;
+
+    expect(elements.status.textContent).toBe('Paused');
+  });
+
+  it('jumps to the next and previous page while playing', async () => {
+    player.show(twoPageDocument());
+    player.play();
+    await vi.waitFor(() => expect(sequencer.speakOptions).toHaveLength(1));
+
+    player.jump('forward');
+    expect(sequencer.seek).toHaveBeenCalledWith(1);
+
+    player.jump('backward');
+    expect(sequencer.seek).toHaveBeenCalledWith(0);
+  });
+
+  it('starts playback at the target page when a jump happens while idle', async () => {
+    player.show(twoPageDocument());
+
+    player.jump('forward');
+
+    await vi.waitFor(() => expect(sequencer.loaded[0]).toBeDefined());
+    expect(sequencer.loaded[0]?.length).toBe(2);
+    expect(sequencer.state.current).toBe(1);
+    expect(sequencer.seek).not.toHaveBeenCalled();
+  });
+
+  it('starts from a selected page and clamps rates to the shared range', async () => {
+    player.show(twoPageDocument());
+    const second = elements.pages.querySelectorAll('section')[1];
+    if (!second) throw new Error('second page section missing');
+    const range = document.createRange();
+    range.selectNodeContents(second);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    expect(player.selectedIndex()).toBe(1);
+
+    player.applyRate(9);
+    expect(player.currentRate).toBe(2);
+    expect(sequencer.setRate).toHaveBeenCalledWith(2);
+  });
+
+  it('ignores selections outside the rendered document', () => {
+    player.show(twoPageDocument());
+    const outside = document.createElement('div');
+    document.body.append(outside);
+    const range = document.createRange();
+    range.selectNodeContents(outside);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    expect(player.selectedIndex()).toBeNull();
+  });
+
+  it('persists the applied rate through the injected store', async () => {
+    const saveRate = vi.fn(async () => {});
+    const persisting = new PdfPlayer(sequencer, { elements, saveRate });
+
+    persisting.applyRate(1.5);
+    await persisting.commitRate();
+
+    expect(saveRate).toHaveBeenCalledWith(1.5);
   });
 });
