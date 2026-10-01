@@ -81,6 +81,14 @@ extraction from `querySelectorAll(selector)` elements chunked via `splitText`.
 
 `describeBoundary` — structured boundary event logging for observability.
 
+## `pdf-player.ts` — PDF reading-view narration controller
+
+Drives a `SegmentSequencer` over one segment per readable PDF page inside
+`pdf-reader.html`. Renders sections, translates boundaries into word highlights
+(`mark[data-active-word=true]`), and reports `Page N of M` in
+`#pdf-page-position`. Empty pages are never narrated; failures render a clear
+non-speaking state.
+
 ## `fake-reader.ts` — E2E fake
 
 `FakeBoundaryReader implements TextReader` — fires synthetic word boundaries on
