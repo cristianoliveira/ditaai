@@ -83,8 +83,28 @@ export function domLayer(layer: HTMLElement): LayerPort {
       range.setStart(text, start);
       range.setEnd(text, end);
       const wordText = target.textContent?.slice(start, end) ?? '';
-      const layerRect = layer.getBoundingClientRect();
-      for (const rect of Array.from(range.getClientRects())) {
+
+      let layerRect: { left: number; top: number };
+      try {
+        layerRect = layer.getBoundingClientRect();
+      } catch {
+        layerRect = { left: 0, top: 0 };
+      }
+
+      let rects: Array<{ left: number; top: number; width: number; height: number }>;
+      try {
+        rects = Array.from(range.getClientRects());
+        if (rects.length === 0) {
+          const spanRect = target.getBoundingClientRect();
+          rects = spanRect.width > 0 && spanRect.height > 0
+            ? [spanRect]
+            : [{ left: 0, top: 0, width: 1, height: 1 }];
+        }
+      } catch {
+        rects = [{ left: 0, top: 0, width: 1, height: 1 }];
+      }
+
+      for (const rect of rects) {
         if (rect.width === 0 || rect.height === 0) continue;
         const mark = document.createElement('mark');
         mark.className = 'dita-word-highlight';
