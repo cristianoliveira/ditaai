@@ -26,7 +26,7 @@ function testReaderRequested(): boolean {
   // script contract uses — init scripts can set the attribute without touching
   // the action-generated viewer URL.
   if (new URLSearchParams(location.search).get('testReader') === 'fake') return true;
-  return document.documentElement.dataset['ditaTestReader'] === 'fake';
+  return document.documentElement.getAttribute('data-dita-test-reader') === 'fake';
 }
 
 async function main(): Promise<void> {
