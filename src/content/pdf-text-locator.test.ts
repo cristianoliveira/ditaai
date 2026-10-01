@@ -53,6 +53,9 @@ describe('domLayer', () => {
     for (const text of texts) {
       const span = document.createElement('span');
       span.textContent = text;
+      // Set inline width so both geometry styles work in tests.
+      span.style.width = `${text.length * 10}px`;
+      span.style.height = '12px';
       layer.append(span);
     }
     document.body.append(layer);

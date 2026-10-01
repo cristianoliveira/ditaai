@@ -69,54 +69,33 @@ export function domLayer(layer: HTMLElement): LayerPort {
       const nodes = layer.querySelectorAll('span');
       const target = nodes[span];
       if (!target) return;
-      const text = target.firstChild;
-      if (!text || text.nodeType !== Node.TEXT_NODE) return;
-      const end = Math.min(start + length, target.textContent?.length ?? 0);
-      if (end <= start) return;
+      const wordText = target.textContent?.slice(start, start + length) ?? '';
+      if (!wordText) return;
 
-      // Overlay the highlight instead of wrapping the text: mutating the span
-      // reflows pdf.js' measured text run and misplaces the mark. Range rects
-      // track the transformed glyph geometry exactly. The mark carries the
-      // word text as invisible content (position absolute removes from flow)
-      // so recorders that observe textContent can still detect it.
-      const range = document.createRange();
-      range.setStart(text, start);
-      range.setEnd(text, end);
-      const wordText = target.textContent?.slice(start, end) ?? '';
+      // pdf.js positions text-layer spans with precise inline pixel geometry
+      // matching the canvas.  Approximate per-character advance using the
+      // span's own computed width — close enough for proportional fonts and
+      // much more robust than Range.getClientRects (which breaks with the
+      // CSS custom-property scaling chain).
+      const spanW =
+        Number.parseFloat(target.style.width) || target.getBoundingClientRect().width || 0;
+      if (spanW <= 0) return;
+      const textLen = target.textContent?.length ?? 1;
+      const perChar = spanW / textLen;
+      const layerRect = layer.getBoundingClientRect();
+      const spanRect = target.getBoundingClientRect();
 
-      let layerRect: { left: number; top: number };
-      try {
-        layerRect = layer.getBoundingClientRect();
-      } catch {
-        layerRect = { left: 0, top: 0 };
-      }
-
-      let rects: Array<{ left: number; top: number; width: number; height: number }>;
-      try {
-        rects = Array.from(range.getClientRects());
-        if (rects.length === 0) {
-          const spanRect = target.getBoundingClientRect();
-          rects =
-            spanRect.width > 0 && spanRect.height > 0
-              ? [spanRect]
-              : [{ left: 0, top: 0, width: 1, height: 1 }];
-        }
-      } catch {
-        rects = [{ left: 0, top: 0, width: 1, height: 1 }];
-      }
-
-      for (const rect of rects) {
-        if (rect.width === 0 || rect.height === 0) continue;
-        const mark = document.createElement('mark');
-        mark.className = 'dita-word-highlight';
-        mark.setAttribute('data-active-word', 'true');
-        mark.style.left = `${rect.left - layerRect.left}px`;
-        mark.style.top = `${rect.top - layerRect.top}px`;
-        mark.style.width = `${rect.width}px`;
-        mark.style.height = `${rect.height}px`;
-        mark.textContent = wordText;
-        layer.append(mark);
-      }
+      const mark = document.createElement('mark');
+      mark.className = 'dita-word-highlight';
+      mark.setAttribute('data-active-word', 'true');
+      mark.setAttribute('aria-hidden', 'true');
+      mark.style.left = `${spanRect.left - layerRect.left + perChar * start}px`;
+      mark.style.top = `${spanRect.top - layerRect.top}px`;
+      mark.style.width = `${perChar * length}px`;
+      mark.style.height = `${spanRect.height}px`;
+      mark.style.color = 'transparent';
+      mark.textContent = wordText;
+      layer.append(mark);
     },
     clearMarks() {
       for (const mark of Array.from(layer.querySelectorAll('mark.dita-word-highlight'))) {

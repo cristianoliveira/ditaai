@@ -67,7 +67,6 @@ export class PdfPageRenderer {
     canvas.style.width = `${Math.floor(viewport.width)}px`;
     canvas.style.height = `${Math.floor(viewport.height)}px`;
     layer.replaceChildren();
-    layer.style.setProperty('--scale-factor', String(scale));
     layer.setAttribute('role', 'presentation');
 
     const context = canvas.getContext('2d');

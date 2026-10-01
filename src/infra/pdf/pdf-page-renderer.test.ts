@@ -82,7 +82,6 @@ describe('PdfPageRenderer', () => {
     expect(canvas.width).toBe(306);
     expect(canvas.style.width).toBe('306px');
     expect(layer.getAttribute('data-text-layer')).toBe('rendered');
-    expect(layer.style.getPropertyValue('--scale-factor')).toBe('0.5');
   });
 
   it('caps the canvas width even for wide containers', async () => {
@@ -96,7 +95,6 @@ describe('PdfPageRenderer', () => {
     }).renderInto(canvas, layer, 5000);
 
     expect(canvas.style.width).toBe('612px');
-    expect(layer.style.getPropertyValue('--scale-factor')).toBe('1');
   });
 
   it('cancels a hung render when cancelled or re-rendered', async () => {

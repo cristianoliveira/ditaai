@@ -38,6 +38,12 @@ export class PdfDocumentError extends Error {
 export interface PdfTextPage {
   pageNumber: number;
   text: string;
+  /** Original PDF-space coordinates for each text item, used to position word
+   * highlights without relying on TextLayer CSS geometry. */
+  items: Array<{ str: string; x: number; y: number; width: number }>;
+  /** Unscaled page dimensions (CSS px at scale = 1). */
+  baseWidth: number;
+  baseHeight: number;
 }
 
 export interface PdfTextDocument {
@@ -300,15 +306,29 @@ async function extractPages(pdf: PdfJsDocument): Promise<PdfTextDocument> {
   let containsText = false;
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
     const page = await pdf.getPage(pageNumber);
+    const base = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
-    const text = content.items
-      .filter(isTextItem)
-      .map((item) => `${item.str}${item.hasEOL ? '\n' : ' '}`)
-      .join('')
-      .replace(/\s+/g, ' ')
-      .trim();
+    const textItems: Array<{ str: string; x: number; y: number; width: number }> = [];
+    const textFragments: string[] = [];
+    for (const item of content.items) {
+      if (!isTextItem(item)) continue;
+      textFragments.push(`${item.str}${item.hasEOL ? '\n' : ' '}`);
+      textItems.push({
+        str: item.str,
+        x: item.transform[4],
+        y: item.transform[5],
+        width: item.width,
+      });
+    }
+    const text = textFragments.join('').replace(/\s+/g, ' ').trim();
     if (text) containsText = true;
-    pages.push({ pageNumber, text });
+    pages.push({
+      pageNumber,
+      text,
+      items: textItems,
+      baseWidth: base.width,
+      baseHeight: base.height,
+    });
     page.cleanup();
   }
   if (!containsText) {

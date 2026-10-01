@@ -83,12 +83,32 @@ function viewerElements(): {
   return { root, status, position, pages };
 }
 
-function twoPageDocument(): PdfTextDocument {
+function twoPageDocument(itemsData?: {
+  items?: Array<Array<{ str: string; x: number; y: number; width: number }>>;
+  baseWidth?: number;
+  baseHeight?: number;
+}): PdfTextDocument {
   return {
     pageCount: 2,
     pages: [
-      { pageNumber: 1, text: 'Orchid opens the story.' },
-      { pageNumber: 2, text: 'Cedar closes the story.' },
+      {
+        pageNumber: 1,
+        text: 'Orchid opens the story.',
+        items: itemsData?.items?.[0] ?? [
+          { str: 'Orchid opens the story.', x: 72, y: 600, width: 120 },
+        ],
+        baseWidth: itemsData?.baseWidth ?? 612,
+        baseHeight: itemsData?.baseHeight ?? 792,
+      },
+      {
+        pageNumber: 2,
+        text: 'Cedar closes the story.',
+        items: itemsData?.items?.[1] ?? [
+          { str: 'Cedar closes the story.', x: 72, y: 550, width: 95 },
+        ],
+        baseWidth: itemsData?.baseWidth ?? 612,
+        baseHeight: itemsData?.baseHeight ?? 792,
+      },
     ],
   };
 }
@@ -154,9 +174,21 @@ describe('PdfPlayer', () => {
     player.show({
       pageCount: 3,
       pages: [
-        { pageNumber: 1, text: 'Only this page speaks.' },
-        { pageNumber: 2, text: '' },
-        { pageNumber: 3, text: 'Then this one.' },
+        {
+          pageNumber: 1,
+          text: 'Only this page speaks.',
+          items: [{ str: 'Only this page speaks.', x: 72, y: 600, width: 130 }],
+          baseWidth: 612,
+          baseHeight: 792,
+        },
+        { pageNumber: 2, text: '', items: [], baseWidth: 612, baseHeight: 792 },
+        {
+          pageNumber: 3,
+          text: 'Then this one.',
+          items: [{ str: 'Then this one.', x: 72, y: 550, width: 80 }],
+          baseWidth: 612,
+          baseHeight: 792,
+        },
       ],
     });
 
@@ -278,6 +310,8 @@ describe('PdfPlayer', () => {
           for (const part of text.split(' the ')) {
             const span = document.createElement('span');
             span.textContent = `${part} `;
+            span.style.width = `${(part.length + 1) * 10}px`;
+            span.style.height = '12px';
             layer.append(span);
           }
           return Promise.resolve();
@@ -309,10 +343,34 @@ describe('PdfPlayer', () => {
       player.show({
         pageCount: 4,
         pages: [
-          { pageNumber: 1, text: 'Orchid opens the story.' },
-          { pageNumber: 2, text: 'Birch continues the story.' },
-          { pageNumber: 3, text: 'Cedar closes the story.' },
-          { pageNumber: 4, text: 'Elm ends the story.' },
+          {
+            pageNumber: 1,
+            text: 'Orchid opens the story.',
+            items: [{ str: 'Orchid opens the story.', x: 72, y: 600, width: 120 }],
+            baseWidth: 612,
+            baseHeight: 792,
+          },
+          {
+            pageNumber: 2,
+            text: 'Birch continues the story.',
+            items: [{ str: 'Birch continues the story.', x: 72, y: 600, width: 120 }],
+            baseWidth: 612,
+            baseHeight: 792,
+          },
+          {
+            pageNumber: 3,
+            text: 'Cedar closes the story.',
+            items: [{ str: 'Cedar closes the story.', x: 72, y: 550, width: 95 }],
+            baseWidth: 612,
+            baseHeight: 792,
+          },
+          {
+            pageNumber: 4,
+            text: 'Elm ends the story.',
+            items: [{ str: 'Elm ends the story.', x: 72, y: 500, width: 80 }],
+            baseWidth: 612,
+            baseHeight: 792,
+          },
         ],
       });
       await vi.waitFor(() => expect(player.paintedPages).toEqual([1, 2]));
@@ -343,7 +401,7 @@ describe('PdfPlayer', () => {
       sequencer.state = { current: 0, total: 2, playing: true, paused: false };
       sequencer.emitBoundary({ charIndex: 0, charLength: 6 });
 
-      const mark = elements.pages.querySelector('.textLayer mark[data-active-word="true"]');
+      const mark = elements.pages.querySelector('mark[data-active-word="true"]');
       expect(mark?.textContent).toBe('Orchid');
     });
 

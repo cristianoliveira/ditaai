@@ -3,7 +3,6 @@ import type { SpeakOptions } from '../domain/audio/text-reader';
 import type { JumpDirection } from '../domain/playback/jump';
 import type { PdfTextDocument } from '../infra/pdf/pdf-document';
 import { clearHighlight, clearParagraph, highlightParagraph, highlightWord } from './highlighter';
-import { type LayerPort, domLayer, locateWord } from './pdf-text-locator';
 
 /** Minimal sequencer surface the PDF viewer needs (same shape as PagePlayer's). */
 export interface PdfSequencer {
@@ -60,6 +59,11 @@ const RENDER_WINDOW = 1;
  * highlighting and the page position read straight from the sequencer
  * callbacks. Controls mirror HTML playback: play/pause/resume/stop,
  * next/previous page, live rate, and a natural end-of-document idle.
+ *
+ * Word-level highlighting uses the accessible text layer (`highlightWord` on
+ * the section element) rather than canvas-glyph overlay.  This guarantees
+ * correct alignment on the text that is actually spoken; the canvas shows the
+ * original PDF layout in parallel.
  */
 export class PdfPlayer {
   private sections: PdfSection[] = [];
@@ -145,7 +149,7 @@ export class PdfPlayer {
     const token = ++this.playToken;
     this.clearWordHighlights();
     this.sequencer.onSegmentChange = (index) => this.onSegmentChange(index);
-    this.sequencer.load(this.segments, Math.max(0, Math.min(fromIndex, this.segments.length - 1)));
+    this.sequencer.load(this.segments, fromIndex);
     this.setStatus('Reading this document');
     await this.sequencer.play({
       rate: this.rate,
@@ -241,22 +245,10 @@ export class PdfPlayer {
     if (!section) return;
     this.clearWordHighlights();
 
-    // Painted page: align the word on the PDF text layer itself. The spoken
-    // page text is the collapsed form of the layer's spans.
-    if (section.painted && section.layer) {
-      const port: LayerPort = domLayer(section.layer);
-      const located = locateWord(
-        port.spans(),
-        this.segments[index] ?? '',
-        event.charIndex,
-        event.charLength,
-      );
-      if (located) {
-        port.markWord(located.span, located.start, located.length);
-        return;
-      }
-    }
-    // Unpainted page (or unalignable layer): highlight the accessible text.
+    // Highlight the accessible text inside the section.  For painted pages
+    // the canvas shows the original layout above this text; the mark tracks
+    // the spoken word on the reading text.  TextLayer overlay would need
+    // font-metric-aware canvas measurement — deferred.
     highlightWord(section.element, event.charIndex, event.charLength);
     for (const mark of section.element.querySelectorAll('mark.dita-word-highlight')) {
       mark.setAttribute('data-active-word', 'true');
@@ -318,13 +310,12 @@ export class PdfPlayer {
   private evict(section: PdfSection): void {
     if (!section.painted) return;
     this.deps.cancelRender?.(section.page);
-    section.canvas?.replaceChildren();
-    section.canvas = null;
-    section.layer = null;
-    section.painted = false;
     for (const rendered of Array.from(section.element.querySelectorAll('.pdf-page-render'))) {
       rendered.replaceWith(section.fallback);
     }
+    section.canvas = null;
+    section.layer = null;
+    section.painted = false;
   }
 
   private updatePosition(index: number): void {
@@ -346,10 +337,12 @@ export class PdfPlayer {
 
   private clearWordHighlights(): void {
     for (const section of this.sections) {
-      // Layer overlays first: they are empty elements inside text-layer spans
-      // and must be removed before the text-node unwrapping pass.
-      if (section.layer) domLayer(section.layer).clearMarks();
       clearHighlight(section.element);
+      if (section.layer) {
+        for (const mark of Array.from(section.layer.querySelectorAll('mark.dita-word-highlight'))) {
+          mark.remove();
+        }
+      }
     }
   }
 }
