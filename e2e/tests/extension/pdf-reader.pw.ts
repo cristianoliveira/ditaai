@@ -374,6 +374,157 @@ test.describe('PDF dictation', () => {
     }
   });
 
+  test('covers the whole spoken word on the rendered page (geometry)', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+      await enableFakeReader(context);
+
+      const reader = await openReaderFromAction(context, extensionId, 'two-page-text.pdf');
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'ready', {
+        timeout: 20_000,
+      });
+
+      // Page-side geometry sampler: on every highlight mutation, measure the
+      // active element's rect against each candidate word's Range rect inside
+      // the text layer — synchronously, so 50ms word windows cannot race.
+      await reader.evaluate(() => {
+        interface Rect {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        }
+        interface El {
+          textContent: string | null;
+          getAttribute(name: string): string | null;
+          closest(selector: string): El | null;
+          querySelector(selector: string): El | null;
+          getBoundingClientRect(): Rect;
+        }
+        interface RangeLike {
+          setStart(node: unknown, offset: number): void;
+          setEnd(node: unknown, offset: number): void;
+          getBoundingClientRect(): Rect;
+        }
+        const scope = globalThis as unknown as {
+          ditaGeometry?: Array<{ page: string; word: string; covX: number; covY: number }>;
+          document: {
+            querySelector(selector: string): El | null;
+            createRange(): RangeLike;
+            createTreeWalker(
+              root: unknown,
+              whatToShow: number,
+            ): {
+              nextNode(): unknown;
+            };
+          };
+          MutationObserver: new (
+            cb: () => void,
+          ) => {
+            observe(target: unknown, options: unknown): void;
+          };
+        };
+        scope.ditaGeometry = [];
+
+        const overlapFraction = (a: Rect, b: Rect): { x: number; y: number } => {
+          const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+          const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+          return {
+            x: b.width > 0 ? Math.max(0, overlapX) / b.width : 0,
+            y: b.height > 0 ? Math.max(0, overlapY) / b.height : 0,
+          };
+        };
+
+        const sample = () => {
+          const active = scope.document.querySelector('[data-active-word="true"]');
+          if (!active) return;
+          const pageSection = active.closest('[data-page-number]');
+          const page = pageSection?.getAttribute('data-page-number') ?? '';
+          const markRect = active.getBoundingClientRect();
+          const layer = pageSection?.querySelector('.textLayer');
+          if (!layer) return;
+
+          // Candidate words: every whitespace-separated run in the layer's
+          // text nodes, measured with a Range (non-mutating, like a user
+          // selecting the word).
+          const walker = scope.document.createTreeWalker(layer, 4 /* Node.SHOW_TEXT */);
+          let best: { word: string; covX: number; covY: number } | null = null;
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = (node as { data?: string }).data ?? '';
+            for (const match of text.matchAll(/\S+/g)) {
+              const start = match.index ?? 0;
+              const range = scope.document.createRange();
+              range.setStart(node, start);
+              range.setEnd(node, start + match[0].length);
+              const markWordRect = range.getBoundingClientRect();
+              const fraction = overlapFraction(markRect, markWordRect);
+              if (!best || fraction.x > best.covX) {
+                best = { word: match[0], covX: fraction.x, covY: fraction.y };
+              }
+            }
+          }
+          if (!best) return;
+          const samples = scope.ditaGeometry ?? [];
+          const last = samples[samples.length - 1];
+          if (last?.word === best.word && last.page === page) return;
+          samples.push({ page, word: best.word, covX: best.covX, covY: best.covY });
+        };
+
+        const pages = scope.document.querySelector('#pdf-pages');
+        if (!pages) return;
+        new scope.MutationObserver(sample).observe(pages, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: true,
+          attributeFilter: ['data-active-word'],
+        });
+      });
+
+      await reader.locator('button[data-action="play"]').click();
+
+      // Every spoken word on both pages must be covered by the highlight.
+      // Wait for natural end (status 'Finished') so the full sequence lands.
+      await expect(reader.locator('#pdf-status')).toHaveText('Finished', { timeout: 30_000 });
+      const samples = await reader.evaluate(() => {
+        const scope = globalThis as unknown as {
+          ditaGeometry?: Array<{ page: string; word: string; covX: number; covY: number }>;
+        };
+        return scope.ditaGeometry ?? [];
+      });
+
+      // Whole-word coverage on both pages, in narration order.
+      expect(samples.map((s) => s.word)).toEqual([
+        'Orchid',
+        'opens',
+        'the',
+        'story.',
+        'Cedar',
+        'closes',
+        'the',
+        'story.',
+      ]);
+      expect(samples.map((s) => s.page)).toEqual(['1', '1', '1', '1', '2', '2', '2', '2']);
+      for (const sample of samples) {
+        expect(
+          `page ${sample.page} word "${sample.word}" covX=${sample.covX.toFixed(2)} covY=${sample.covY.toFixed(2)}`,
+          `highlight must cover the whole spoken word: page ${sample.page} "${sample.word}" (covX=${sample.covX.toFixed(2)}, covY=${sample.covY.toFixed(2)})`,
+        ).toBeTruthy();
+        expect(sample.covX).toBeGreaterThanOrEqual(0.8);
+        expect(sample.covY).toBeGreaterThanOrEqual(0.7);
+      }
+
+      // End of narration: the highlight clears.
+      await expect(reader.locator('[data-active-word="true"]')).toHaveCount(0, {
+        timeout: 10_000,
+      });
+      expect(errors).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
   test('image-only PDF shows a non-speaking error state', async () => {
     const harness = await launchExtensionContext();
     try {
