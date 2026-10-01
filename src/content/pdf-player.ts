@@ -296,7 +296,12 @@ export class PdfPlayer {
     canvas.height = 0;
 
     try {
-      await this.deps.renderPage(section.page, canvas, layer, this.elements.pages.clientWidth || 800);
+      await this.deps.renderPage(
+        section.page,
+        canvas,
+        layer,
+        this.elements.pages.clientWidth || 800,
+      );
     } catch {
       canvas.width = 0;
       canvas.height = 0;
@@ -317,9 +322,9 @@ export class PdfPlayer {
     section.canvas = null;
     section.layer = null;
     section.painted = false;
-    section.element
-      .querySelectorAll('.pdf-page-render')
-      .forEach((rendered) => rendered.replaceWith(section.fallback));
+    for (const rendered of Array.from(section.element.querySelectorAll('.pdf-page-render'))) {
+      rendered.replaceWith(section.fallback);
+    }
   }
 
   private updatePosition(index: number): void {
