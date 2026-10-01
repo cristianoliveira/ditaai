@@ -95,15 +95,14 @@ export class PdfPageRenderer {
         return;
       }
       this.textLayer = textLayer;
-      await textLayer.render();
-    } finally {
-      if (this.active === task) this.active = null;
-      // Set CSS scaling so the text layer font-size calc uses the correct
-      // --total-scale-factor chain: .pdf-page-render sets --total-scale-factor
-      // = calc(var(--scale-factor) * var(--user-unit)).
+      // Set CSS scaling before textLayer.render() so the font-size calc
+      // is deterministic from the first render frame.
       if (layer.parentElement) {
         layer.parentElement.style.setProperty('--scale-factor', String(scale));
       }
+      await textLayer.render();
+    } finally {
+      if (this.active === task) this.active = null;
       this.page.cleanup?.();
     }
   }
