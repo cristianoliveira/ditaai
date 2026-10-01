@@ -49,7 +49,7 @@ function fakePage(options: FakePageOptions = {}): RenderablePdfPage & {
 
 class TextLayerStub {
   constructor(params: { container: HTMLElement }) {
-    (params.container as HTMLElement).dataset['textLayer'] = 'rendered';
+    (params.container as HTMLElement).setAttribute('data-text-layer', 'rendered');
   }
 
   render(): Promise<void> {
@@ -81,7 +81,7 @@ describe('PdfPageRenderer', () => {
 
     expect(canvas.width).toBe(306);
     expect(canvas.style.width).toBe('306px');
-    expect(layer.dataset['textLayer']).toBe('rendered');
+    expect(layer.getAttribute('data-text-layer')).toBe('rendered');
     expect(layer.style.getPropertyValue('--scale-factor')).toBe('0.5');
   });
 
