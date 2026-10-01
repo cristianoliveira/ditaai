@@ -98,6 +98,12 @@ export class PdfPageRenderer {
       await textLayer.render();
     } finally {
       if (this.active === task) this.active = null;
+      // Set CSS scaling so the text layer font-size calc uses the correct
+      // --total-scale-factor chain: .pdf-page-render sets --total-scale-factor
+      // = calc(var(--scale-factor) * var(--user-unit)).
+      if (layer.parentElement) {
+        layer.parentElement.style.setProperty('--scale-factor', String(scale));
+      }
       this.page.cleanup?.();
     }
   }

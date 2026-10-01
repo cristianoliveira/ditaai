@@ -19,6 +19,11 @@
       position: relative;
       box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
       background: white;
+      --scale-factor: 1;
+      --user-unit: 1;
+      --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+      --scale-round-x: 1px;
+      --scale-round-y: 1px;
     }
     .pdf-page-canvas {
       display: block;
