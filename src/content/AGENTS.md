@@ -84,10 +84,24 @@ extraction from `querySelectorAll(selector)` elements chunked via `splitText`.
 ## `pdf-player.ts` — PDF reading-view narration controller
 
 Drives a `SegmentSequencer` over one segment per readable PDF page inside
-`pdf-reader.html`. Renders sections, translates boundaries into word highlights
-(`mark[data-active-word=true]`), and reports `Page N of M` in
-`#pdf-page-position`. Empty pages are never narrated; failures render a clear
-non-speaking state.
+`pdf-reader.html`. Each section starts as accessible text (`p.pdf-page-text`)
+and is replaced by the original page render (canvas + `.textLayer`) inside a
+bounded window of the current ±1 pages; anything outside the window is evicted
+to text again (`cancelRender` included). Boundaries are aligned to the rendered
+page via `pdf-text-locator` (`mark[data-active-word=true]` inside the text
+layer; unalignable/unpainted pages fall back to highlighting the accessible
+text). Reports `Page N of M` in `#pdf-page-position`, mirrors HTML controls
+(pause/resume/stop, next/previous page jumps, live rate with an injected rate
+store, selection-scoped start, natural end-of-document idle). Empty pages are
+never narrated; failures render a clear non-speaking state.
+
+## `pdf-text-locator.ts` — spoken-word ↔ text-layer alignment
+
+Pure `locateWord(spans, pageText, offset, length)` maps collapsed spoken text
+offsets onto PDF.js text-layer spans (whitespace/newline splits handled; a
+word split across spans returns null instead of guessing), plus the `domLayer`
+DOM adapter that wraps the word in `mark.dita-word-highlight
+[data-active-word=true]`.
 
 ## `fake-reader.ts` — E2E fake
 

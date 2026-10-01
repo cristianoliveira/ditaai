@@ -1,6 +1,7 @@
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { GlobalWorkerOptions, TextLayer, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
+import { PdfPageRenderer, type RenderablePdfPage, pdfTextLayerFactory } from './pdf-page-renderer';
 
 // The bundled worker keeps parsing off the UI thread in the extension. Node
 // test runtimes have no browser Worker, so they fall back to pdf.js' fake
@@ -66,6 +67,36 @@ export async function loadPdfDocument(
   rawUrl: string,
   fetcher: typeof fetch = fetch,
 ): Promise<PdfTextDocument> {
+  const opened = await openPdfDocument(rawUrl, fetcher);
+  try {
+    return opened.text;
+  } finally {
+    await opened.destroy();
+  }
+}
+
+export interface OpenedPdfDocument {
+  text: PdfTextDocument;
+  /** Render one page (canvas + selectable text layer) scaled to fit the
+   * given width. Re-renders cancel the previous task for that page. */
+  renderPage(
+    pageNumber: number,
+    canvas: HTMLCanvasElement,
+    layer: HTMLElement,
+    containerWidth: number,
+  ): Promise<void>;
+  /** Abort an in-flight render (e.g. an evicted page). */
+  cancelRender(pageNumber: number): void;
+  destroy(): Promise<void>;
+}
+
+/** Open a PDF and keep the parsed document alive for canvas rendering.
+ * Callers must destroy() to release memory and cancel render tasks. */
+export async function openPdfDocument(
+  rawUrl: string,
+  fetcher: typeof fetch = fetch,
+  options: { standardFontDataUrl?: string } = {},
+): Promise<OpenedPdfDocument> {
   const url = validatePdfUrl(rawUrl);
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -78,7 +109,7 @@ export async function loadPdfDocument(
     }, PDF_READ_TIMEOUT_MS);
   });
 
-  const work = async (): Promise<PdfTextDocument> => {
+  const work = async (): Promise<PdfJsDocument> => {
     try {
       const response = await fetcher(url.href, {
         credentials: 'include',
@@ -110,8 +141,11 @@ export async function loadPdfDocument(
         enableXfa: false,
         disableAutoFetch: true,
         useWorkerFetch: false,
+        ...(options.standardFontDataUrl
+          ? { standardFontDataUrl: options.standardFontDataUrl }
+          : {}),
       });
-      return await extractPages(await loadingTask.promise);
+      return (await loadingTask.promise) as PdfJsDocument;
     } catch (error) {
       if (error instanceof PdfDocumentError) throw error;
       if (controller.signal.aborted) {
@@ -133,11 +167,60 @@ export async function loadPdfDocument(
     }
   };
 
+  let parsed: PdfJsDocument;
   try {
-    return await Promise.race([work(), timedOut]);
+    parsed = await Promise.race([work(), timedOut]);
+  } catch (error) {
+    await loadingTask?.destroy();
+    throw error;
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
-    await loadingTask?.destroy();
+  }
+  if (!loadingTask) throw new PdfDocumentError('malformed', 'This PDF could not be opened.');
+  return openExtracted(parsed, loadingTask);
+}
+
+async function openExtracted(
+  pdf: PdfJsDocument,
+  loadingTask: ReturnType<typeof getDocument>,
+): Promise<OpenedPdfDocument> {
+  const text = await extractPages(pdf);
+  const renderers = new Map<number, PdfPageRenderer>();
+
+  return {
+    text,
+    async renderPage(pageNumber, canvas, layer, containerWidth) {
+      const renderer = await ensureRenderer(pdf, renderers, pageNumber);
+      if (!renderer) throw new Error(`Page ${pageNumber} is unavailable`);
+      await renderer.renderInto(canvas, layer, containerWidth);
+    },
+    cancelRender(pageNumber) {
+      renderers.get(pageNumber)?.cancel();
+    },
+    async destroy() {
+      for (const renderer of renderers.values()) renderer.cancel();
+      renderers.clear();
+      await loadingTask.destroy();
+    },
+  };
+}
+
+async function ensureRenderer(
+  pdf: PdfJsDocument,
+  renderers: Map<number, PdfPageRenderer>,
+  pageNumber: number,
+): Promise<PdfPageRenderer | null> {
+  const existing = renderers.get(pageNumber);
+  if (existing) return existing;
+  try {
+    const page = await pdf.getPage(pageNumber);
+    const renderer = new PdfPageRenderer(page as unknown as RenderablePdfPage, {
+      createTextLayer: pdfTextLayerFactory(TextLayer),
+    });
+    renderers.set(pageNumber, renderer);
+    return renderer;
+  } catch {
+    return null;
   }
 }
 

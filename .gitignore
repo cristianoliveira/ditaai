@@ -27,3 +27,6 @@ blob-report/
 
 # Downloaded voice models (large, not tracked)
 /voices/
+
+# Generated from the pinned pdfjs-dist package by scripts/sync-pdfjs-assets.mjs
+public/pdfjs/

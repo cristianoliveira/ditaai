@@ -11,13 +11,22 @@ import { SpeechSynthesisReader } from '../../infra/audio/speech-synthesis-reader
 import { SessionStoragePdfRequestStore } from '../../infra/chrome/pdf-request-store';
 import { ChromePlaybackRateStore } from '../../infra/chrome/playback-rate-storage';
 import { RuntimeInstalledVoiceReader } from '../../infra/chrome/runtime-installed-voice-reader';
-import { PdfDocumentError, isHttpPdfUrl, loadPdfDocument } from '../../infra/pdf/pdf-document';
+import {
+  type OpenedPdfDocument,
+  PdfDocumentError,
+  isHttpPdfUrl,
+  openPdfDocument,
+} from '../../infra/pdf/pdf-document';
 import { logger } from '../../lib/logger';
 
 const REQUEST_ID_PARAM = 'request';
 
 function testReaderRequested(): boolean {
-  return new URLSearchParams(location.search).get('testReader') === 'fake';
+  // Query param or the same `data-dita-test-reader` attribute the content
+  // script contract uses — init scripts can set the attribute without touching
+  // the action-generated viewer URL.
+  if (new URLSearchParams(location.search).get('testReader') === 'fake') return true;
+  return document.documentElement.dataset['ditaTestReader'] === 'fake';
 }
 
 async function main(): Promise<void> {
@@ -33,18 +42,24 @@ async function main(): Promise<void> {
     ? new FakeBoundaryReader()
     : new InstalledVoiceReader(new RuntimeInstalledVoiceReader(), new SpeechSynthesisReader());
   const sequencer: PdfSequencer = new SegmentSequencer(reader);
-  const rateStore = new ChromePlaybackRateStore();
+  let opened: OpenedPdfDocument | null = null;
   const player = new PdfPlayer(sequencer, {
     elements: { root, status, position, pages },
     saveRate: (rate) => rateStore.save(rate),
+    renderPage: (page, canvas, layer, width) =>
+      opened?.renderPage(page, canvas, layer, width) ?? Promise.resolve(),
+    cancelRender: (page) => opened?.cancelRender(page),
   });
 
   const unload = (): void => {
     sequencer.stop();
+    void opened?.destroy();
+    opened = null;
     if (requestId) void store.clear(requestId);
   };
   window.addEventListener('pagehide', unload, { once: true });
 
+  const rateStore = new ChromePlaybackRateStore();
   player.applyRate(await rateStore.load());
   const rate = document.querySelector<HTMLInputElement>('[data-role="rate"]');
   if (rate) {
@@ -82,8 +97,10 @@ async function main(): Promise<void> {
   }
 
   try {
-    const pdf = await loadPdfDocument(sourceUrl);
-    player.show(pdf);
+    opened = await openPdfDocument(sourceUrl, fetch, {
+      standardFontDataUrl: chrome.runtime.getURL('pdfjs/standard_fonts/'),
+    });
+    player.show(opened.text);
   } catch (error) {
     if (error instanceof PdfDocumentError) {
       player.fail(error.message);

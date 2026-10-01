@@ -3,6 +3,7 @@ import type { SpeakOptions } from '../domain/audio/text-reader';
 import type { JumpDirection } from '../domain/playback/jump';
 import type { PdfTextDocument } from '../infra/pdf/pdf-document';
 import { clearHighlight, clearParagraph, highlightParagraph, highlightWord } from './highlighter';
+import { type LayerPort, domLayer, locateWord } from './pdf-text-locator';
 
 /** Minimal sequencer surface the PDF viewer needs (same shape as PagePlayer's). */
 export interface PdfSequencer {
@@ -28,23 +29,46 @@ interface PdfPlayerDeps {
   elements: PdfPlayerElements;
   /** Persists the committed rate — shared with HTML playback. */
   saveRate: (rate: number) => Promise<void>;
+  /** Renders one original page (canvas + text layer) at fit-width scale.
+   * Absent in degraded mode: sections keep accessible text only. */
+  renderPage?(
+    pageNumber: number,
+    canvas: HTMLCanvasElement,
+    layer: HTMLElement,
+    containerWidth: number,
+  ): Promise<void>;
+  cancelRender?(pageNumber: number): void;
 }
 
+interface PdfSection {
+  element: HTMLElement;
+  /** Accessible text shown until (and after) the page is painted. */
+  fallback: HTMLElement;
+  layer: HTMLElement | null;
+  canvas: HTMLCanvasElement | null;
+  page: number;
+  painted: boolean;
+}
+
+/** How many canvases may stay painted around the current page (low-end bound). */
+const RENDER_WINDOW = 1;
+
 /**
- * Narration controller for the extension-owned PDF reading view. Pages become
- * section elements; each page is one spoken segment, so highlighting and the
- * page position read straight from the sequencer callbacks. Controls mirror
- * HTML playback: play/pause/resume/stop, next/previous page, live rate, and a
- * natural end-of-document idle.
+ * Narration controller for the extension-owned PDF reading view. Pages render
+ * as original PDF pages (canvas + selectable text layer) within a bounded
+ * window around the spoken page; each page is one spoken segment, so
+ * highlighting and the page position read straight from the sequencer
+ * callbacks. Controls mirror HTML playback: play/pause/resume/stop,
+ * next/previous page, live rate, and a natural end-of-document idle.
  */
 export class PdfPlayer {
-  private sections: HTMLElement[] = [];
-  private pageNumbers: number[] = [];
+  private sections: PdfSection[] = [];
   private segments: string[] = [];
   private totalPages = 0;
   private rate = 1;
   private mounted = false;
   private playToken = 0;
+  private renderGeneration = 0;
 
   constructor(
     private readonly sequencer: PdfSequencer,
@@ -56,7 +80,7 @@ export class PdfPlayer {
   }
 
   get pageCount(): number {
-    return this.pageNumbers.length;
+    return this.sections.length;
   }
 
   get segmentTexts(): readonly string[] {
@@ -67,6 +91,10 @@ export class PdfPlayer {
     return this.rate;
   }
 
+  get paintedPages(): number[] {
+    return this.sections.filter((section) => section.painted).map((section) => section.page);
+  }
+
   /** Page index a selection starts in, or null when the selection is outside
    * the rendered document. Lets "Play" honor "start from this passage". */
   selectedIndex(): number | null {
@@ -75,25 +103,33 @@ export class PdfPlayer {
     const node = selection.getRangeAt(0).startContainer;
     const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
     if (!element) return null;
-    const index = this.sections.findIndex((section) => section.contains(element));
+    const index = this.sections.findIndex((section) => section.element.contains(element));
     return index === -1 ? null : index;
   }
 
-  /** Render readable pages and arm playback. Empty pages are skipped so they
-   * are not narrated as silence. */
+  /** Render readable pages (text first, canvases lazily) and arm playback.
+   * Empty pages are skipped so they are not narrated as silence. */
   show(pdf: PdfTextDocument): void {
     this.clearPages();
+    this.playToken++;
     for (const page of pdf.pages) {
       if (!page.text) continue;
       const section = document.createElement('section');
       section.setAttribute('data-page-number', String(page.pageNumber));
       section.setAttribute('aria-label', `Page ${page.pageNumber} of ${pdf.pageCount}`);
-      const paragraph = document.createElement('p');
-      paragraph.textContent = page.text;
-      section.append(paragraph);
+      const fallback = document.createElement('p');
+      fallback.className = 'pdf-page-text';
+      fallback.textContent = page.text;
+      section.append(fallback);
       this.elements.pages.append(section);
-      this.sections.push(section);
-      this.pageNumbers.push(page.pageNumber);
+      this.sections.push({
+        element: section,
+        fallback,
+        layer: null,
+        canvas: null,
+        page: page.pageNumber,
+        painted: false,
+      });
       this.segments.push(page.text);
     }
     this.mounted = true;
@@ -101,6 +137,7 @@ export class PdfPlayer {
     this.elements.root.setAttribute('data-pdf-state', 'ready');
     this.setStatus('Ready to listen');
     this.updatePosition(0);
+    void this.renderAround(0);
   }
 
   async play(fromIndex = 0): Promise<void> {
@@ -170,6 +207,7 @@ export class PdfPlayer {
   /** Reflect a failed load: clear pages, never fabricate narration. */
   fail(message: string): void {
     this.playToken++;
+    this.renderGeneration++;
     this.clearPages();
     this.mounted = false;
     this.elements.root.setAttribute('data-pdf-state', 'error');
@@ -188,44 +226,124 @@ export class PdfPlayer {
     if (!section) return;
     for (const [position, other] of this.sections.entries()) {
       if (position === index) {
-        highlightParagraph(other);
+        highlightParagraph(other.element);
         continue;
       }
-      clearParagraph(other);
+      clearParagraph(other.element);
     }
     this.updatePosition(index);
+    void this.renderAround(index);
   }
 
   private onBoundary(event: { charIndex: number; charLength: number }): void {
     const index = this.sequencer.getState().current;
     const section = this.sections[index];
     if (!section) return;
-    clearHighlight(section);
-    highlightWord(section, event.charIndex, event.charLength);
-    for (const mark of section.querySelectorAll('mark.dita-word-highlight')) {
+    this.clearWordHighlights();
+
+    // Painted page: align the word on the PDF text layer itself. The spoken
+    // page text is the collapsed form of the layer's spans.
+    if (section.painted && section.layer) {
+      const port: LayerPort = domLayer(section.layer);
+      const located = locateWord(
+        port.spans(),
+        this.segments[index] ?? '',
+        event.charIndex,
+        event.charLength,
+      );
+      if (located) {
+        port.markWord(located.span, located.start, located.length);
+        return;
+      }
+    }
+    // Unpainted page (or unalignable layer): highlight the accessible text.
+    highlightWord(section.element, event.charIndex, event.charLength);
+    for (const mark of section.element.querySelectorAll('mark.dita-word-highlight')) {
       mark.setAttribute('data-active-word', 'true');
     }
   }
 
+  /** Keep at most the pages around `center` painted; everything else reverts
+   * to accessible text so canvas memory stays bounded on low-end devices. */
+  private async renderAround(center: number): Promise<void> {
+    if (!this.deps.renderPage) return;
+    const generation = ++this.renderGeneration;
+    const lo = Math.max(0, center - RENDER_WINDOW);
+    const hi = Math.min(this.sections.length - 1, center + RENDER_WINDOW);
+
+    for (const [index, section] of this.sections.entries()) {
+      if (index < lo || index > hi) {
+        this.evict(section);
+        continue;
+      }
+      if (section.painted) continue;
+      await this.paint(index, generation);
+      if (generation !== this.renderGeneration) return; // superseded — stop early
+    }
+  }
+
+  private async paint(index: number, generation: number): Promise<void> {
+    const section = this.sections[index];
+    if (!section || !this.deps.renderPage) return;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'pdf-page-canvas';
+    const layer = document.createElement('div');
+    layer.className = 'textLayer';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pdf-page-render';
+    wrapper.append(canvas, layer);
+    canvas.width = 0;
+    canvas.height = 0;
+
+    try {
+      await this.deps.renderPage(section.page, canvas, layer, this.elements.pages.clientWidth || 800);
+    } catch {
+      canvas.width = 0;
+      canvas.height = 0;
+      return; // keep accessible text; rendering stays optional
+    }
+    if (generation !== this.renderGeneration || !this.sections[index]) return;
+    if (section.element.contains(section.fallback)) section.fallback.replaceWith(wrapper);
+    else section.element.querySelector('.pdf-page-render')?.replaceWith(wrapper);
+    section.canvas = canvas;
+    section.layer = layer;
+    section.painted = true;
+  }
+
+  private evict(section: PdfSection): void {
+    if (!section.painted) return;
+    this.deps.cancelRender?.(section.page);
+    section.canvas?.replaceChildren();
+    section.canvas = null;
+    section.layer = null;
+    section.painted = false;
+    section.element
+      .querySelectorAll('.pdf-page-render')
+      .forEach((rendered) => rendered.replaceWith(section.fallback));
+  }
+
   private updatePosition(index: number): void {
-    const pageNumber = this.pageNumbers[index];
-    if (pageNumber === undefined || this.totalPages === 0) {
+    const section = this.sections[index];
+    if (!section || this.totalPages === 0) {
       this.elements.position.textContent = '';
       return;
     }
-    this.elements.position.textContent = `Page ${pageNumber} of ${this.totalPages}`;
+    this.elements.position.textContent = `Page ${section.page} of ${this.totalPages}`;
   }
 
   private clearPages(): void {
+    for (const section of this.sections) this.evict(section);
     this.elements.pages.replaceChildren();
     this.sections = [];
-    this.pageNumbers = [];
     this.segments = [];
     this.totalPages = 0;
   }
 
   private clearWordHighlights(): void {
-    for (const section of this.sections) clearHighlight(section);
+    for (const section of this.sections) {
+      clearHighlight(section.element);
+      if (section.layer) domLayer(section.layer).clearMarks();
+    }
   }
 }
 

@@ -262,4 +262,106 @@ describe('PdfPlayer', () => {
 
     expect(saveRate).toHaveBeenCalledWith(1.5);
   });
+
+  describe('with page rendering', () => {
+    function renderingPlayer(options?: {
+      failPages?: number[];
+    }): {
+      player: PdfPlayer;
+      renderPage: ReturnType<typeof vi.fn>;
+      cancelRender: ReturnType<typeof vi.fn>;
+    } {
+      const renderPage = vi.fn(
+        (pageNumber: number, _canvas: HTMLCanvasElement, layer: HTMLElement) => {
+          if (options?.failPages?.includes(pageNumber)) return Promise.reject(new Error('boom'));
+          const text = pageNumber === 1 ? 'Orchid opens the story.' : 'Cedar closes the story.';
+          for (const part of text.split(' the ')) {
+            const span = document.createElement('span');
+            span.textContent = `${part} `;
+            layer.append(span);
+          }
+          return Promise.resolve();
+        },
+      );
+      const cancelRender = vi.fn();
+      const rendering = new PdfPlayer(sequencer, {
+        elements,
+        saveRate: vi.fn(async () => {}),
+        renderPage,
+        cancelRender,
+      });
+      return { player: rendering, renderPage, cancelRender };
+    }
+
+    it('shows accessible text first, then paints the window around the current page', async () => {
+      const { player } = renderingPlayer();
+      player.show(twoPageDocument());
+
+      // Text is immediately present for screen readers and early narration.
+      expect(elements.pages.querySelectorAll('p.pdf-page-text')).toHaveLength(2);
+      await vi.waitFor(() => expect(player.paintedPages).toEqual([1, 2]));
+      expect(elements.pages.querySelector('.textLayer span')).not.toBeNull();
+      expect(elements.pages.querySelector('p.pdf-page-text')).toBeNull();
+    });
+
+    it('evicts far pages so canvas memory stays bounded', async () => {
+      const { player, cancelRender } = renderingPlayer();
+      player.show({
+        pageCount: 4,
+        pages: [
+          { pageNumber: 1, text: 'Orchid opens the story.' },
+          { pageNumber: 2, text: 'Birch continues the story.' },
+          { pageNumber: 3, text: 'Cedar closes the story.' },
+          { pageNumber: 4, text: 'Elm ends the story.' },
+        ],
+      });
+      await vi.waitFor(() => expect(player.paintedPages).toEqual([1, 2]));
+
+      player.jump('forward');
+      sequencer.state = { current: 1, total: 4, playing: true, paused: false };
+      sequencer.emitSegmentChange(1);
+      await vi.waitFor(() => expect(player.paintedPages).toEqual([1, 2, 3]));
+
+      player.jump('forward');
+      sequencer.state = { current: 2, total: 4, playing: true, paused: false };
+      sequencer.emitSegmentChange(2);
+      await vi.waitFor(() => expect(player.paintedPages).toEqual([2, 3, 4]));
+
+      expect(cancelRender).toHaveBeenCalledWith(1);
+      const first = elements.pages.querySelector('section[data-page-number="1"]');
+      expect(first?.querySelector('p.pdf-page-text')).not.toBeNull();
+      expect(first?.querySelector('canvas')).toBeNull();
+    });
+
+    it('highlights the spoken word inside the painted text layer', async () => {
+      const { player } = renderingPlayer();
+      player.show(twoPageDocument());
+      await vi.waitFor(() => expect(player.paintedPages).toEqual([1, 2]));
+      player.play();
+      await vi.waitFor(() => expect(sequencer.speakOptions).toHaveLength(1));
+
+      sequencer.state = { current: 0, total: 2, playing: true, paused: false };
+      sequencer.emitBoundary({ charIndex: 0, charLength: 6 });
+
+      const mark = elements.pages.querySelector('.textLayer mark[data-active-word="true"]');
+      expect(mark?.textContent).toBe('Orchid');
+    });
+
+    it('keeps accessible-text highlighting when a page fails to paint', async () => {
+      const { player } = renderingPlayer({ failPages: [1] });
+      player.show(twoPageDocument());
+      await vi.waitFor(() => expect(player.paintedPages).toEqual([2]));
+      player.play();
+      await vi.waitFor(() => expect(sequencer.speakOptions).toHaveLength(1));
+
+      sequencer.state = { current: 0, total: 2, playing: true, paused: false };
+      sequencer.emitBoundary({ charIndex: 0, charLength: 6 });
+
+      const mark = elements.pages
+        .querySelector('section[data-page-number="1"]')
+        ?.querySelector('mark[data-active-word="true"]');
+      expect(mark?.textContent).toBe('Orchid');
+      expect(mark?.closest('.textLayer')).toBeNull();
+    });
+  });
 });

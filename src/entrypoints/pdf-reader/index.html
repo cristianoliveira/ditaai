@@ -4,6 +4,54 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DitaAi — PDF reader</title>
+  <style>
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 1rem 3rem;
+    }
+    #pdf-pages section {
+      position: relative;
+      margin: 1.5rem auto;
+      width: fit-content;
+    }
+    .pdf-page-render {
+      position: relative;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+      background: white;
+    }
+    .pdf-page-canvas {
+      display: block;
+    }
+    .textLayer {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      opacity: 1;
+      line-height: 1;
+      text-size-adjust: none;
+      forced-color-adjust: none;
+      transform-origin: 0 0;
+      caret-color: CanvasText;
+    }
+    .textLayer span {
+      position: absolute;
+      color: transparent;
+      white-space: pre;
+      cursor: text;
+      transform-origin: 0% 0%;
+    }
+    .textLayer mark.dita-word-highlight {
+      background: var(--dita-accent, #f5b840);
+      color: transparent;
+      padding: 0;
+    }
+    .pdf-page-text {
+      max-width: 70ch;
+      margin: 1rem auto;
+      line-height: 1.6;
+    }
+  </style>
 </head>
 <body>
   <main id="pdf-reader" data-pdf-state="loading">
