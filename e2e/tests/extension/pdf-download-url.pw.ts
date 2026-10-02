@@ -1,13 +1,13 @@
 import { type BrowserContext, type Page, expect, test } from '@playwright/test';
 import { launchExtensionContext, testHarnessUrl } from '../../helpers/extension';
 import { type FixtureServer, startFixtureServer } from '../../helpers/fixture-server';
+import { ServiceWorkerRequester } from '../../requesters/service-worker';
 
 /**
  * Extensionless PDF URL acceptance (continuation deliverable 6): a valid
  * `application/pdf` served from `/download?id=…` — no `.pdf` in the path —
- * must be dictatable, while same-shape HTML must never be silently handed to
- * the PDF reader. Dave's deliverable 5 provides the user-facing trigger; the
- * positive case is the failing baseline until it lands.
+ * must be dictatable through the popup's explicit "Read this link as PDF…"
+ * action, while same-shape HTML must never be silently handed to the reader.
  *
  * Privacy: no request may leave the fixture host, and the source URL (with
  * its query) must never appear in the reader URL.
@@ -23,6 +23,22 @@ function trackExternalRequests(context: BrowserContext, fixtureHost: string): Se
   return external;
 }
 
+/** Enable the viewer's deterministic fake reader via the shared
+ * `data-dita-test-reader` attribute (safe on every page: the native PDF tab
+ * has no accessible documentElement and extension pages ignore it). */
+async function enableFakeReader(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    const doc = (
+      globalThis as unknown as {
+        document: {
+          documentElement: { setAttribute(name: string, value: string): void } | null;
+        };
+      }
+    ).document;
+    doc.documentElement?.setAttribute('data-dita-test-reader', 'fake');
+  });
+}
+
 test.describe('extensionless PDF URLs', () => {
   let server: FixtureServer;
 
@@ -33,28 +49,41 @@ test.describe('extensionless PDF URLs', () => {
     await server.close();
   });
 
-  /** Open the action popup on the given download-shaped URL and return the
-   * first page created afterwards (the reader tab, when handoff works). The
-   * wait is registered after the harness page exists, so only genuinely new
-   * pages resolve it. */
-  async function openActionOn(
+  /**
+   * Open the real popup page against the given download-shaped tab and click
+   * the "Read this link as PDF…" action. popup.html runs as a background tab
+   * (`tabs.create({active:false})`) so its own main() resolves the still-active
+   * fixture tab, unhides the gated button, and Playwright clicks it — the
+   * real gate, the real consent click, the real handoff.
+   */
+  async function consentAndOpenReader(
     context: BrowserContext,
     extensionId: string,
     pathAndQuery: string,
   ): Promise<Page> {
     const tab = await context.newPage();
     await tab.goto(`${server.base}/${pathAndQuery}`);
-    await tab.bringToFront();
 
+    const next = context.waitForEvent('page', { timeout: 15_000 });
     const ext = await context.newPage();
     await ext.goto(testHarnessUrl(extensionId));
+    // The fixture tab must be the ACTIVE tab before the popup loads: its
+    // main() resolves the active tab exactly once at startup.
     await tab.bringToFront();
-    const next = context.waitForEvent('page', { timeout: 15_000 });
     await ext.evaluate(async () => {
-      await chrome.action.openPopup();
+      await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html'), active: false });
     });
+
+    const popup = await context.waitForEvent('page', { timeout: 15_000 });
+    // The action must be offered exactly when the page content is unusable.
+    // On application/pdf URLs the content script answers from the native
+    // viewer with an empty document; whether the popup still offers the
+    // action there is part of what this suite pins down.
+    await expect(popup.locator('#pdf-attempt')).toBeVisible({ timeout: 10_000 });
+    const [reader] = await Promise.all([next, popup.locator('#pdf-attempt').click()]);
     await ext.close();
-    return next;
+    await popup.close();
+    return reader;
   }
 
   test('narrates an extensionless application/pdf URL', async () => {
@@ -62,19 +91,9 @@ test.describe('extensionless PDF URLs', () => {
     try {
       const { context, extensionId, errors } = harness;
       const external = trackExternalRequests(context, new URL(server.base).host);
-      await context.addInitScript(() => {
-        const doc = (
-          globalThis as unknown as {
-            document: {
-              documentElement: { setAttribute(name: string, value: string): void } | null;
-            };
-          }
-        ).document;
-        doc.documentElement?.setAttribute('data-dita-test-reader', 'fake');
-      });
+      await enableFakeReader(context);
 
-      const reader = await openActionOn(context, extensionId, 'download?id=pdf-text');
-
+      const reader = await consentAndOpenReader(context, extensionId, 'download?id=pdf-text');
       await expect.poll(async () => reader.url(), { timeout: 15_000 }).toMatch(/pdf-reader\.html/);
       // The source URL (path + query) must never leak into the viewer URL.
       expect(reader.url()).not.toContain('download');
@@ -103,30 +122,34 @@ test.describe('extensionless PDF URLs', () => {
       const { context, extensionId, errors } = harness;
       const external = trackExternalRequests(context, new URL(server.base).host);
 
-      const next = openActionOn(context, extensionId, 'download?id=html');
-      // Let any premature reader-tab attempt surface, then assert none did.
-      const stray = await Promise.race([
-        next.then((page) => page.url()),
-        new Promise<string>((resolve) => setTimeout(() => resolve('none'), 4_000)),
-      ]);
+      const tab = await context.newPage();
+      await tab.goto(`${server.base}/download?id=html`);
 
-      const tab = context.pages().find((page) => page.url().includes('download?id=html'));
-      expect(tab, 'HTML fixture tab must exist').toBeTruthy();
-
-      // No PDF reader tab was opened for HTML, whatever the stray page is.
-      if (stray !== 'none') expect(stray).not.toMatch(/pdf-reader\.html/);
-
-      // Normal page playback still works on the readable HTML page.
+      // Open the real popup page against the HTML tab: the gated action is
+      // offered, but nothing is handed off without the user's click.
       const ext = await context.newPage();
       await ext.goto(testHarnessUrl(extensionId));
-      await tab?.bringToFront();
-      const sw = new (await import('../../requesters/service-worker')).ServiceWorkerRequester(ext);
+      await tab.bringToFront();
+      await ext.evaluate(async () => {
+        await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html'), active: false });
+      });
+      const popup = await context.waitForEvent('page', { timeout: 15_000 });
+      // Readable HTML: the action must stay hidden — normal playback already
+      // reads the page, and a silent PDF handoff would be a regression.
+      await expect(popup.locator('#pdf-attempt')).toBeHidden({ timeout: 10_000 });
+      await popup.close();
+      const harness2 = await context.newPage();
+      await harness2.goto(testHarnessUrl(extensionId));
+      await tab.bringToFront();
+      const sw = new ServiceWorkerRequester(harness2);
       expect(await sw.playTab()).toEqual({ ok: true });
       await expect
         .poll(async () => (await sw.getPlaybackState()).state, { timeout: 5_000 })
         .toBe('PLAYING');
       await sw.stop();
+      await harness2.close();
 
+      expect(context.pages().some((page) => page.url().includes('pdf-reader'))).toBe(false);
       expect(external.size).toBe(0);
       expect(errors).toEqual([]);
     } finally {
@@ -140,19 +163,30 @@ test.describe('extensionless PDF URLs', () => {
       const { context, extensionId, errors } = harness;
       const external = trackExternalRequests(context, new URL(server.base).host);
 
-      const next = openActionOn(context, extensionId, 'download?id=blank-html');
-      const stray = await Promise.race([
-        next.then((page) => page.url()),
-        new Promise<string>((resolve) => setTimeout(() => resolve('none'), 4_000)),
-      ]);
-      if (stray !== 'none') expect(stray).not.toMatch(/pdf-reader\.html/);
+      const tab = await context.newPage();
+      await tab.goto(`${server.base}/download?id=blank-html`);
 
-      // The blank page has no readable text: playTab must refuse cleanly.
       const ext = await context.newPage();
       await ext.goto(testHarnessUrl(extensionId));
-      const sw = new (await import('../../requesters/service-worker')).ServiceWorkerRequester(ext);
-      const result = (await sw.playTab()) as { ok: boolean; error?: string };
-      expect(result.ok).toBe(false);
+      await tab.bringToFront();
+      const next = context.waitForEvent('page', { timeout: 15_000 });
+      await ext.evaluate(async () => {
+        await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html'), active: false });
+      });
+      const popup = await context.waitForEvent('page', { timeout: 15_000 });
+      // Unreadable HTML is exactly when the action must be offered; clicking
+      // it lets the reader show its own clear not-a-PDF error.
+      await expect(popup.locator('#pdf-attempt')).toBeVisible({ timeout: 10_000 });
+      const [reader] = await Promise.all([next, popup.locator('#pdf-attempt').click()]);
+      await ext.close();
+      await popup.close();
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'error', {
+        timeout: 20_000,
+      });
+      await expect(reader.locator('#pdf-status')).toBeVisible();
+      await expect(reader.locator('#pdf-status')).toHaveAttribute('role', 'alert');
+      await reader.locator('button[data-action="play"]').click();
+      await expect(reader.locator('mark')).toHaveCount(0);
 
       expect(external.size).toBe(0);
       expect(errors).toEqual([]);
@@ -168,8 +202,8 @@ test.describe('extensionless PDF URLs', () => {
       const external = trackExternalRequests(context, new URL(server.base).host);
 
       // Seed the real one-use request store directly (same key/shape as the
-      // popup handoff) so the reader's own fetch path is exercised without
-      // depending on #5's popup trigger.
+      // popup handoff) so the reader's own fetch path is exercised against a
+      // download-shaped URL.
       const ext = await context.newPage();
       await ext.goto(testHarnessUrl(extensionId));
       const requestId = await ext.evaluate(async (sourceUrl) => {
