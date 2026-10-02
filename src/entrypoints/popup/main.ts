@@ -18,9 +18,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  wireExplicitPdfAttempt(tab?.url);
-
   if (!tab?.id) throw new Error('No active tab');
+
   const player = new PopupPlayer(
     (method) =>
       chrome.tabs.sendMessage(tab.id as number, {
@@ -31,6 +30,11 @@ async function main(): Promise<void> {
     async () => {
       await chrome.runtime.sendMessage({ dest: 'background', method: 'openVoicesPage' });
     },
+    undefined,
+    // Page-first UX: the PDF rescue action appears only when the page really
+    // cannot be read (no content script) AND the tab is an eligible http(s)
+    // URL — never on ordinary readable HTML pages.
+    () => revealPdfRescue(tab.url),
   );
   document.body.append(player.mount());
   await player.refresh();
@@ -40,12 +44,14 @@ async function main(): Promise<void> {
   closeOnPointerLeave(document, () => window.close());
 }
 
-/** Offer the explicit "Read as PDF…" action on ordinary http(s) tabs. The
- * click — not page probing — is the consent; the reader then verifies the
- * link really serves a PDF and shows a clear error when it does not. */
-function wireExplicitPdfAttempt(tabUrl: string | undefined): void {
+/** Reveal the explicit "Read as PDF…" action. The click — not page probing —
+ * is the consent; the reader then verifies the link really serves a PDF and
+ * shows a clear error when it does not. Hidden by default in popup.html. */
+let rescueRevealed = false;
+function revealPdfRescue(tabUrl: string | undefined): void {
   const button = document.querySelector<HTMLButtonElement>('#pdf-attempt');
-  if (!button || !canAttemptPdfHandoff(tabUrl)) return;
+  if (!button || !canAttemptPdfHandoff(tabUrl) || rescueRevealed) return;
+  rescueRevealed = true;
   button.hidden = false;
   button.addEventListener('click', () => {
     void attemptPdfHandoff(tabUrl, (url) => chrome.tabs.create({ url })).then((handed) => {

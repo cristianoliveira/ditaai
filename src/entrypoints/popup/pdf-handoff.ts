@@ -43,11 +43,7 @@ export async function attemptPdfHandoff(
   return true;
 }
 
-async function handoff(
-  tabUrl: string,
-  opener: OpenTab,
-  store: PdfRequestStore,
-): Promise<void> {
+async function handoff(tabUrl: string, opener: OpenTab, store: PdfRequestStore): Promise<void> {
   const requestId = await store.save(tabUrl);
   await opener(chrome.runtime.getURL(`/pdf-reader.html?request=${encodeURIComponent(requestId)}`));
 }

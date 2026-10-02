@@ -56,14 +56,12 @@ type TextMarkedContentStub = { type: string };
 
 /** HTTP(S) URL without embedded credentials — the transport-level gate shared
  * by the popup handoff and the reader. Content validation happens elsewhere. */
-export function isHttpLikeUrl(rawUrl: string | undefined): boolean {
+export function isHttpLikeUrl(rawUrl: string | undefined): rawUrl is string {
   if (!rawUrl) return false;
   try {
     const url = new URL(rawUrl);
     return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      !url.username &&
-      !url.password
+      (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password
     );
   } catch {
     return false;

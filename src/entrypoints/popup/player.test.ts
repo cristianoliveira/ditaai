@@ -128,4 +128,26 @@ describe('PopupPlayer', () => {
       error,
     });
   });
+
+  it('signals unreadable pages so the popup can offer the PDF rescue action', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('Receiving end does not exist.'));
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not signal unreadable for readable pages', async () => {
+    const send = vi.fn().mockResolvedValue({ playing: false, paused: false });
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).not.toHaveBeenCalled();
+  });
 });

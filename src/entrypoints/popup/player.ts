@@ -22,6 +22,9 @@ export class PopupPlayer {
     private readonly send: SendToPage,
     private readonly openConfiguration: OpenConfiguration = async () => {},
     private readonly interactionLogger: Logger = logger,
+    /** Invoked once page messaging fails — the popup uses this to reveal the
+     * explicit "Read as PDF…" rescue action on eligible tabs. */
+    private readonly onUnreadable: () => void = () => {},
   ) {
     this.element = document.createElement('main');
     this.element.className = 'player';
@@ -127,6 +130,7 @@ export class PopupPlayer {
       });
       this.status.textContent = 'This page cannot be read';
       this.playButton.disabled = true;
+      this.onUnreadable();
     }
   }
 
