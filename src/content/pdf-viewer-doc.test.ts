@@ -9,6 +9,22 @@ function docWith(bodyHtml: string): Document {
 }
 
 describe('isPdfViewerDocument', () => {
+  function withContentType(mime: string): Document {
+    const doc = document.implementation.createHTMLDocument();
+    Object.defineProperty(doc, 'contentType', { value: mime });
+    return doc;
+  }
+
+  it('detects the native viewer by document.contentType even with an empty body', () => {
+    const doc = withContentType('application/pdf');
+    expect(doc.body?.children.length ?? 0).toBe(0); // Kelly: body is empty
+    expect(isPdfViewerDocument(doc)).toBe(true);
+  });
+
+  it('ignores contentType on ordinary HTML documents', () => {
+    expect(isPdfViewerDocument(withContentType('text/html'))).toBe(false);
+  });
+
   it('recognises the plugin-only viewer structure (sole embed, no text)', () => {
     expect(isPdfViewerDocument(docWith('<embed type="application/pdf">'))).toBe(true);
   });
