@@ -64,7 +64,6 @@ test.describe('extensionless PDF URLs', () => {
     const tab = await context.newPage();
     await tab.goto(`${server.base}/${pathAndQuery}`);
 
-    const next = context.waitForEvent('page', { timeout: 15_000 });
     const ext = await context.newPage();
     await ext.goto(testHarnessUrl(extensionId));
     // The fixture tab must be the ACTIVE tab before the popup loads: its
@@ -80,6 +79,9 @@ test.describe('extensionless PDF URLs', () => {
     // viewer with an empty document; whether the popup still offers the
     // action there is part of what this suite pins down.
     await expect(popup.locator('#pdf-attempt')).toBeVisible({ timeout: 10_000 });
+    // Registered only now: the reader tab is the next page created after
+    // this point (the click's handoff).
+    const next = context.waitForEvent('page', { timeout: 15_000 });
     const [reader] = await Promise.all([next, popup.locator('#pdf-attempt').click()]);
     await ext.close();
     await popup.close();
@@ -169,24 +171,24 @@ test.describe('extensionless PDF URLs', () => {
       const ext = await context.newPage();
       await ext.goto(testHarnessUrl(extensionId));
       await tab.bringToFront();
-      const next = context.waitForEvent('page', { timeout: 15_000 });
       await ext.evaluate(async () => {
         await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html'), active: false });
       });
       const popup = await context.waitForEvent('page', { timeout: 15_000 });
-      // Unreadable HTML is exactly when the action must be offered; clicking
-      // it lets the reader show its own clear not-a-PDF error.
-      await expect(popup.locator('#pdf-attempt')).toBeVisible({ timeout: 10_000 });
-      const [reader] = await Promise.all([next, popup.locator('#pdf-attempt').click()]);
-      await ext.close();
+      // Unreadable HTML: messaging still succeeds (the content script answers
+      // with an empty document), so no rescue action and no reader tab — HTML
+      // shapes must never reach the PDF reader, even blank ones.
+      await expect(popup.locator('#pdf-attempt')).toBeHidden({ timeout: 10_000 });
       await popup.close();
-      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'error', {
-        timeout: 20_000,
-      });
-      await expect(reader.locator('#pdf-status')).toBeVisible();
-      await expect(reader.locator('#pdf-status')).toHaveAttribute('role', 'alert');
-      await reader.locator('button[data-action="play"]').click();
-      await expect(reader.locator('mark')).toHaveCount(0);
+
+      // The blank page has no readable text: playTab must refuse cleanly.
+      const harness2 = await context.newPage();
+      await harness2.goto(testHarnessUrl(extensionId));
+      await tab.bringToFront();
+      const sw = new ServiceWorkerRequester(harness2);
+      const result = (await sw.playTab()) as { ok: boolean; error?: string };
+      expect(result.ok).toBe(false);
+      await harness2.close();
 
       expect(external.size).toBe(0);
       expect(errors).toEqual([]);
