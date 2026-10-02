@@ -26,4 +26,13 @@ describe('hasReadableContent', () => {
   it('treats whitespace-only pages as unreadable', () => {
     expect(hasReadableContent(docWith('<div>   </div>'))).toBe(false);
   });
+
+  it('recomputes live as the DOM changes (SPA navigation honesty)', () => {
+    const doc = docWith('<div></div>');
+    expect(hasReadableContent(doc)).toBe(false);
+    const article = doc.createElement('article');
+    article.innerHTML = '<p>Client-side navigation landed on prose.</p>';
+    doc.body.append(article);
+    expect(hasReadableContent(doc)).toBe(true);
+  });
 });

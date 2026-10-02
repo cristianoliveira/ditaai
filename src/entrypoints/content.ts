@@ -809,7 +809,6 @@ export default defineContentScript({
     }
 
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-      let pageReadable: boolean | null = null;
       if (msg?.dest !== 'contentScript') return false;
       // Chrome's native PDF viewer hosts an ordinary document with a plugin
       // embed: messaging would succeed while nothing is readable. Close the
@@ -878,12 +877,14 @@ export default defineContentScript({
         return false;
       }
       if (msg.method === 'getPlaybackState') {
-        // The popup's rescue-CTA gate needs a semantic readability verdict,
-        // not a playback-state inference (idle readable and blank pages are
-        // both playing=false/paused=false). Extracted once per page; the
-        // paragraph extractor is the same source playback itself uses.
-        pageReadable ??= hasReadableContent(document);
-        sendResponse({ ...sequencer.getState(), readable: pageReadable });
+        // Semantic readability verdict for the popup's rescue-CTA gate,
+        // recomputed live on every request: SPA navigation can change what
+        // is readable at any time, and the paragraph extractor is cheap
+        // relative to messaging. Same source playback itself uses.
+        sendResponse({
+          ...sequencer.getState(),
+          readable: hasReadableContent(document),
+        });
         return false;
       }
       if (msg.method === 'togglePlay') {
