@@ -20,9 +20,11 @@ See [product direction](docs/PRODUCT.md) for promises and boundaries.
 ## Listen to a PDF
 
 Open a text-based PDF at an HTTP(S) URL, then click the DitaAi extension icon.
-DitaAi opens its own PDF reading tab; press Play to hear the document while
-spoken words are highlighted on the page. Use pause, stop, speed, and page
-navigation as you would on a web page. PDF text and speech stay local.
+Links ending in `.pdf` open DitaAi's PDF reading tab directly. For download
+links without `.pdf` in the address, choose **Read this link as PDF…** in the
+popup. Press Play to hear the document while spoken words are highlighted on
+the page. Use pause, stop, speed, and page navigation as you would on a web
+page. PDF text and speech stay local.
 
 Scanned/image-only and password-protected PDFs are not supported. Large PDFs
 (over 20 MB or 200 pages) are rejected. Chrome's built-in PDF viewer cannot

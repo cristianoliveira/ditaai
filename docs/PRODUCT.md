@@ -27,8 +27,9 @@ audio experience. A user opens DitaAi, presses play, and listens instead of read
 - DitaAi narrates existing page text; it does not summarize, rewrite, translate,
   or record a permanent audiobook file.
 - Browser-protected pages where Chrome blocks content scripts cannot be read.
-  Direct HTTP(S) text-based PDFs use a separate DitaAi reading view; Chrome's
-  built-in PDF viewer cannot be highlighted by DitaAi.
+  HTTP(S) text-based PDFs use a separate DitaAi reading view; a PDF URL without
+  a `.pdf` suffix needs an explicit **Read this link as PDF…** action in the
+  popup. Chrome's built-in PDF viewer cannot be highlighted by DitaAi.
 - Scanned/image-only and password-protected PDFs, local file URLs, and PDFs
   exceeding reader limits are outside the first PDF dictation release.
 - Cloud TTS, accounts, and a standalone local TTS server are not active product
