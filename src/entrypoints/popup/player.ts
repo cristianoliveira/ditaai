@@ -126,17 +126,13 @@ export class PopupPlayer {
       const result = await this.send(method);
       if (isPagePlaybackState(result)) {
         this.reflect(result);
-        // A page whose own content script found nothing narratable (blank
-        // documents) is just as unreadable as one whose messaging fails —
-        // both must surface the cannot-read state.
-        if (options.expectState && result.readable === false) {
-          throw new Error('page has no readable content');
-        }
         return;
       }
       // A page whose listeners exist but answer no state (Chrome's native PDF
       // viewer resolves with undefined) is just as unreadable as one whose
-      // messaging rejects — both must surface the cannot-read state.
+      // messaging rejects — both must surface the cannot-read state. A blank
+      // HTML page still answers a valid state and stays page-first: hidden
+      // CTA, no rescue offer (product UX call).
       if (options.expectState) throw new Error('page reported no playback state');
     } catch (error) {
       this.interactionLogger.warn('interaction:request-failed', {

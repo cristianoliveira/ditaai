@@ -153,9 +153,10 @@ describe('PopupPlayer', () => {
     expect(onUnreadable).toHaveBeenCalledTimes(1);
   });
 
-  it('treats an explicitly content-less page (readable:false) as unreadable', async () => {
-    // Blank HTML: messaging succeeds and the state is a valid idle state, but
-    // the content script flags that nothing on the page can be narrated.
+  it('keeps blank pages out of the rescue path (product UX: page-first)', async () => {
+    // Blank HTML answers a valid idle state with readable:false; the CTA
+    // stays hidden — only unusable messaging (native PDF viewer, no content
+    // script) may offer the PDF rescue action.
     const send = vi.fn().mockResolvedValue({ playing: false, paused: false, readable: false });
     const onUnreadable = vi.fn();
     const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
@@ -163,7 +164,7 @@ describe('PopupPlayer', () => {
 
     await player.refresh();
 
-    expect(onUnreadable).toHaveBeenCalledTimes(1);
+    expect(onUnreadable).not.toHaveBeenCalled();
   });
 
   it('keeps an idle-but-readable page out of the rescue path', async () => {
