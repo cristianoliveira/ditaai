@@ -153,10 +153,11 @@ describe('PopupPlayer', () => {
     expect(onUnreadable).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps blank pages out of the rescue path (product UX: page-first)', async () => {
-    // Blank HTML answers a valid idle state with readable:false; the CTA
-    // stays hidden — only unusable messaging (native PDF viewer, no content
-    // script) may offer the PDF rescue action.
+  it('keeps blank pages out of the rescue path (final product UX: page-first)', async () => {
+    // FINAL product call (Mary, restoring b44cde4 after a superseded request):
+    // blank HTML answers a valid idle state flagged readable:false, but the
+    // CTA stays hidden — only unusable messaging (native PDF viewer, missing
+    // content script) may offer the PDF rescue action.
     const send = vi.fn().mockResolvedValue({ playing: false, paused: false, readable: false });
     const onUnreadable = vi.fn();
     const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
