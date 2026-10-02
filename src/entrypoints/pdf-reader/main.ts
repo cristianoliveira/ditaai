@@ -14,7 +14,7 @@ import { RuntimeInstalledVoiceReader } from '../../infra/chrome/runtime-installe
 import {
   type OpenedPdfDocument,
   PdfDocumentError,
-  isHttpPdfUrl,
+  isHttpLikeUrl,
   openPdfDocument,
 } from '../../infra/pdf/pdf-document';
 import { logger } from '../../lib/logger';
@@ -91,7 +91,10 @@ async function main(): Promise<void> {
   }
 
   const sourceUrl = await store.consume(requestId);
-  if (!sourceUrl || !isHttpPdfUrl(sourceUrl)) {
+  // The one-use store entry only exists after an explicit popup action, so
+  // the transport check is enough here; content-type + PDF magic are
+  // validated by openPdfDocument with clear per-cause errors.
+  if (!sourceUrl || !isHttpLikeUrl(sourceUrl)) {
     player.fail('This reading request expired. Open the PDF again from the DitaAi popup.');
     return;
   }

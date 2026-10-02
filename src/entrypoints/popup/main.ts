@@ -1,6 +1,6 @@
 import { SessionStoragePdfRequestStore } from '../../infra/chrome/pdf-request-store';
 import { closeOnPointerLeave } from './close-on-pointer-leave';
-import { openPdfReader } from './pdf-handoff';
+import { attemptPdfHandoff, canAttemptPdfHandoff, openPdfReader } from './pdf-handoff';
 import { PopupPlayer } from './player';
 
 async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
@@ -17,6 +17,8 @@ async function main(): Promise<void> {
     window.close();
     return;
   }
+
+  wireExplicitPdfAttempt(tab?.url);
 
   if (!tab?.id) throw new Error('No active tab');
   const player = new PopupPlayer(
@@ -36,6 +38,20 @@ async function main(): Promise<void> {
   await player.openPlayerBar();
   // Dismiss the popup when the mouse leaves it; narration keeps playing.
   closeOnPointerLeave(document, () => window.close());
+}
+
+/** Offer the explicit "Read as PDF…" action on ordinary http(s) tabs. The
+ * click — not page probing — is the consent; the reader then verifies the
+ * link really serves a PDF and shows a clear error when it does not. */
+function wireExplicitPdfAttempt(tabUrl: string | undefined): void {
+  const button = document.querySelector<HTMLButtonElement>('#pdf-attempt');
+  if (!button || !canAttemptPdfHandoff(tabUrl)) return;
+  button.hidden = false;
+  button.addEventListener('click', () => {
+    void attemptPdfHandoff(tabUrl, (url) => chrome.tabs.create({ url })).then((handed) => {
+      if (handed) window.close();
+    });
+  });
 }
 
 void main();

@@ -54,16 +54,26 @@ export interface PdfTextDocument {
 type PdfJsDocument = Awaited<ReturnType<typeof getDocument>['promise']>;
 type TextMarkedContentStub = { type: string };
 
-export function isHttpPdfUrl(rawUrl: string | undefined): boolean {
+/** HTTP(S) URL without embedded credentials — the transport-level gate shared
+ * by the popup handoff and the reader. Content validation happens elsewhere. */
+export function isHttpLikeUrl(rawUrl: string | undefined): boolean {
   if (!rawUrl) return false;
   try {
     const url = new URL(rawUrl);
     return (
       (url.protocol === 'http:' || url.protocol === 'https:') &&
       !url.username &&
-      !url.password &&
-      url.pathname.toLowerCase().endsWith('.pdf')
+      !url.password
     );
+  } catch {
+    return false;
+  }
+}
+
+export function isHttpPdfUrl(rawUrl: string | undefined): boolean {
+  if (!isHttpLikeUrl(rawUrl)) return false;
+  try {
+    return new URL(rawUrl).pathname.toLowerCase().endsWith('.pdf');
   } catch {
     return false;
   }
