@@ -159,7 +159,7 @@ test.describe('extensionless PDF URLs', () => {
     }
   });
 
-  test('shows a clear non-speaking state for unreadable HTML, without a reader tab', async () => {
+  test('offers the rescue CTA on unreadable HTML; reader shows the not-pdf error', async () => {
     const harness = await launchExtensionContext();
     try {
       const { context, extensionId, errors } = harness;
@@ -168,6 +168,7 @@ test.describe('extensionless PDF URLs', () => {
       const tab = await context.newPage();
       await tab.goto(`${server.base}/download?id=blank-html`);
 
+      const next = context.waitForEvent('page', { timeout: 15_000 });
       const ext = await context.newPage();
       await ext.goto(testHarnessUrl(extensionId));
       await tab.bringToFront();
@@ -175,20 +176,32 @@ test.describe('extensionless PDF URLs', () => {
         await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html'), active: false });
       });
       const popup = await context.waitForEvent('page', { timeout: 15_000 });
-      // Unreadable HTML: messaging still succeeds (the content script answers
-      // with an empty document), so no rescue action and no reader tab — HTML
-      // shapes must never reach the PDF reader, even blank ones.
-      await expect(popup.locator('#pdf-attempt')).toBeHidden({ timeout: 10_000 });
-      await popup.close();
+      // Blank HTML is an unreadable HTTP(S) page: the rescue CTA is the
+      // recovery affordance (Mary's product call). The original page's
+      // playback refusal is preserved below.
+      await expect(popup.locator('#pdf-attempt')).toBeVisible({ timeout: 10_000 });
 
-      // The blank page has no readable text: playTab must refuse cleanly.
       const harness2 = await context.newPage();
       await harness2.goto(testHarnessUrl(extensionId));
       await tab.bringToFront();
       const sw = new ServiceWorkerRequester(harness2);
-      const result = (await sw.playTab()) as { ok: boolean; error?: string };
-      expect(result.ok).toBe(false);
+      const refusal = (await sw.playTab()) as { ok: boolean; error?: string };
+      expect(refusal.ok).toBe(false);
       await harness2.close();
+      await tab.bringToFront();
+
+      // Consent click → reader validates the real content → clear not-pdf
+      // error, never speech.
+      const [reader] = await Promise.all([next, popup.locator('#pdf-attempt').click()]);
+      await ext.close();
+      await popup.close();
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'error', {
+        timeout: 20_000,
+      });
+      await expect(reader.locator('#pdf-status')).toBeVisible();
+      await expect(reader.locator('#pdf-status')).toHaveAttribute('role', 'alert');
+      await reader.locator('button[data-action="play"]').click();
+      await expect(reader.locator('mark')).toHaveCount(0);
 
       expect(external.size).toBe(0);
       expect(errors).toEqual([]);
@@ -302,6 +315,47 @@ test.describe('extensionless PDF URLs', () => {
       await reader.locator('button[data-action="play"]').click();
       await expect(reader.locator('mark')).toHaveCount(0);
 
+      expect(external.size).toBe(0);
+      expect(errors).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test('ordinary article embedding a PDF stays readable with no rescue CTA', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+      const external = trackExternalRequests(context, new URL(server.base).host);
+
+      const tab = await context.newPage();
+      await tab.goto(`${server.base}/article-with-pdf-embed.html`);
+      await tab.bringToFront();
+
+      const ext = await context.newPage();
+      await ext.goto(testHarnessUrl(extensionId));
+      await ext.evaluate(async () => {
+        await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html'), active: false });
+      });
+      await tab.bringToFront();
+      const popup = await context.waitForEvent('page', { timeout: 15_000 });
+      // A readable article that merely embeds a PDF must not be treated as a
+      // native viewer page: no rescue CTA, normal playback unchanged.
+      await expect(popup.locator('#pdf-attempt')).toBeHidden({ timeout: 10_000 });
+      await popup.close();
+
+      const harness2 = await context.newPage();
+      await harness2.goto(testHarnessUrl(extensionId));
+      await tab.bringToFront();
+      const sw = new ServiceWorkerRequester(harness2);
+      expect(await sw.playTab()).toEqual({ ok: true });
+      await expect
+        .poll(async () => (await sw.getPlaybackState()).state, { timeout: 5_000 })
+        .toBe('PLAYING');
+      await sw.stop();
+      await harness2.close();
+
+      expect(context.pages().some((page) => page.url().includes('pdf-reader'))).toBe(false);
       expect(external.size).toBe(0);
       expect(errors).toEqual([]);
     } finally {
