@@ -153,6 +153,31 @@ describe('PopupPlayer', () => {
     expect(onUnreadable).toHaveBeenCalledTimes(1);
   });
 
+  it('treats an explicitly content-less page (readable:false) as unreadable', async () => {
+    // Blank HTML: messaging succeeds and the state is a valid idle state, but
+    // the content script flags that nothing on the page can be narrated.
+    const send = vi.fn().mockResolvedValue({ playing: false, paused: false, readable: false });
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an idle-but-readable page out of the rescue path', async () => {
+    // A readable article that simply is not playing must never offer the CTA.
+    const send = vi.fn().mockResolvedValue({ playing: false, paused: false, readable: true });
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).not.toHaveBeenCalled();
+  });
+
   it('does not signal unreadable for readable pages', async () => {
     const send = vi.fn().mockResolvedValue({ playing: false, paused: false });
     const onUnreadable = vi.fn();

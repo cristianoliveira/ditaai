@@ -6,6 +6,9 @@ import { theme } from '../../ui/theme';
 export interface PagePlaybackState {
   playing: boolean;
   paused: boolean;
+  /** Content-script verdict on whether the page offers narratable text.
+   * Absent from older content scripts; false marks blank/unusable pages. */
+  readable?: boolean;
 }
 
 export type SendToPage = (method: string) => Promise<unknown>;
@@ -123,6 +126,12 @@ export class PopupPlayer {
       const result = await this.send(method);
       if (isPagePlaybackState(result)) {
         this.reflect(result);
+        // A page whose own content script found nothing narratable (blank
+        // documents) is just as unreadable as one whose messaging fails —
+        // both must surface the cannot-read state.
+        if (options.expectState && result.readable === false) {
+          throw new Error('page has no readable content');
+        }
         return;
       }
       // A page whose listeners exist but answer no state (Chrome's native PDF
