@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Article with embedded PDF</title>
+  </head>
+  <body>
+    <!-- Regression fixture (Mary's false positive): an ordinary readable
+         article that merely embeds a PDF preview. The popup must treat this
+         as a normal readable page — no rescue CTA, normal playback. -->
+    <article>
+      <h1>Field notes</h1>
+      <p>
+        This article embeds a PDF preview below, but the page itself is
+        ordinary readable HTML and must keep working with normal playback.
+      </p>
+      <embed type="application/pdf" src="/two-page-text.pdf" width="400" height="300" />
+    </article>
+  </body>
+</html>

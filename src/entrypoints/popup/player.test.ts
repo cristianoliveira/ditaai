@@ -128,4 +128,66 @@ describe('PopupPlayer', () => {
       error,
     });
   });
+
+  it('signals unreadable pages so the popup can offer the PDF rescue action', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('Receiving end does not exist.'));
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a silent PDF-viewer page (no state in response) as unreadable', async () => {
+    // Chrome's native PDF viewer hosts a content script whose router declines;
+    // sendMessage then RESOLVES with undefined instead of rejecting.
+    const send = vi.fn().mockResolvedValue(undefined);
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps blank pages out of the rescue path (final product UX: page-first)', async () => {
+    // FINAL product call (Mary, restoring b44cde4 after a superseded request):
+    // blank HTML answers a valid idle state flagged readable:false, but the
+    // CTA stays hidden — only unusable messaging (native PDF viewer, missing
+    // content script) may offer the PDF rescue action.
+    const send = vi.fn().mockResolvedValue({ playing: false, paused: false, readable: false });
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).not.toHaveBeenCalled();
+  });
+
+  it('keeps an idle-but-readable page out of the rescue path', async () => {
+    // A readable article that simply is not playing must never offer the CTA.
+    const send = vi.fn().mockResolvedValue({ playing: false, paused: false, readable: true });
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).not.toHaveBeenCalled();
+  });
+
+  it('does not signal unreadable for readable pages', async () => {
+    const send = vi.fn().mockResolvedValue({ playing: false, paused: false });
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).not.toHaveBeenCalled();
+  });
 });

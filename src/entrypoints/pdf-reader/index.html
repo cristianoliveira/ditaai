@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DitaAi — PDF reader</title>
+  <style>
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 1rem 3rem;
+    }
+    #pdf-pages section {
+      position: relative;
+      margin: 1.5rem auto;
+      width: fit-content;
+    }
+    .pdf-page-render {
+      position: relative;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+      background: white;
+      --scale-factor: 1;
+      --user-unit: 1;
+      --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+      --scale-round-x: 1px;
+      --scale-round-y: 1px;
+    }
+    .pdf-page-canvas {
+      display: block;
+    }
+    /* Official pdf.js text-layer CSS from pdf_viewer.css (Apache 2.0) */
+    .textLayer {
+      color-scheme: only light;
+      position: absolute;
+      text-align: initial;
+      inset: 0;
+      overflow: clip;
+      opacity: 1;
+      line-height: 1;
+      letter-spacing: normal;
+      word-spacing: normal;
+      text-size-adjust: none;
+      forced-color-adjust: none;
+      transform-origin: 0 0;
+      caret-color: CanvasText;
+      z-index: 0;
+      --min-font-size: 1;
+      --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+      --min-font-size-inv: calc(1 / var(--min-font-size));
+    }
+    .textLayer :is(span, br) {
+      color: transparent;
+      position: absolute;
+      white-space: pre;
+      cursor: text;
+      transform-origin: 0% 0%;
+      user-select: text;
+    }
+    .textLayer > :not(.markedContent),
+    .textLayer .markedContent span:not(.markedContent) {
+      z-index: 1;
+      --font-height: 0;
+      font-size: calc(var(--text-scale-factor) * var(--font-height));
+      --scale-x: 1;
+      --rotate: 0deg;
+      transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+    }
+    .textLayer .markedContent {
+      display: contents;
+    }
+    .textLayer .highlight { /* DitaAi word overlay inherits amber */ }
+    .textLayer mark.dita-word-highlight {
+      padding: 0;
+      margin: 0;
+      border-radius: 2px;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .pdf-page-text {
+      max-width: 70ch;
+      margin: 1rem auto;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <main id="pdf-reader" data-pdf-state="loading">
+    <header>
+      <h1>PDF reader</h1>
+      <p id="pdf-status" role="status">Preparing this document…</p>
+      <output id="pdf-page-position" aria-live="polite"></output>
+    </header>
+    <section id="pdf-controls" aria-label="Playback controls">
+      <button type="button" data-action="play">Play</button>
+      <button type="button" data-action="pause">Pause</button>
+      <button type="button" data-action="stop">Stop</button>
+      <button type="button" data-action="previous" aria-label="Previous page">Previous page</button>
+      <button type="button" data-action="next" aria-label="Next page">Next page</button>
+      <label for="pdf-rate">Speed</label>
+      <input id="pdf-rate" data-role="rate" type="range" min="0.5" max="2" step="0.1" value="1" />
+    </section>
+    <section id="pdf-pages" aria-label="Document text"></section>
+  </main>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

@@ -13,9 +13,11 @@ import {
 } from '../content/highlighter';
 import { nearestReadable } from '../content/nearest-readable';
 import { extractParagraphs } from '../content/paragraph-extractor';
+import { isPdfViewerDocument } from '../content/pdf-viewer-doc';
 import { Picker } from '../content/picker/picker';
 import { PagePlayer } from '../content/player-session';
 import { hydratePreferences } from '../content/preference-hydration';
+import { hasReadableContent } from '../content/readable-content';
 import { ShortcutController } from '../content/shortcuts';
 import { locateWord } from '../content/word-locator';
 import { buildTreeIndex, orderedStaticText } from '../domain/accessibility/tree';
@@ -808,6 +810,11 @@ export default defineContentScript({
 
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg?.dest !== 'contentScript') return false;
+      // Chrome's native PDF viewer hosts an ordinary document with a plugin
+      // embed: messaging would succeed while nothing is readable. Close the
+      // message port so the popup takes its existing "cannot be read" path,
+      // which is what offers the explicit "Read as PDF…" rescue action.
+      if (isPdfViewerDocument(document)) return false;
       if (msg.method === 'getText') {
         const built = buildChunksFiltered(document);
         sendResponse({ texts: built.map((chunk) => chunk.text) });
@@ -870,7 +877,14 @@ export default defineContentScript({
         return false;
       }
       if (msg.method === 'getPlaybackState') {
-        sendResponse(sequencer.getState());
+        // Semantic readability verdict for the popup's rescue-CTA gate,
+        // recomputed live on every request: SPA navigation can change what
+        // is readable at any time, and the paragraph extractor is cheap
+        // relative to messaging. Same source playback itself uses.
+        sendResponse({
+          ...sequencer.getState(),
+          readable: hasReadableContent(document),
+        });
         return false;
       }
       if (msg.method === 'togglePlay') {

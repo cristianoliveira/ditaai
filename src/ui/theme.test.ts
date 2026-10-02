@@ -49,7 +49,7 @@ describe('theme stop action', () => {
 describe('theme highlight (on-page, arbitrary backgrounds)', () => {
   it('uses a high-luminance amber fill so it glows on dark pages', () => {
     // #ffc107 = rgb(255, 193, 7) — brighter than the UI accent on purpose.
-    expect(theme.highlight.fill).toBe('rgba(255, 193, 7, 0.55)');
+    expect(theme.highlight.fill).toBe('rgba(255, 193, 7, 0.4)');
   });
 
   it('adds a solid darker edge ring so a visible edge exists on any background', () => {

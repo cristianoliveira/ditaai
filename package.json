@@ -1,13 +1,13 @@
 {
   "name": "ditaai",
-  "version": "0.3.0-4661b2f-1790586231",
+  "version": "0.3.0-e4fefcc-1790931678",
   "private": true,
   "description": "Turn web pages into private, local audio",
   "type": "module",
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
+    "build": "node scripts/sync-pdfjs-assets.mjs && wxt build",
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
@@ -38,6 +38,7 @@
     "wxt": "0.21.3"
   },
   "dependencies": {
-    "onnxruntime-web": "^1.27.0"
+    "onnxruntime-web": "^1.27.0",
+    "pdfjs-dist": "6.3.289"
   }
 }

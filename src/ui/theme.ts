@@ -66,7 +66,7 @@ export const theme: Theme = {
   stopHover: STOP_HOVER_HEX,
   accentTint: (alpha: number) => `rgba(${ACCENT_R}, ${ACCENT_G}, ${ACCENT_B}, ${alpha})`,
   highlight: {
-    fill: `rgba(${FILL_R}, ${FILL_G}, ${FILL_B}, 0.55)`,
+    fill: `rgba(${FILL_R}, ${FILL_G}, ${FILL_B}, 0.4)`,
     edge: `0 0 0 2px rgba(${EDGE_R}, ${EDGE_G}, ${EDGE_B}, 0.6)`,
     text: '#1a1300',
     paragraph: `rgba(${FILL_R}, ${FILL_G}, ${FILL_B}, 0.1)`,

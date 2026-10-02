@@ -6,6 +6,9 @@ import { theme } from '../../ui/theme';
 export interface PagePlaybackState {
   playing: boolean;
   paused: boolean;
+  /** Content-script verdict on whether the page offers narratable text.
+   * Absent from older content scripts; false marks blank/unusable pages. */
+  readable?: boolean;
 }
 
 export type SendToPage = (method: string) => Promise<unknown>;
@@ -22,6 +25,9 @@ export class PopupPlayer {
     private readonly send: SendToPage,
     private readonly openConfiguration: OpenConfiguration = async () => {},
     private readonly interactionLogger: Logger = logger,
+    /** Invoked once page messaging fails — the popup uses this to reveal the
+     * explicit "Read as PDF…" rescue action on eligible tabs. */
+    private readonly onUnreadable: () => void = () => {},
   ) {
     this.element = document.createElement('main');
     this.element.className = 'player';
@@ -81,7 +87,7 @@ export class PopupPlayer {
   }
 
   async refresh(): Promise<void> {
-    await this.request('getPlaybackState');
+    await this.request('getPlaybackState', { expectState: true });
   }
 
   /**
@@ -115,10 +121,19 @@ export class PopupPlayer {
     await this.request('stopPlayback');
   }
 
-  private async request(method: string): Promise<void> {
+  private async request(method: string, options: { expectState?: boolean } = {}): Promise<void> {
     try {
       const result = await this.send(method);
-      if (isPagePlaybackState(result)) this.reflect(result);
+      if (isPagePlaybackState(result)) {
+        this.reflect(result);
+        return;
+      }
+      // A page whose listeners exist but answer no state (Chrome's native PDF
+      // viewer resolves with undefined) is just as unreadable as one whose
+      // messaging rejects — both must surface the cannot-read state. A blank
+      // HTML page still answers a valid state and stays page-first: hidden
+      // CTA, no rescue offer (product UX call).
+      if (options.expectState) throw new Error('page reported no playback state');
     } catch (error) {
       this.interactionLogger.warn('interaction:request-failed', {
         surface: 'popup',
@@ -127,6 +142,7 @@ export class PopupPlayer {
       });
       this.status.textContent = 'This page cannot be read';
       this.playButton.disabled = true;
+      this.onUnreadable();
     }
   }
 
