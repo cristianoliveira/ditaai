@@ -71,9 +71,17 @@ export async function launchExtensionContext(
     });
   });
 
-  // Wait for the service worker to register.
+  // Wait for the service worker to register. Cold starts (first Chromium
+  // spawn after a build, profile creation, disk pressure) can exceed a tight
+  // timeout — allow up to 45s per wait, and retry the whole wait once so a
+  // single slow registration cannot fail an otherwise-healthy harness.
   while (context.serviceWorkers().length < 1) {
-    await context.waitForEvent('serviceworker', { timeout: 15_000 });
+    try {
+      await context.waitForEvent('serviceworker', { timeout: 45_000 });
+    } catch {
+      if (context.serviceWorkers().length > 0) break;
+      await context.waitForEvent('serviceworker', { timeout: 45_000 });
+    }
   }
 
   const sw = context.serviceWorkers()[0];

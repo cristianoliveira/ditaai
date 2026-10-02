@@ -197,17 +197,32 @@ test.describe('extensionless PDF URLs', () => {
     }
   });
 
-  test('extensionless PDF with auth failure shows a clear error state in the reader', async () => {
+  test('extensionless PDF with auth failure never reaches the reader via CTA; reader fetch path errors cleanly', async () => {
     const harness = await launchExtensionContext();
     try {
       const { context, extensionId, errors } = harness;
       const external = trackExternalRequests(context, new URL(server.base).host);
 
-      // Seed the real one-use request store directly (same key/shape as the
-      // popup handoff) so the reader's own fetch path is exercised against a
-      // download-shaped URL.
+      // A 401 page renders readable text ("Unauthorized"): the content-derived
+      // readable flag keeps the rescue CTA hidden — the popup must not offer a
+      // doomed PDF handoff for a page the user can already read.
+      const tab = await context.newPage();
+      await tab.goto(`${server.base}/download?id=denied`);
+      await tab.bringToFront();
       const ext = await context.newPage();
       await ext.goto(testHarnessUrl(extensionId));
+      await ext.evaluate(async () => {
+        await chrome.tabs.create({ url: chrome.runtime.getURL('popup.html'), active: false });
+      });
+      await tab.bringToFront();
+      const popup = await context.waitForEvent('page', { timeout: 15_000 });
+      await expect(popup.locator('#pdf-attempt')).toBeHidden({ timeout: 10_000 });
+      await popup.close();
+      expect(context.pages().some((page) => page.url().includes('pdf-reader'))).toBe(false);
+
+      // The reader's own fetch path still must fail cleanly on the same
+      // download-shaped URL: seed the real one-use request store (same key/
+      // shape as the popup handoff) and open the reader directly.
       const requestId = await ext.evaluate(async (sourceUrl) => {
         const store = globalThis as unknown as {
           crypto: { randomUUID(): string };
@@ -243,6 +258,52 @@ test.describe('extensionless PDF URLs', () => {
       const unexpected = errors.filter((line) => !line.includes('401'));
       expect(unexpected).toEqual([]);
       expect(external.size).toBe(0);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test('extensionless PDF over the size cap shows the too-large error', async () => {
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+      const external = trackExternalRequests(context, new URL(server.base).host);
+
+      const reader = await consentAndOpenReader(context, extensionId, 'download?id=oversize');
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'error', {
+        timeout: 20_000,
+      });
+      const status = await reader.locator('#pdf-status').textContent();
+      expect(status?.toLowerCase()).toContain('large');
+      await reader.locator('button[data-action="play"]').click();
+      await expect(reader.locator('mark')).toHaveCount(0);
+
+      expect(external.size).toBe(0);
+      expect(errors).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test('extensionless PDF that never finishes streaming shows the timeout error', async () => {
+    test.setTimeout(60_000);
+    const harness = await launchExtensionContext();
+    try {
+      const { context, extensionId, errors } = harness;
+      const external = trackExternalRequests(context, new URL(server.base).host);
+
+      const reader = await consentAndOpenReader(context, extensionId, 'download?id=timeout');
+      // The reader aborts the stalled stream at its own 20s limit.
+      await expect(reader.locator('#pdf-reader')).toHaveAttribute('data-pdf-state', 'error', {
+        timeout: 30_000,
+      });
+      const status = await reader.locator('#pdf-status').textContent();
+      expect(status?.toLowerCase()).toContain('timed out');
+      await reader.locator('button[data-action="play"]').click();
+      await expect(reader.locator('mark')).toHaveCount(0);
+
+      expect(external.size).toBe(0);
+      expect(errors).toEqual([]);
     } finally {
       await harness.close();
     }
