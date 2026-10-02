@@ -140,6 +140,19 @@ describe('PopupPlayer', () => {
     expect(onUnreadable).toHaveBeenCalledTimes(1);
   });
 
+  it('treats a silent PDF-viewer page (no state in response) as unreadable', async () => {
+    // Chrome's native PDF viewer hosts a content script whose router declines;
+    // sendMessage then RESOLVES with undefined instead of rejecting.
+    const send = vi.fn().mockResolvedValue(undefined);
+    const onUnreadable = vi.fn();
+    const player = new PopupPlayer(send, undefined, loggerSpy(), onUnreadable);
+    document.body.append(player.mount());
+
+    await player.refresh();
+
+    expect(onUnreadable).toHaveBeenCalledTimes(1);
+  });
+
   it('does not signal unreadable for readable pages', async () => {
     const send = vi.fn().mockResolvedValue({ playing: false, paused: false });
     const onUnreadable = vi.fn();

@@ -13,6 +13,7 @@ import {
 } from '../content/highlighter';
 import { nearestReadable } from '../content/nearest-readable';
 import { extractParagraphs } from '../content/paragraph-extractor';
+import { isPdfViewerDocument } from '../content/pdf-viewer-doc';
 import { Picker } from '../content/picker/picker';
 import { PagePlayer } from '../content/player-session';
 import { hydratePreferences } from '../content/preference-hydration';
@@ -808,6 +809,11 @@ export default defineContentScript({
 
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg?.dest !== 'contentScript') return false;
+      // Chrome's native PDF viewer hosts an ordinary document with a plugin
+      // embed: messaging would succeed while nothing is readable. Close the
+      // message port so the popup takes its existing "cannot be read" path,
+      // which is what offers the explicit "Read as PDF…" rescue action.
+      if (isPdfViewerDocument(document)) return false;
       if (msg.method === 'getText') {
         const built = buildChunksFiltered(document);
         sendResponse({ texts: built.map((chunk) => chunk.text) });

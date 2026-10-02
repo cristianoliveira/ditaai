@@ -84,7 +84,7 @@ export class PopupPlayer {
   }
 
   async refresh(): Promise<void> {
-    await this.request('getPlaybackState');
+    await this.request('getPlaybackState', { expectState: true });
   }
 
   /**
@@ -118,10 +118,17 @@ export class PopupPlayer {
     await this.request('stopPlayback');
   }
 
-  private async request(method: string): Promise<void> {
+  private async request(method: string, options: { expectState?: boolean } = {}): Promise<void> {
     try {
       const result = await this.send(method);
-      if (isPagePlaybackState(result)) this.reflect(result);
+      if (isPagePlaybackState(result)) {
+        this.reflect(result);
+        return;
+      }
+      // A page whose listeners exist but answer no state (Chrome's native PDF
+      // viewer resolves with undefined) is just as unreadable as one whose
+      // messaging rejects — both must surface the cannot-read state.
+      if (options.expectState) throw new Error('page reported no playback state');
     } catch (error) {
       this.interactionLogger.warn('interaction:request-failed', {
         surface: 'popup',
