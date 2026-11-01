@@ -9,7 +9,7 @@ import { AUDIO_BUFFER_OPTIONS, DEFAULT_AUDIO_BUFFER_SECONDS } from '../../domain
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, languageLabel } from '../../domain/audio/languages';
 import { DEFAULT_SYNTHESIS_QUALITY, SYNTHESIS_QUALITY_OPTIONS } from '../../domain/audio/quality';
 import { DEFAULT_SHORTCUTS } from '../../domain/shortcuts/shortcuts';
-import { SUPERTONIC_ENGINE_ASSETS, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
+import { ENGINE_ASSETS, KITTEN_VOICES, listVoices } from '../../domain/voices/catalog';
 import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import { ChromeAudioBufferStorage } from '../../infra/chrome/audio-buffer-storage';
@@ -21,12 +21,14 @@ import { ChromeSynthesisQualityStorage } from '../../infra/chrome/synthesis-qual
 import { ChromeVoiceRotationStorage } from '../../infra/chrome/voice-rotation-storage';
 import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
+import { KITTEN_MODEL_GRAPH_BYTES, isKittenModelCached } from '../../infra/voices/kitten-model';
 import { logger } from '../../lib/logger';
 import { overallDownloadPercentage } from './download-progress';
 import { ShortcutsPanel } from './shortcuts-panel';
 import { type VoiceCardState, renderVoiceCard } from './voice-card';
 
 const CACHE_NAME = 'dita-voices';
+const VOICES = listVoices();
 
 // ── DOM refs ─────────────────────────────────────────────────────────
 
@@ -109,28 +111,30 @@ async function refresh(): Promise<void> {
   const _cache = await openCache();
 
   // Check engine assets
-  let engineReady = true;
-  for (const asset of SUPERTONIC_ENGINE_ASSETS.assets) {
-    const url = sourceUrl(asset.source);
-    if (!(await isInCache(url))) {
-      engineReady = false;
-      break;
+  const engineStates = new Map<string, boolean>();
+  for (const [engine, assets] of Object.entries(ENGINE_ASSETS)) {
+    let ready = true;
+    for (const asset of assets.assets) {
+      if (!(await isInCache(sourceUrl(asset.source)))) {
+        ready = false;
+        break;
+      }
     }
+    engineStates.set(engine, ready);
   }
+  const readyEngines = [...engineStates].filter(([, ready]) => ready).map(([engine]) => engine);
+  engineStatus.className = readyEngines.length > 0 ? 'ready' : '';
+  engineStatus.textContent = readyEngines.length
+    ? `✅ Ready: ${readyEngines.join(', ')}.`
+    : '⬇️ Engine models not installed. Download a voice to install automatically.';
 
-  if (engineReady) {
-    engineStatus.className = 'ready';
-    engineStatus.textContent = '✅ Engine ready — all model files installed.';
-  } else {
-    engineStatus.className = '';
-    engineStatus.textContent =
-      '⬇️ Engine models not installed. Download any voice to install automatically.';
-  }
-
-  // Check voice states
-  for (const voice of SUPERTONIC_VOICES) {
+  // A model graph alone is not enough to make a voice selectable.
+  for (const voice of VOICES) {
     const url = sourceUrl(voice.source);
-    const installed = await isInCache(url);
+    const engineReady = engineStates.get(voice.engine) ?? false;
+    const voiceCached =
+      voice.engine === 'kitten' ? await isKittenModelCached(_cache) : await isInCache(url);
+    const installed = engineReady && voiceCached;
     const current = state.get(voice.id);
     state.set(voice.id, {
       voiceId: voice.id,
@@ -160,7 +164,7 @@ async function refresh(): Promise<void> {
     defaultLanguage: DEFAULT_LANGUAGE,
     defaultAudioBufferSeconds: DEFAULT_AUDIO_BUFFER_SECONDS,
   });
-  const installedVoiceIds = SUPERTONIC_VOICES.filter((voice) => state.get(voice.id)?.installed).map(
+  const installedVoiceIds = VOICES.filter((voice) => state.get(voice.id)?.installed).map(
     (voice) => voice.id,
   );
   selectedVoiceId = resolveSelectedVoiceId(storedVoiceId, installedVoiceIds);
@@ -179,7 +183,7 @@ async function refresh(): Promise<void> {
 
 function updateStatusBar(): void {
   const installed = [...state.values()].filter((s) => s.installed).length;
-  const total = SUPERTONIC_VOICES.length;
+  const total = VOICES.length;
   const downloading = [...state.values()].filter((s) => s.downloading).length;
   const engineReady = engineStatus.classList.contains('ready');
 
@@ -200,7 +204,7 @@ function updateStatusBar(): void {
 function renderVoices(): void {
   voicesGrid.innerHTML = '';
 
-  for (const voice of SUPERTONIC_VOICES) {
+  for (const voice of VOICES) {
     const s = state.get(voice.id);
     if (!s) continue;
 
@@ -237,44 +241,76 @@ function selectVoice(voiceId: string): void {
 }
 
 async function downloadVoice(voiceId: string): Promise<void> {
-  const voice = SUPERTONIC_VOICES.find((v) => v.id === voiceId);
+  const voice = VOICES.find((v) => v.id === voiceId);
   if (!voice) return;
 
-  // Mark as downloading
-  const current = state.get(voiceId)!;
-  state.set(voiceId, { ...current, downloading: true, progress: 0 });
+  // Kitten's graph and NPZ contain every speaker; install that shared bundle once.
+  const affectedVoices = voice.engine === 'kitten' ? KITTEN_VOICES : [voice];
+  for (const affectedVoice of affectedVoices) {
+    const current = state.get(affectedVoice.id);
+    if (current) {
+      state.set(affectedVoice.id, { ...current, downloading: true, progress: 0 });
+    }
+  }
   renderVoices();
   updateStatusBar();
 
   try {
     const missingEngineUrls: string[] = [];
-    for (const asset of SUPERTONIC_ENGINE_ASSETS.assets) {
+    for (const asset of ENGINE_ASSETS[voice.engine]?.assets ?? []) {
       const assetUrl = sourceUrl(asset.source);
       if (!(await isInCache(assetUrl))) missingEngineUrls.push(assetUrl);
     }
 
-    const downloadUrls = [...missingEngineUrls, sourceUrl(voice.source)];
+    const voiceUrl = sourceUrl(voice.source);
+    let voiceIsCached = await isInCache(voiceUrl);
+    if (voice.engine === 'kitten') {
+      const cache = await openCache();
+      voiceIsCached = await isKittenModelCached(cache);
+      if (!voiceIsCached && (await cache.match(voiceUrl))) await cache.delete(voiceUrl);
+    }
+    const downloadUrls = voiceIsCached ? missingEngineUrls : [...missingEngineUrls, voiceUrl];
     for (const [completedFiles, url] of downloadUrls.entries()) {
-      await downloadToCache(url, (filePercentage) => {
-        const currentState = state.get(voiceId);
-        if (!currentState) return;
-
-        const progress = overallDownloadPercentage(
-          completedFiles,
-          filePercentage,
-          downloadUrls.length,
-        );
-        state.set(voiceId, { ...currentState, progress });
-        renderVoices();
-      });
+      const expectedByteLength =
+        voice.engine === 'kitten' && url === voiceUrl ? KITTEN_MODEL_GRAPH_BYTES : undefined;
+      await downloadToCache(
+        url,
+        (filePercentage) => {
+          const progress = overallDownloadPercentage(
+            completedFiles,
+            filePercentage,
+            downloadUrls.length,
+          );
+          for (const affectedVoice of affectedVoices) {
+            const currentState = state.get(affectedVoice.id);
+            if (currentState) state.set(affectedVoice.id, { ...currentState, progress });
+          }
+          renderVoices();
+        },
+        expectedByteLength,
+      );
     }
 
-    state.set(voiceId, { voiceId, installed: true, downloading: false, progress: 100 });
+    for (const affectedVoice of affectedVoices) {
+      state.set(affectedVoice.id, {
+        voiceId: affectedVoice.id,
+        installed: true,
+        downloading: false,
+        progress: 100,
+      });
+    }
     if (!selectedVoiceId) selectVoice(voiceId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     logger.error(`Download failed for ${voiceId}:`, msg);
-    state.set(voiceId, { voiceId, installed: false, downloading: false, progress: 0 });
+    for (const affectedVoice of affectedVoices) {
+      state.set(affectedVoice.id, {
+        voiceId: affectedVoice.id,
+        installed: false,
+        downloading: false,
+        progress: 0,
+      });
+    }
   }
 
   renderVoices();
@@ -282,7 +318,7 @@ async function downloadVoice(voiceId: string): Promise<void> {
 }
 
 async function downloadAll(): Promise<void> {
-  for (const voice of SUPERTONIC_VOICES) {
+  for (const voice of VOICES) {
     const s = state.get(voice.id);
     if (s && !s.installed) {
       await downloadVoice(voice.id);

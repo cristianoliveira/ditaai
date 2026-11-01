@@ -23,11 +23,11 @@ export function renderVoiceCard(
 
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.textContent = `Supertonic · ${voice.language}`;
+  meta.textContent = `${voice.engine === 'kitten' ? 'Kitten' : 'Supertonic'} · ${voice.language}`;
 
   const size = document.createElement('div');
   size.className = 'size';
-  size.textContent = '~300 KB';
+  size.textContent = voice.engine === 'kitten' ? '~60 MB model' : '~300 KB';
 
   card.append(name, meta, size);
 
