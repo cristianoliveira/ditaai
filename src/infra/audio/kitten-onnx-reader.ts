@@ -37,7 +37,12 @@ export class KittenOnnxReader implements TextReader {
   /** Boundaries are relayed from the offscreen document to the active tab. */
   onBoundary?: SpeakOptions['onBoundary'];
   onBoundarySchedule?: (schedule: BoundarySchedule) => void;
-  onSynthesisComplete?: (sampleCount: number, inferenceMs: number) => void;
+  onSynthesisComplete?: (metrics: {
+    sampleCount: number;
+    inferenceMs: number;
+    peak: number;
+    rms: number;
+  }) => void;
   onPlaybackStarted?: () => void;
 
   constructor(config: KittenOnnxReaderConfig) {
@@ -136,13 +141,27 @@ export class KittenOnnxReader implements TextReader {
       cursor += chunk.length;
     }
 
+    let peak = 0;
+    let sumSquares = 0;
+    for (const sample of samples) {
+      if (!Number.isFinite(sample)) throw new Error('Kitten model returned invalid audio');
+      const magnitude = Math.abs(sample);
+      peak = Math.max(peak, magnitude);
+      sumSquares += sample * sample;
+    }
+    if (peak < 1e-5) throw new Error('Kitten produced silent audio');
+
+    const inferenceMs = Date.now() - inferenceStartedAt;
+    const rms = Math.sqrt(sumSquares / samples.length);
     logger.info('[kitten] synthesis:complete', {
       inputChars: textToSpeak.length,
       chunks: chunks.length,
       sampleCount: samples.length,
-      inferenceMs: Date.now() - inferenceStartedAt,
+      inferenceMs,
+      peak,
+      rms,
     });
-    this.onSynthesisComplete?.(samples.length, Date.now() - inferenceStartedAt);
+    this.onSynthesisComplete?.({ sampleCount: samples.length, inferenceMs, peak, rms });
     const context = this.getAudioContext();
     const audio = context.createBuffer(1, samples.length, SAMPLE_RATE);
     audio.copyToChannel(samples, 0);

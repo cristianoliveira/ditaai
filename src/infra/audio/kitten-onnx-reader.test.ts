@@ -26,7 +26,8 @@ function setup() {
     createBufferSource: vi.fn(() => source),
     createGain: vi.fn(() => ({ gain: { value: 1 }, connect: vi.fn() })),
   };
-  const run = vi.fn().mockResolvedValue({ audio: { data: new Float32Array(30_000) } });
+  const waveform = () => new Float32Array(30_000).fill(0.1);
+  const run = vi.fn().mockResolvedValue({ audio: { data: waveform() } });
   const session = {
     run,
     outputNames: ['audio'],
@@ -58,7 +59,9 @@ describe('KittenOnnxReader', () => {
   it('synthesizes audio, schedules word boundaries, and reuses prepared inference', async () => {
     const { reader, run, source, context, audio } = setup();
     const schedule = vi.fn();
+    const synthesisComplete = vi.fn();
     reader.onBoundarySchedule = schedule;
+    reader.onSynthesisComplete = synthesisComplete;
 
     await reader.prepare('Hello Kitten.');
     await reader.speak('Hello Kitten.');
@@ -69,6 +72,11 @@ describe('KittenOnnxReader', () => {
     expect(modelInputs?.speed.data[0]).toBeCloseTo(1.2);
     expect(audio.copyToChannel).toHaveBeenCalledOnce();
     expect(source.start).toHaveBeenCalledOnce();
+    expect(synthesisComplete).toHaveBeenCalledOnce();
+    const metrics = synthesisComplete.mock.calls[0]?.[0];
+    expect(metrics?.sampleCount).toBe(30_000);
+    expect(metrics?.peak).toBeCloseTo(0.1);
+    expect(metrics?.rms).toBeCloseTo(0.1);
     expect(schedule).toHaveBeenCalledWith(
       expect.objectContaining({
         durationMs: 1_000,
@@ -92,7 +100,7 @@ describe('KittenOnnxReader', () => {
           maxActiveRuns = Math.max(maxActiveRuns, activeRuns);
           releases.push(() => {
             activeRuns--;
-            resolve({ audio: { data: new Float32Array(30_000) } });
+            resolve({ audio: { data: new Float32Array(30_000).fill(0.1) } });
           });
         }),
     );
@@ -133,6 +141,13 @@ describe('KittenOnnxReader', () => {
     expect(reader).toBeDefined();
   });
 
+  it('rejects a silent waveform instead of reporting successful speech', async () => {
+    const { reader, run } = setup();
+    run.mockResolvedValue({ audio: { data: new Float32Array(30_000) } });
+
+    await expect(reader.speak('Hello')).rejects.toThrow('Kitten produced silent audio');
+  });
+
   it('rejects model output without finite audio', async () => {
     const { reader } = setup();
     const subject = new KittenOnnxReader({
@@ -155,7 +170,7 @@ describe('KittenOnnxReader', () => {
           createBuffer: vi.fn(() => ({ copyToChannel: vi.fn(), duration: 1 })),
         }) as unknown as AudioContext,
       sessionFactory: vi.fn().mockResolvedValue({
-        run: vi.fn().mockResolvedValue({ audio: { data: new Float32Array([Number.NaN]) } }),
+        run: vi.fn().mockResolvedValue({ audio: { data: new Float32Array([0.1, Number.NaN]) } }),
         outputNames: ['audio'],
       } as never),
     });

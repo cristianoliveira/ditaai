@@ -59,6 +59,8 @@ test.describe('Kitten live model smoke', () => {
           backend: string;
           sampleCount: number | null;
           inferenceMs: number | null;
+          peak: number | null;
+          rms: number | null;
           audioStarted: boolean;
           error: string | null;
         }>;
@@ -85,6 +87,8 @@ test.describe('Kitten live model smoke', () => {
       expect(evidence.backend).toBe('onnxruntime-web');
       expect(evidence.inferenceMs).toBeGreaterThan(0);
       expect(evidence.sampleCount).toBeGreaterThan(0);
+      expect(evidence.peak).toBeGreaterThan(1e-5);
+      expect(evidence.rms).toBeGreaterThan(0);
       expect(evidence.audioStarted).toBe(true);
       console.info('Kitten live inference evidence:', JSON.stringify(evidence));
       expect(harness.errors).toEqual([]);

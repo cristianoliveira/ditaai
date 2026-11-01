@@ -24,6 +24,8 @@ let readerVoiceId: string | null = null;
 let readerInitialization: Promise<InstalledReader> | null = null;
 let lastKittenSampleCount: number | null = null;
 let lastKittenInferenceMs: number | null = null;
+let lastKittenPeak: number | null = null;
+let lastKittenRms: number | null = null;
 let lastKittenAudioStarted = false;
 let lastKittenError: string | null = null;
 const pageVoiceRotations = new Map<string, PageVoiceRotation>();
@@ -134,9 +136,11 @@ async function createReader(voiceId: string, isKitten: boolean): Promise<Install
       voiceCount: Object.keys(assets.voices).length,
     });
     const kittenReader = new KittenOnnxReader({ assets, voiceAlias: 'Bella' });
-    kittenReader.onSynthesisComplete = (sampleCount, inferenceMs) => {
+    kittenReader.onSynthesisComplete = ({ sampleCount, inferenceMs, peak, rms }) => {
       lastKittenSampleCount = sampleCount;
       lastKittenInferenceMs = inferenceMs;
+      lastKittenPeak = peak;
+      lastKittenRms = rms;
     };
     kittenReader.onPlaybackStarted = () => {
       lastKittenAudioStarted = true;
@@ -179,6 +183,8 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
       backend: 'onnxruntime-web',
       sampleCount: lastKittenSampleCount,
       inferenceMs: lastKittenInferenceMs,
+      peak: lastKittenPeak,
+      rms: lastKittenRms,
       audioStarted: lastKittenAudioStarted,
       error: lastKittenError,
     };
@@ -213,6 +219,8 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
     if (r instanceof KittenOnnxReader) {
       lastKittenSampleCount = null;
       lastKittenInferenceMs = null;
+      lastKittenPeak = null;
+      lastKittenRms = null;
       lastKittenAudioStarted = false;
       lastKittenError = null;
     }
