@@ -82,6 +82,7 @@ export default defineBackground(() => {
     fetchTabText,
     resolveActiveTab,
     installedReader,
+    getKittenDiagnostics: () => installedReader.getKittenDiagnostics(),
   });
 
   // Route installed-voice boundaries from offscreen back to the content tab that

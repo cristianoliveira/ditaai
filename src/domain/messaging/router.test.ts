@@ -85,6 +85,17 @@ describe('createMessageRouter', () => {
     expect(ctrl.getState().state).toBe('STOPPED');
   });
 
+  it('returns Kitten synthesis diagnostics from the installed reader adapter', async () => {
+    const diagnostics = { sampleCount: 24_000, audioStarted: true };
+    const router = createMessageRouter(new PlaybackController(), {
+      fetchTabText: vi.fn().mockResolvedValue([]),
+      resolveActiveTab: vi.fn().mockResolvedValue(1),
+      getKittenDiagnostics: vi.fn().mockResolvedValue(diagnostics),
+    });
+
+    await expect(router(msg('getKittenDiagnostics'))).resolves.toEqual(diagnostics);
+  });
+
   it('returns playback state via getPlaybackState', () => {
     const { ctrl, router } = makeRouter();
 

@@ -127,10 +127,11 @@ async function refresh(): Promise<void> {
     ? `✅ Ready: ${readyEngines.join(', ')}.`
     : '⬇️ Engine models not installed. Download a voice to install automatically.';
 
-  // Check voice states
+  // A model graph alone is not enough to make a voice selectable.
   for (const voice of VOICES) {
     const url = sourceUrl(voice.source);
-    const installed = await isInCache(url);
+    const engineReady = engineStates.get(voice.engine) ?? false;
+    const installed = engineReady && (await isInCache(url));
     const current = state.get(voice.id);
     state.set(voice.id, {
       voiceId: voice.id,

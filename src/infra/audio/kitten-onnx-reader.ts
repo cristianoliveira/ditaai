@@ -32,10 +32,13 @@ export class KittenOnnxReader implements TextReader {
   private audioContext: AudioContext | null = null;
   private sourceNode: AudioBufferSourceNode | null = null;
   private readonly prepared = new Map<string, Promise<PreparedSpeech>>();
+  private inferenceQueue: Promise<void> = Promise.resolve();
 
   /** Boundaries are relayed from the offscreen document to the active tab. */
   onBoundary?: SpeakOptions['onBoundary'];
   onBoundarySchedule?: (schedule: BoundarySchedule) => void;
+  onSynthesisComplete?: (sampleCount: number, inferenceMs: number) => void;
+  onPlaybackStarted?: () => void;
 
   constructor(config: KittenOnnxReaderConfig) {
     this.assets = config.assets;
@@ -85,7 +88,8 @@ export class KittenOnnxReader implements TextReader {
     const session = await this.getSession();
     const alias = this.assets.config.voice_aliases[this.voiceAlias];
     const voice = alias ? this.assets.voices[alias] : undefined;
-    if (!voice) throw new Error(`Kitten voice embedding is missing: ${this.voiceAlias}`);
+    if (!alias || !voice) throw new Error(`Kitten voice embedding is missing: ${this.voiceAlias}`);
+    const speedPrior = this.assets.config.speed_priors?.[alias] ?? 1;
 
     const chunks = splitText(textToSpeak, MAX_CHARS_PER_CHUNK);
     if (chunks.length === 0) throw new Error('Kitten cannot synthesize empty text');
@@ -95,23 +99,32 @@ export class KittenOnnxReader implements TextReader {
       const tokenIds = await textToKittenTokenIds(chunk, this.phonemize);
       if (tokenIds.length <= 3) continue;
       const style = styleForText(voice, chunk.length);
-      const outputs = await session.run({
-        input_ids: new ort.Tensor('int64', BigInt64Array.from(tokenIds, BigInt), [
-          1,
-          tokenIds.length,
-        ]),
-        style: new ort.Tensor('float32', style, [1, style.length]),
-        speed: new ort.Tensor('float32', new Float32Array([options?.rate ?? 1]), [1]),
-      });
+      const inference = this.inferenceQueue.then(() =>
+        session.run({
+          input_ids: new ort.Tensor('int64', BigInt64Array.from(tokenIds, BigInt), [
+            1,
+            tokenIds.length,
+          ]),
+          style: new ort.Tensor('float32', style, [1, style.length]),
+          speed: new ort.Tensor(
+            'float32',
+            new Float32Array([(options?.rate ?? 1) * speedPrior]),
+            [1],
+          ),
+        }),
+      );
+      this.inferenceQueue = inference.then(
+        () => undefined,
+        () => undefined,
+      );
+      const outputs = await inference;
       const outputName = session.outputNames[0];
       const waveform = outputName ? outputs[outputName]?.data : undefined;
       if (!(waveform instanceof Float32Array) || waveform.length === 0) {
         throw new Error('Kitten model returned no audio');
       }
       if (!Number.isFinite(waveform[0])) throw new Error('Kitten model returned invalid audio');
-      // Match the upstream reference's small trailing silence trim.
-      const end = waveform.length > SAMPLE_RATE ? waveform.length - 5_000 : waveform.length;
-      audioChunks.push(waveform.slice(0, end));
+      audioChunks.push(waveform);
     }
 
     const totalSamples = audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
@@ -129,6 +142,7 @@ export class KittenOnnxReader implements TextReader {
       sampleCount: samples.length,
       inferenceMs: Date.now() - inferenceStartedAt,
     });
+    this.onSynthesisComplete?.(samples.length, Date.now() - inferenceStartedAt);
     const context = this.getAudioContext();
     const audio = context.createBuffer(1, samples.length, SAMPLE_RATE);
     audio.copyToChannel(samples, 0);
@@ -165,7 +179,6 @@ export class KittenOnnxReader implements TextReader {
     source.connect(gain);
     gain.connect(context.destination);
     this.sourceNode = source;
-    this.onBoundarySchedule?.(speech.schedule);
 
     return new Promise((resolve) => {
       source.addEventListener('ended', () => {
@@ -174,6 +187,8 @@ export class KittenOnnxReader implements TextReader {
         resolve();
       });
       source.start();
+      this.onPlaybackStarted?.();
+      this.onBoundarySchedule?.(speech.schedule);
     });
   }
 

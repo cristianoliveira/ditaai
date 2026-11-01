@@ -14,6 +14,17 @@ describe('textToKittenTokenIds', () => {
     expect(tokens.length).toBeGreaterThan(2);
   });
 
+  it('preserves punctuation and separates IPA symbols like the reference tokenizer', async () => {
+    const phonemizer = vi.fn().mockResolvedValue(['ab']);
+
+    const tokens = await textToKittenTokenIds('A, B', phonemizer);
+
+    expect(phonemizer).toHaveBeenNthCalledWith(1, 'A', 'en-us');
+    expect(phonemizer).toHaveBeenNthCalledWith(2, 'B', 'en-us');
+    // Two two-symbol phoneme groups, punctuation, separators, and markers.
+    expect(tokens).toHaveLength(12);
+  });
+
   it('returns no tokens for whitespace without calling the phonemizer', async () => {
     const phonemizer = vi.fn();
 

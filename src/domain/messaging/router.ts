@@ -25,6 +25,7 @@ export function createMessageRouter(
     fetchTabText: TabTextFetcher;
     resolveActiveTab: ActiveTabResolver;
     installedReader?: AvailableTextReader;
+    getKittenDiagnostics?: () => Promise<unknown>;
   },
 ): MessageHandler {
   const setVoiceVisit = (args: unknown[]): void => {
@@ -68,6 +69,7 @@ export function createMessageRouter(
       return { ok: true };
     },
     getPlaybackState: () => controller.getState(),
+    getKittenDiagnostics: () => deps.getKittenDiagnostics?.() ?? null,
     isInstalledVoiceAvailable: async (args) => {
       setVoiceVisit(args);
       return { ok: true, available: (await deps.installedReader?.isAvailable()) ?? false };

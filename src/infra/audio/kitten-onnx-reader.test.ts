@@ -37,6 +37,7 @@ function setup() {
       name: 'Kitten TTS Nano',
       model: 'kitten-tts-nano-0.8',
       voices: 'voices.npz',
+      speed_priors: { 'voice-bella': 1.2 },
       voice_aliases: { Bella: 'voice-bella' },
     },
     voices: {
@@ -63,18 +64,56 @@ describe('KittenOnnxReader', () => {
     await reader.speak('Hello Kitten.');
 
     expect(run).toHaveBeenCalledOnce();
-    expect(context.createBuffer).toHaveBeenCalledWith(1, 30_000 - 5_000, 24_000);
+    expect(context.createBuffer).toHaveBeenCalledWith(1, 30_000, 24_000);
+    const modelInputs = run.mock.calls[0]?.[0];
+    expect(modelInputs?.speed.data[0]).toBeCloseTo(1.2);
     expect(audio.copyToChannel).toHaveBeenCalledOnce();
     expect(source.start).toHaveBeenCalledOnce();
     expect(schedule).toHaveBeenCalledWith(
       expect.objectContaining({
         durationMs: 1_000,
-        sampleCount: 25_000,
+        sampleCount: 30_000,
         boundaries: expect.arrayContaining([
           expect.objectContaining({ charIndex: 0, charLength: 5 }),
         ]),
       }),
     );
+  });
+
+  it('serializes concurrent inference on the shared ONNX session', async () => {
+    const { reader, run } = setup();
+    let activeRuns = 0;
+    let maxActiveRuns = 0;
+    const releases: Array<() => void> = [];
+    run.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          activeRuns++;
+          maxActiveRuns = Math.max(maxActiveRuns, activeRuns);
+          releases.push(() => {
+            activeRuns--;
+            resolve({ audio: { data: new Float32Array(30_000) } });
+          });
+        }),
+    );
+    const releaseNextRun = () => {
+      const release = releases.shift();
+      if (!release) throw new Error('No inference is waiting');
+      release();
+    };
+
+    const preparation = reader.prepare('First sentence.');
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    const playback = reader.speak('Second sentence.');
+    await Promise.resolve();
+    expect(releases).toHaveLength(1);
+
+    releaseNextRun();
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    releaseNextRun();
+    await Promise.all([preparation, playback]);
+
+    expect(maxActiveRuns).toBe(1);
   });
 
   it('rejects missing voice data instead of returning silence', async () => {
