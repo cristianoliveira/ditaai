@@ -9,6 +9,7 @@ describe('isFatalOnnxError', () => {
     'unreachable executed',
     'out of memory',
     'WebAssembly.RuntimeError: out of memory',
+    'phonon-tts worker failed: could not start',
   ])('classifies WASM/ONNX trap %j as fatal', (message) => {
     expect(isFatalOnnxError(new Error(message))).toBe(true);
     expect(isFatalOnnxError(message)).toBe(true);
@@ -21,6 +22,7 @@ describe('isFatalOnnxError', () => {
     'Could not establish connection. Receiving end does not exist.',
     'Voice failed',
     'inference failed',
+    'Network request failed',
   ])('does not classify transient error %j as fatal', (message) => {
     expect(isFatalOnnxError(new Error(message))).toBe(false);
   });

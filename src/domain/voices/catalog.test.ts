@@ -3,6 +3,8 @@ import {
   ENGINE_ASSETS,
   KITTEN_ENGINE_ASSETS,
   KITTEN_VOICES,
+  PHONON_ENGINE_ASSETS,
+  PHONON_VOICES,
   SUPERTONIC_ENGINE_ASSETS,
   SUPERTONIC_VOICES,
   findVoice,
@@ -64,7 +66,7 @@ describe('catalog', () => {
 
   describe('listVoices', () => {
     it('lists all voices when no engine filter', () => {
-      expect(listVoices()).toHaveLength(18);
+      expect(listVoices()).toHaveLength(19);
     });
 
     it('filters by engine', () => {
@@ -73,6 +75,10 @@ describe('catalog', () => {
 
     it('includes the Kitten voice for the Kitten engine', () => {
       expect(listVoices('kitten')).toEqual(KITTEN_VOICES);
+    });
+
+    it('includes Phonon voices for the Phonon engine', () => {
+      expect(listVoices('phonon')).toEqual(PHONON_VOICES);
     });
 
     it('returns empty for unknown engine', () => {
@@ -127,7 +133,47 @@ describe('catalog', () => {
     });
   });
 
+  describe('PHONON_VOICES', () => {
+    it('exposes one pinned English default voice with neutral gender', () => {
+      expect(PHONON_VOICES).toEqual([
+        {
+          id: 'phonon-31m-en-default',
+          name: 'Phonon 31m English (Default)',
+          gender: 'neutral',
+          engine: 'phonon',
+          language: 'en',
+          source: {
+            type: 'huggingface',
+            repo: 'gradium/phonon-31m-en',
+            revision: '8c64b55ec301728e2d1695bfea87a08a267d0c2d',
+            path: 'default-voice.safetensors',
+          },
+        },
+      ]);
+    });
+
+    it('has the pinned q8 weights, config, and tokenizer as shared engine assets', () => {
+      expect(PHONON_ENGINE_ASSETS.engine).toBe('phonon');
+      expect(PHONON_ENGINE_ASSETS.assets.map((asset) => asset.name)).toEqual([
+        'config.json',
+        'tokenizer.json',
+        'model.q8.gguf',
+      ]);
+      expect(
+        PHONON_ENGINE_ASSETS.assets.every(
+          (asset) =>
+            asset.source.repo === 'gradium/phonon-31m-en' &&
+            asset.source.revision === '8c64b55ec301728e2d1695bfea87a08a267d0c2d',
+        ),
+      ).toBe(true);
+    });
+  });
+
   describe('findVoice', () => {
+    it('finds Phonon default by id and engine', () => {
+      expect(findVoice('phonon-31m-en-default', 'phonon')).toEqual(PHONON_VOICES[0]);
+    });
+
     it('finds Kitten Bella by id and engine', () => {
       expect(findVoice('kitten-bella', 'kitten')).toEqual(KITTEN_VOICES[0]);
     });

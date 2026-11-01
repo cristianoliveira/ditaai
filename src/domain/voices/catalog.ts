@@ -112,15 +112,52 @@ export const KITTEN_ENGINE_ASSETS: EngineAssets = {
 };
 
 /** All known voice catalogs, keyed by engine. */
+const PHONON_REPO = 'gradium/phonon-31m-en';
+const PHONON_REVISION = '8c64b55ec301728e2d1695bfea87a08a267d0c2d';
+
+/** Phonon 31m English ships one default speaker embedding. */
+export const PHONON_VOICES: Voice[] = [
+  {
+    id: 'phonon-31m-en-default',
+    name: 'Phonon 31m English (Default)',
+    gender: 'neutral',
+    engine: 'phonon',
+    language: 'en',
+    source: {
+      type: 'huggingface',
+      repo: PHONON_REPO,
+      revision: PHONON_REVISION,
+      path: 'default-voice.safetensors',
+    },
+  },
+];
+
+/** Shared model files read from the same pinned checkpoint as the voice. */
+export const PHONON_ENGINE_ASSETS: EngineAssets = {
+  engine: 'phonon',
+  assets: ['config.json', 'tokenizer.json', 'model.q8.gguf'].map((name) => ({
+    name,
+    source: {
+      type: 'huggingface',
+      repo: PHONON_REPO,
+      revision: PHONON_REVISION,
+      path: name,
+    },
+  })),
+};
+
+/** All known voice catalogs, keyed by engine. */
 export const VOICE_CATALOGS: Record<string, Voice[]> = {
   supertonic: SUPERTONIC_VOICES,
   kitten: KITTEN_VOICES,
+  phonon: PHONON_VOICES,
 };
 
 /** All known engine assets, keyed by engine. */
 export const ENGINE_ASSETS: Record<string, EngineAssets> = {
   supertonic: SUPERTONIC_ENGINE_ASSETS,
   kitten: KITTEN_ENGINE_ASSETS,
+  phonon: PHONON_ENGINE_ASSETS,
 };
 
 export function listVoices(engine?: string): Voice[] {

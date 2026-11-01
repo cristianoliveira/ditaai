@@ -5,10 +5,11 @@ export default defineConfig({
   srcDir: 'src',
   outDir: 'dist',
   modules: [path.resolve('src/modules/onnx-runtime.ts')],
+  vite: () => ({ worker: { format: 'es' } }),
   manifest: {
     name: 'DitaAi',
     version: '0.3.0',
-    version_name: '0.3.0-cef7558-1793533966',
+    version_name: '0.3.0-de3e3e3-1793551069',
     description: 'Turn web pages into private, local audio',
     permissions: ['storage', 'tabs', 'offscreen', 'contextMenus', 'debugger'],
     host_permissions: ['<all_urls>'],

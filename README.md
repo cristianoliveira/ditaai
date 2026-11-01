@@ -12,8 +12,8 @@ private, and fully tested.
 
 Open DitaAi and press play to hear the page's meaningful content. Pause, resume,
 change speed, move by paragraph, or start from a chosen paragraph while DitaAi
-highlights your place. A Supertonic neural voice can run locally through
-WebAssembly; browser speech is the built-in fallback.
+highlights your place. Supertonic, Kitten, and Phonon neural voices can run
+locally through WebAssembly; browser speech is the built-in fallback.
 
 See [product direction](docs/PRODUCT.md) for promises and boundaries.
 
@@ -33,14 +33,22 @@ https://github.com/user-attachments/assets/55e586b5-133f-4dda-ad90-2cad994a7e97
 
 ## Voices
 
-DitaAi ships with 10 Supertonic presets (M1–M5, F1–F5) from
-[Supertone/supertonic-3](https://huggingface.co/Supertone/supertonic-3).
+DitaAi offers 10 Supertonic presets (M1–M5, F1–F5) from
+[Supertone/supertonic-3](https://huggingface.co/Supertone/supertonic-3), Kitten's
+English speakers from
+[KittenTTS-Nano-v0.8-ONNX](https://huggingface.co/onnx-community/KittenTTS-Nano-v0.8-ONNX),
+and Phonon 31m English from
+[gradium/phonon-31m-en](https://huggingface.co/gradium/phonon-31m-en) (Apache-2.0).
+
+Open the widget → settings → Voices to download and select a voice. Phonon is a
+~62 MB model download; after installation, its worker, WebAssembly runtime, and
+model assets run locally. See [voice installation and offline use](docs/PHONON-VOICES.md).
 
 - **In the extension:** open the floating widget → settings (gear) → Voices
-  page, then download a voice. Files are stored in Cache Storage
-  (`dita-voices`) and read by the offscreen document at playback time.
-- **Before installing:** `just install-voices [M1 F3 ...]` downloads voice
-  files to `voices/supertonic/` for offline use or packaging.
+  page, then download a voice. Assets are stored in Cache Storage and read by
+  the offscreen document at playback time. Phonon assets use a separate cache.
+- **For Supertonic packaging:** `just install-voices [M1 F3 ...]` downloads
+  voice files to `voices/supertonic/` for offline use or packaging.
 
 ## Inspirations
 

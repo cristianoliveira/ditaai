@@ -1,5 +1,5 @@
 /**
- * Classifies ONNX/WASM errors that leave the inference runtime unrecoverable.
+ * Classifies WASM worker errors that leave an installed inference runtime unrecoverable.
  *
  * `onnxruntime-web` runs models in a WebAssembly linear memory that can grow
  * but never shrink. Once a tensor allocation lands past the memory ceiling the
@@ -12,6 +12,7 @@ const FATAL_ONNX_PATTERNS = [
   /out of memory/i,
   /unreachable executed/i,
   /\bruntimeerror\b/i,
+  /phonon-tts worker failed/i,
 ];
 
 export function isFatalOnnxError(error: unknown): boolean {
