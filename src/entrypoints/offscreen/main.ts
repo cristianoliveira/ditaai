@@ -22,12 +22,6 @@ type InstalledReader = SupertonicOnnxReader | KittenOnnxReader;
 let reader: InstalledReader | null = null;
 let readerVoiceId: string | null = null;
 let readerInitialization: Promise<InstalledReader> | null = null;
-let lastKittenSampleCount: number | null = null;
-let lastKittenInferenceMs: number | null = null;
-let lastKittenPeak: number | null = null;
-let lastKittenRms: number | null = null;
-let lastKittenAudioStarted = false;
-let lastKittenError: string | null = null;
 const pageVoiceRotations = new Map<string, PageVoiceRotation>();
 const PAGE_VISIT_VOICES_KEY = 'pageVisitVoices';
 
@@ -135,17 +129,7 @@ async function createReader(voiceId: string, isKitten: boolean): Promise<Install
       modelBytes: assets.model.byteLength,
       voiceCount: Object.keys(assets.voices).length,
     });
-    const kittenReader = new KittenOnnxReader({ assets, voiceAlias: 'Bella' });
-    kittenReader.onSynthesisComplete = ({ sampleCount, inferenceMs, peak, rms }) => {
-      lastKittenSampleCount = sampleCount;
-      lastKittenInferenceMs = inferenceMs;
-      lastKittenPeak = peak;
-      lastKittenRms = rms;
-    };
-    kittenReader.onPlaybackStarted = () => {
-      lastKittenAudioStarted = true;
-    };
-    return kittenReader;
+    return new KittenOnnxReader({ assets, voiceAlias: 'Bella' });
   }
 
   const [modelAssets, voiceStyle] = await Promise.all([
@@ -177,18 +161,6 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
   const context = args.at(-1);
   const pageVisitId = isVoiceContext(context) ? context.pageVisitId : 'unknown-page-visit';
   const rotateVoices = isVoiceContext(context) && context.rotateVoices === true;
-  if (method === 'getKittenDiagnostics') {
-    return {
-      ok: true,
-      backend: 'onnxruntime-web',
-      sampleCount: lastKittenSampleCount,
-      inferenceMs: lastKittenInferenceMs,
-      peak: lastKittenPeak,
-      rms: lastKittenRms,
-      audioStarted: lastKittenAudioStarted,
-      error: lastKittenError,
-    };
-  }
   if (method === 'isAvailable') {
     return { ok: true, available: await isAvailable(selectedVoiceId, rotateVoices, pageVisitId) };
   }
@@ -216,14 +188,6 @@ async function handleMessage(method: string, args: unknown[]): Promise<unknown> 
       resumeFromChar: options?.resumeFromChar ?? 0,
     });
     const r = await getReader(selectedVoiceId, rotateVoices, pageVisitId);
-    if (r instanceof KittenOnnxReader) {
-      lastKittenSampleCount = null;
-      lastKittenInferenceMs = null;
-      lastKittenPeak = null;
-      lastKittenRms = null;
-      lastKittenAudioStarted = false;
-      lastKittenError = null;
-    }
     r.onBoundary = (event) => {
       chrome.runtime.sendMessage({
         dest: 'serviceWorker',
@@ -288,7 +252,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // down atomically — reader, sessions, audio and WASM heap included — so
       // cleanup is both safe and automatic.
       const fatal = isFatalOnnxError(error);
-      if (reader instanceof KittenOnnxReader) lastKittenError = detail;
       logger.error(`[installed-voice][offscreen] ${method}:failed`, {
         durationMs: Date.now() - startedAt,
         error: detail,

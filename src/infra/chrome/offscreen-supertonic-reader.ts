@@ -21,8 +21,6 @@ interface NarrationLanguageStore {
 interface OffscreenResponse {
   ok: boolean;
   available?: boolean;
-  sampleCount?: number | null;
-  audioStarted?: boolean;
   error?: string;
   /** Set when the offscreen suffered a fatal, unrecoverable error (WASM trap).
    * Tells the service worker to recreate the document for a fresh runtime. */
@@ -117,10 +115,6 @@ export class OffscreenSupertonicReader implements AvailableTextReader {
 
   resume(): void {
     void this.send('resume');
-  }
-
-  getKittenDiagnostics(): Promise<OffscreenResponse> {
-    return this.send('getKittenDiagnostics');
   }
 
   stop(): void {

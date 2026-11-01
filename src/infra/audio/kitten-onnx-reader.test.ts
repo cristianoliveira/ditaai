@@ -59,9 +59,7 @@ describe('KittenOnnxReader', () => {
   it('synthesizes audio, schedules word boundaries, and reuses prepared inference', async () => {
     const { reader, run, source, context, audio } = setup();
     const schedule = vi.fn();
-    const synthesisComplete = vi.fn();
     reader.onBoundarySchedule = schedule;
-    reader.onSynthesisComplete = synthesisComplete;
 
     await reader.prepare('Hello Kitten.');
     await reader.speak('Hello Kitten.');
@@ -72,11 +70,6 @@ describe('KittenOnnxReader', () => {
     expect(modelInputs?.speed.data[0]).toBeCloseTo(1.2);
     expect(audio.copyToChannel).toHaveBeenCalledOnce();
     expect(source.start).toHaveBeenCalledOnce();
-    expect(synthesisComplete).toHaveBeenCalledOnce();
-    const metrics = synthesisComplete.mock.calls[0]?.[0];
-    expect(metrics?.sampleCount).toBe(30_000);
-    expect(metrics?.peak).toBeCloseTo(0.1);
-    expect(metrics?.rms).toBeCloseTo(0.1);
     expect(schedule).toHaveBeenCalledWith(
       expect.objectContaining({
         durationMs: 1_000,

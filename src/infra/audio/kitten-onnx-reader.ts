@@ -37,13 +37,6 @@ export class KittenOnnxReader implements TextReader {
   /** Boundaries are relayed from the offscreen document to the active tab. */
   onBoundary?: SpeakOptions['onBoundary'];
   onBoundarySchedule?: (schedule: BoundarySchedule) => void;
-  onSynthesisComplete?: (metrics: {
-    sampleCount: number;
-    inferenceMs: number;
-    peak: number;
-    rms: number;
-  }) => void;
-  onPlaybackStarted?: () => void;
 
   constructor(config: KittenOnnxReaderConfig) {
     this.assets = config.assets;
@@ -154,6 +147,7 @@ export class KittenOnnxReader implements TextReader {
     const inferenceMs = Date.now() - inferenceStartedAt;
     const rms = Math.sqrt(sumSquares / samples.length);
     logger.info('[kitten] synthesis:complete', {
+      backend: 'onnxruntime-web',
       inputChars: textToSpeak.length,
       chunks: chunks.length,
       sampleCount: samples.length,
@@ -161,7 +155,6 @@ export class KittenOnnxReader implements TextReader {
       peak,
       rms,
     });
-    this.onSynthesisComplete?.({ sampleCount: samples.length, inferenceMs, peak, rms });
     const context = this.getAudioContext();
     const audio = context.createBuffer(1, samples.length, SAMPLE_RATE);
     audio.copyToChannel(samples, 0);
@@ -206,7 +199,10 @@ export class KittenOnnxReader implements TextReader {
         resolve();
       });
       source.start();
-      this.onPlaybackStarted?.();
+      logger.info('[kitten] playback:started', {
+        sampleCount: speech.schedule.sampleCount,
+        durationMs: speech.schedule.durationMs,
+      });
       this.onBoundarySchedule?.(speech.schedule);
     });
   }
