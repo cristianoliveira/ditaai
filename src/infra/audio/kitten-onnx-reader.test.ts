@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { KittenAssets } from './kitten-cache';
 import { KittenOnnxReader } from './kitten-onnx-reader';
 
-function setup() {
+function setup(alias = 'Bella') {
   let ended: (() => void) | undefined;
   const source = {
     buffer: null as AudioBuffer | null,
@@ -32,22 +32,23 @@ function setup() {
     run,
     outputNames: ['audio'],
   };
+  const voiceId = `voice-${alias.toLowerCase()}`;
   const assets: KittenAssets = {
     model: new ArrayBuffer(8),
     config: {
       name: 'Kitten TTS Nano',
       model: 'kitten-tts-nano-0.8',
       voices: 'voices.npz',
-      speed_priors: { 'voice-bella': 1.2 },
-      voice_aliases: { Bella: 'voice-bella' },
+      speed_priors: { [voiceId]: 1.2 },
+      voice_aliases: { [alias]: voiceId },
     },
     voices: {
-      'voice-bella': { data: new Float32Array([1, 2, 3, 4]), styleCount: 2, styleDim: 2 },
+      [voiceId]: { data: new Float32Array([1, 2, 3, 4]), styleCount: 2, styleDim: 2 },
     },
   };
   const reader = new KittenOnnxReader({
     assets,
-    voiceAlias: 'Bella',
+    voiceAlias: alias,
     phonemize: vi.fn().mockResolvedValue(['hello']),
     audioContextFactory: () => context as unknown as AudioContext,
     sessionFactory: vi.fn().mockResolvedValue(session as never),
@@ -80,6 +81,18 @@ describe('KittenOnnxReader', () => {
       }),
     );
   });
+
+  it.each(['Bella', 'Jasper', 'Luna', 'Bruno', 'Rosie', 'Hugo', 'Kiki', 'Leo'])(
+    'synthesizes with the %s model alias',
+    async (alias) => {
+      const { reader, run } = setup(alias);
+
+      await reader.speak('Hello Kitten.');
+
+      expect(run).toHaveBeenCalledOnce();
+      expect(run.mock.calls[0]?.[0].speed.data[0]).toBeCloseTo(1.2);
+    },
+  );
 
   it('serializes concurrent inference on the shared ONNX session', async () => {
     const { reader, run } = setup();

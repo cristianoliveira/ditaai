@@ -5,7 +5,7 @@
  * pressure. For permanent storage, bundle voices in the extension package.
  */
 
-import { ENGINE_ASSETS } from '../../domain/voices/catalog';
+import { ENGINE_ASSETS, listVoices } from '../../domain/voices/catalog';
 import type { VoiceInstaller } from '../../domain/voices/installer';
 import type { InstalledVoice, Voice } from '../../domain/voices/voice';
 import { sourceUrl, voiceKey } from '../../domain/voices/voice';
@@ -45,8 +45,11 @@ export class CacheStorageVoiceInstaller implements VoiceInstaller {
       }
     }
 
-    // Download the voice style file
-    const sizeBytes = await fetchAndCache(cache, url);
+    // Aliases share one model artifact, so don't fetch it again for each speaker.
+    const cachedVoice = await cache.match(url);
+    const sizeBytes = cachedVoice
+      ? (await cachedVoice.clone().arrayBuffer()).byteLength
+      : await fetchAndCache(cache, url);
 
     return {
       voice,
@@ -59,49 +62,33 @@ export class CacheStorageVoiceInstaller implements VoiceInstaller {
     const cache = await openCache();
     const url = sourceUrl(voice.source);
     await cache.delete(url);
+    // Kitten aliases are backed by one indivisible model/embedding bundle.
+    if (voice.engine === 'kitten') {
+      for (const asset of ENGINE_ASSETS[voice.engine]?.assets ?? []) {
+        await cache.delete(sourceUrl(asset.source));
+      }
+    }
   }
 
   async isInstalled(voice: Voice): Promise<boolean> {
     const cache = await openCache();
-    const url = sourceUrl(voice.source);
-    const cached = await cache.match(url);
-    return cached !== undefined;
+    if (!(await cache.match(sourceUrl(voice.source)))) return false;
+    for (const asset of ENGINE_ASSETS[voice.engine]?.assets ?? []) {
+      if (!(await cache.match(sourceUrl(asset.source)))) return false;
+    }
+    return true;
   }
 
   async listInstalled(): Promise<InstalledVoice[]> {
     const cache = await openCache();
-    const keys = await cache.keys();
     const installed: InstalledVoice[] = [];
 
-    for (const key of keys) {
-      const url = key.url;
-      // Match voice style URLs: .../resolve/main/voice_styles/M1.json
-      const match = url.match(/\/voice_styles\/([A-Z]\d)\.json$/);
-      if (!match) continue;
-
-      const voiceId = match[1];
-      if (!voiceId) continue;
-      const response = await cache.match(url);
+    for (const voice of listVoices()) {
+      if (!(await this.isInstalled(voice))) continue;
+      const response = await cache.match(sourceUrl(voice.source));
       if (!response) continue;
       const buffer = await response.clone().arrayBuffer();
-
-      installed.push({
-        voice: {
-          id: voiceId,
-          name: `Supertonic ${voiceId}`,
-          gender: voiceId.startsWith('M') ? 'male' : 'female',
-          engine: 'supertonic',
-          language: 'multilingual',
-          source: {
-            type: 'huggingface',
-            repo: 'Supertone/supertonic-3',
-            revision: 'main',
-            path: `voice_styles/${voiceId}.json`,
-          },
-        },
-        installedAt: 0,
-        sizeBytes: buffer.byteLength,
-      });
+      installed.push({ voice, installedAt: 0, sizeBytes: buffer.byteLength });
     }
 
     return installed;

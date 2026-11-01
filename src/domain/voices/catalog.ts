@@ -62,22 +62,40 @@ export const SUPERTONIC_ENGINE_ASSETS: EngineAssets = {
 const KITTEN_REPO = 'onnx-community/KittenTTS-Nano-v0.8-ONNX';
 const KITTEN_REVISION = '6078af30aab083436023d04ba845aedd9d1a9206';
 
-/** Single English voice enabled for the first Kitten release. */
-export const KITTEN_VOICES: Voice[] = [
-  {
-    id: 'kitten-bella',
-    name: 'Kitten Bella',
-    gender: 'female',
-    engine: 'kitten',
-    language: 'en',
-    source: {
-      type: 'huggingface',
-      repo: KITTEN_REPO,
-      revision: KITTEN_REVISION,
-      path: 'onnx/model.onnx',
-    },
-  },
-];
+/** The pinned Nano model bundles all eight English speaker embeddings together. */
+const KITTEN_SPEAKERS = [
+  { alias: 'Bella', gender: 'female' },
+  { alias: 'Jasper', gender: 'male' },
+  { alias: 'Luna', gender: 'female' },
+  { alias: 'Bruno', gender: 'male' },
+  { alias: 'Rosie', gender: 'female' },
+  { alias: 'Hugo', gender: 'male' },
+  { alias: 'Kiki', gender: 'female' },
+  { alias: 'Leo', gender: 'male' },
+] as const;
+
+function kittenSource(): Voice['source'] {
+  return {
+    type: 'huggingface',
+    repo: KITTEN_REPO,
+    revision: KITTEN_REVISION,
+    path: 'onnx/model.onnx',
+  };
+}
+
+export const KITTEN_VOICES: Voice[] = KITTEN_SPEAKERS.map(({ alias, gender }) => ({
+  id: `kitten-${alias.toLowerCase()}`,
+  name: `Kitten ${alias}`,
+  gender,
+  engine: 'kitten',
+  language: 'en',
+  source: kittenSource(),
+}));
+
+export function kittenVoiceAlias(voiceId: string): string | undefined {
+  return KITTEN_SPEAKERS.find((speaker) => `kitten-${speaker.alias.toLowerCase()}` === voiceId)
+    ?.alias;
+}
 
 /** Shared config + voice embeddings for the pinned Kitten Nano export. */
 export const KITTEN_ENGINE_ASSETS: EngineAssets = {

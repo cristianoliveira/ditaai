@@ -6,6 +6,7 @@ import {
   SUPERTONIC_ENGINE_ASSETS,
   SUPERTONIC_VOICES,
   findVoice,
+  kittenVoiceAlias,
   listVoices,
 } from './catalog';
 import { sourceUrl, voiceKey } from './voice';
@@ -63,7 +64,7 @@ describe('catalog', () => {
 
   describe('listVoices', () => {
     it('lists all voices when no engine filter', () => {
-      expect(listVoices()).toHaveLength(11);
+      expect(listVoices()).toHaveLength(18);
     });
 
     it('filters by engine', () => {
@@ -80,17 +81,39 @@ describe('catalog', () => {
   });
 
   describe('KITTEN_VOICES', () => {
-    it('exposes one English female voice with a pinned model source', () => {
-      expect(KITTEN_VOICES).toHaveLength(1);
+    it('exposes the eight pinned English voices with supported genders', () => {
+      expect(KITTEN_VOICES.map(({ id, gender }) => [id, gender])).toEqual([
+        ['kitten-bella', 'female'],
+        ['kitten-jasper', 'male'],
+        ['kitten-luna', 'female'],
+        ['kitten-bruno', 'male'],
+        ['kitten-rosie', 'female'],
+        ['kitten-hugo', 'male'],
+        ['kitten-kiki', 'female'],
+        ['kitten-leo', 'male'],
+      ]);
+      expect(KITTEN_VOICES.every((voice) => voice.language === 'en')).toBe(true);
+      expect(new Set(KITTEN_VOICES.map((voice) => voice.id)).size).toBe(8);
+      expect(new Set(KITTEN_VOICES.map((voice) => sourceUrl(voice.source))).size).toBe(1);
+      expect(KITTEN_VOICES.map((voice) => kittenVoiceAlias(voice.id))).toEqual([
+        'Bella',
+        'Jasper',
+        'Luna',
+        'Bruno',
+        'Rosie',
+        'Hugo',
+        'Kiki',
+        'Leo',
+      ]);
+      expect(kittenVoiceAlias('kitten-not-a-voice')).toBeUndefined();
       expect(KITTEN_VOICES[0]).toMatchObject({
         id: 'kitten-bella',
         name: 'Kitten Bella',
         gender: 'female',
         engine: 'kitten',
-        language: 'en',
         source: {
           repo: 'onnx-community/KittenTTS-Nano-v0.8-ONNX',
-          revision: expect.any(String),
+          revision: '6078af30aab083436023d04ba845aedd9d1a9206',
           path: 'onnx/model.onnx',
         },
       });

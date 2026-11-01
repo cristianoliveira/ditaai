@@ -9,7 +9,7 @@ import { AUDIO_BUFFER_OPTIONS, DEFAULT_AUDIO_BUFFER_SECONDS } from '../../domain
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, languageLabel } from '../../domain/audio/languages';
 import { DEFAULT_SYNTHESIS_QUALITY, SYNTHESIS_QUALITY_OPTIONS } from '../../domain/audio/quality';
 import { DEFAULT_SHORTCUTS } from '../../domain/shortcuts/shortcuts';
-import { ENGINE_ASSETS, SUPERTONIC_VOICES, listVoices } from '../../domain/voices/catalog';
+import { ENGINE_ASSETS, KITTEN_VOICES, listVoices } from '../../domain/voices/catalog';
 import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import { ChromeAudioBufferStorage } from '../../infra/chrome/audio-buffer-storage';
@@ -241,9 +241,14 @@ async function downloadVoice(voiceId: string): Promise<void> {
   const voice = VOICES.find((v) => v.id === voiceId);
   if (!voice) return;
 
-  // Mark as downloading
-  const current = state.get(voiceId)!;
-  state.set(voiceId, { ...current, downloading: true, progress: 0 });
+  // Kitten's graph and NPZ contain every speaker; install that shared bundle once.
+  const affectedVoices = voice.engine === 'kitten' ? KITTEN_VOICES : [voice];
+  for (const affectedVoice of affectedVoices) {
+    const current = state.get(affectedVoice.id);
+    if (current) {
+      state.set(affectedVoice.id, { ...current, downloading: true, progress: 0 });
+    }
+  }
   renderVoices();
   updateStatusBar();
 
@@ -254,28 +259,45 @@ async function downloadVoice(voiceId: string): Promise<void> {
       if (!(await isInCache(assetUrl))) missingEngineUrls.push(assetUrl);
     }
 
-    const downloadUrls = [...missingEngineUrls, sourceUrl(voice.source)];
+    const voiceUrl = sourceUrl(voice.source);
+    const downloadUrls = (await isInCache(voiceUrl))
+      ? missingEngineUrls
+      : [...missingEngineUrls, voiceUrl];
     for (const [completedFiles, url] of downloadUrls.entries()) {
       await downloadToCache(url, (filePercentage) => {
-        const currentState = state.get(voiceId);
-        if (!currentState) return;
-
         const progress = overallDownloadPercentage(
           completedFiles,
           filePercentage,
           downloadUrls.length,
         );
-        state.set(voiceId, { ...currentState, progress });
+        for (const affectedVoice of affectedVoices) {
+          const currentState = state.get(affectedVoice.id);
+          if (currentState) state.set(affectedVoice.id, { ...currentState, progress });
+        }
         renderVoices();
       });
     }
 
-    state.set(voiceId, { voiceId, installed: true, downloading: false, progress: 100 });
+    for (const affectedVoice of affectedVoices) {
+      state.set(affectedVoice.id, {
+        voiceId: affectedVoice.id,
+        installed: true,
+        downloading: false,
+        progress: 100,
+      });
+    }
     if (!selectedVoiceId) selectVoice(voiceId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     logger.error(`Download failed for ${voiceId}:`, msg);
-    state.set(voiceId, { voiceId, installed: false, downloading: false, progress: 0 });
+    for (const affectedVoice of affectedVoices) {
+      state.set(affectedVoice.id, {
+        voiceId: affectedVoice.id,
+        installed: false,
+        downloading: false,
+        progress: 0,
+      });
+    }
   }
 
   renderVoices();

@@ -1,5 +1,5 @@
 import type { SpeakOptions } from '../../domain/audio/text-reader';
-import { KITTEN_VOICES, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
+import { KITTEN_VOICES, SUPERTONIC_VOICES, kittenVoiceAlias } from '../../domain/voices/catalog';
 import { PageVoiceRotation } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import {
@@ -35,14 +35,12 @@ async function findInstalledVoiceId(
   pageVisitId: string,
 ): Promise<string | null> {
   const cache = await openCache();
-  const kittenVoice = KITTEN_VOICES.find((voice) => voice.id === selectedVoiceId);
-  if (kittenVoice) {
-    return (await areKittenAssetsInstalled(cache)) ? kittenVoice.id : null;
-  }
-
   const installedVoiceIds: string[] = [];
   for (const voice of SUPERTONIC_VOICES) {
     if (await cache.match(sourceUrl(voice.source))) installedVoiceIds.push(voice.id);
+  }
+  if (await areKittenAssetsInstalled(cache)) {
+    installedVoiceIds.push(...KITTEN_VOICES.map((voice) => voice.id));
   }
   const persistedVoiceId = rotateVoices ? await loadPageVisitVoice(pageVisitId) : null;
   if (persistedVoiceId && installedVoiceIds.includes(persistedVoiceId)) return persistedVoiceId;
@@ -129,7 +127,9 @@ async function createReader(voiceId: string, isKitten: boolean): Promise<Install
       modelBytes: assets.model.byteLength,
       voiceCount: Object.keys(assets.voices).length,
     });
-    return new KittenOnnxReader({ assets, voiceAlias: 'Bella' });
+    const voiceAlias = kittenVoiceAlias(voiceId);
+    if (!voiceAlias) throw new Error(`Unknown Kitten voice: ${voiceId}`);
+    return new KittenOnnxReader({ assets, voiceAlias });
   }
 
   const [modelAssets, voiceStyle] = await Promise.all([
