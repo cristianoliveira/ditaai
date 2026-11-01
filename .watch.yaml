@@ -12,6 +12,11 @@ on:
     - '**/*.js'
     - '**/*.config.ts'
 
+hooks:
+  failure: >-
+    bebop contact --message
+    "DitaAI Funzzy generation failed. Inspect with: fzz ctl status --format toon"
+
 tasks:
   - name: Update plans
     run:

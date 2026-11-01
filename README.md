@@ -41,8 +41,8 @@ and Phonon 31m English from
 [gradium/phonon-31m-en](https://huggingface.co/gradium/phonon-31m-en) (Apache-2.0).
 
 Open the widget → settings → Voices to download and select a voice. Phonon is a
-~62 MB model download; after installation, its worker, WebAssembly runtime, and
-model assets run locally. See [voice installation and offline use](docs/PHONON-VOICES.md).
+~62 MiB model download (~65 MB decimal); after installation, its worker,
+WebAssembly runtime, and model assets run locally. See [voice installation and offline use](docs/PHONON-VOICES.md).
 
 - **In the extension:** open the floating widget → settings (gear) → Voices
   page, then download a voice. Assets are stored in Cache Storage and read by

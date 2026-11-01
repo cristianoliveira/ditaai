@@ -34,7 +34,7 @@ export function renderVoiceCard(
     voice.engine === 'kitten'
       ? '~60 MB model'
       : voice.engine === 'phonon'
-        ? '~62 MB model'
+        ? '~62 MiB model'
         : '~300 KB';
 
   card.append(name, meta, size);

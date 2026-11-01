@@ -17,7 +17,7 @@ import { areKittenAssetsInstalled, loadKittenAssets } from '../../infra/audio/ki
 import { KittenOnnxReader } from '../../infra/audio/kitten-onnx-reader';
 import { isFatalOnnxError } from '../../infra/audio/onnx-errors';
 import { configureOnnxRuntime } from '../../infra/audio/onnx-runtime';
-import { PhononOnnxReader } from '../../infra/audio/phonon-onnx-reader';
+import { PhononReader } from '../../infra/audio/phonon-reader';
 import { loadPhononTts } from '../../infra/audio/phonon-runtime';
 import { SupertonicOnnxReader } from '../../infra/audio/supertonic-onnx-reader';
 import { PHONON_CACHE_NAME, arePhononAssetsInstalled } from '../../infra/voices/phonon-model';
@@ -25,7 +25,7 @@ import { logger } from '../../lib/logger';
 
 configureOnnxRuntime((path) => chrome.runtime.getURL(path));
 
-type InstalledReader = SupertonicOnnxReader | KittenOnnxReader | PhononOnnxReader;
+type InstalledReader = SupertonicOnnxReader | KittenOnnxReader | PhononReader;
 
 let reader: InstalledReader | null = null;
 let readerVoiceId: string | null = null;
@@ -124,7 +124,7 @@ async function getReader(
   }
 
   reader?.stop();
-  if (reader instanceof PhononOnnxReader) reader.dispose();
+  if (reader instanceof PhononReader) reader.dispose();
   reader = null;
   readerVoiceId = null;
   log('reader:initialize', { voiceId });
@@ -144,7 +144,7 @@ async function createReader(
 ): Promise<InstalledReader> {
   const engine = isPhonon ? 'phonon' : isKitten ? 'kitten' : 'supertonic';
   log('cache:load', { voiceId, engine });
-  if (isPhonon) return new PhononOnnxReader(await loadPhononTts());
+  if (isPhonon) return new PhononReader(await loadPhononTts());
   const cache = await openCache();
   if (isKitten) {
     const assets = await loadKittenAssets(cache);

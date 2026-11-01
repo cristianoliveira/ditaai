@@ -69,7 +69,7 @@ describe('renderVoiceCard', () => {
 
     expect(card.querySelector('.name')?.textContent).toBe(phonon.name);
     expect(card.querySelector('.meta')?.textContent).toBe('Phonon · en');
-    expect(card.querySelector('.size')?.textContent).toBe('~62 MB model');
+    expect(card.querySelector('.size')?.textContent).toBe('~62 MiB model');
   });
 
   it('only offers download for a voice that is not installed', () => {

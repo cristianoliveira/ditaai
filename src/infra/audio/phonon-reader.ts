@@ -13,13 +13,13 @@ interface PreparedSpeech {
   boundaries: ReturnType<typeof computeWordTimings>;
 }
 
-export interface PhononOnnxReaderConfig {
+export interface PhononReaderConfig {
   audioContextFactory?: (sampleRate: number) => AudioContext;
 }
 
 const MAX_PREPARED_SPEECH = 4;
 
-export class PhononOnnxReader implements TextReader {
+export class PhononReader implements TextReader {
   private readonly audioContextFactory: (sampleRate: number) => AudioContext;
   private readonly preparations = new Map<string, Promise<PreparedSpeech>>();
   private readonly controllers = new Set<AbortController>();
@@ -34,7 +34,7 @@ export class PhononOnnxReader implements TextReader {
 
   constructor(
     private readonly tts: PhononTTS,
-    config: PhononOnnxReaderConfig = {},
+    config: PhononReaderConfig = {},
   ) {
     this.audioContextFactory =
       config.audioContextFactory ?? ((sampleRate) => new AudioContext({ sampleRate }));

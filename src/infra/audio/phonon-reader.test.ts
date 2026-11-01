@@ -1,6 +1,6 @@
 import type { PhononTTS } from 'phonon-tts';
 import { describe, expect, it, vi } from 'vitest';
-import { PhononOnnxReader } from './phonon-onnx-reader';
+import { PhononReader } from './phonon-reader';
 
 function setup(autoEndPlayback = true) {
   const source = {
@@ -45,13 +45,13 @@ function setup(autoEndPlayback = true) {
     };
   });
   const tts = { sampleRate: 24_000, stream, dispose: vi.fn() } as unknown as PhononTTS;
-  const reader = new PhononOnnxReader(tts, {
+  const reader = new PhononReader(tts, {
     audioContextFactory: () => context as unknown as AudioContext,
   });
   return { reader, stream, streams, source, context, audioBuffer };
 }
 
-describe('PhononOnnxReader', () => {
+describe('PhononReader', () => {
   it('reuses prepared audio and applies rate, volume, and offset boundaries at playback', async () => {
     const { reader, stream, streams, source, context, audioBuffer } = setup();
     const schedule = vi.fn();

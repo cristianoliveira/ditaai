@@ -11,7 +11,7 @@ runtime notices ship under [`public/licenses/phonon-tts/`](../public/licenses/ph
 1. Open the DitaAi widget, choose **Settings → Voices**.
 2. Download **Phonon 31m English (Default)**. The download includes the shared
    config, tokenizer, q8 GGUF model (~61.5 MiB), and voice embedding (~244 KiB);
-   expect about 62 MB total.
+   expect about 62 MiB total (~65 MB decimal).
 3. Once installed, choose **Use voice**. DitaAi persists the selected voice.
 
 The first installation needs network access to Hugging Face. DitaAi verifies
@@ -46,3 +46,7 @@ applicable license and third-party notices in `licenses/phonon-tts/`.
 
 The runtime worker and WASM are bundled with the extension. Model assets are
 separate downloads and are stored in Cache Storage `phonon-tts-v1`.
+
+Phonon buffers the full synthesized segment before playback, so audio does not
+start until that segment finishes inference. Playback rate changes both speed
+and pitch; Phonon does not provide pitch-shift control in this integration.
