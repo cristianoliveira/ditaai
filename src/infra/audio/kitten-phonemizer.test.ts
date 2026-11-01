@@ -34,6 +34,31 @@ describe('textToKittenTokenIds', () => {
     expect(tokens.length).toBeGreaterThan(10);
   });
 
+  it('keeps words inside grouping punctuation while removing unsupported bracket tokens', async () => {
+    const phonemizer = vi.fn().mockResolvedValue(['rɛd ðɪs ʃɔɹt əsaɪd ænd kip goʊɪŋ']);
+
+    const tokens = await textToKittenTokenIds(
+      'Read this (short aside) and [keep] going.',
+      phonemizer,
+    );
+
+    expect(tokens[0]).toBe(0);
+    expect(tokens.slice(-2)).toEqual([10, 0]);
+    expect(tokens.length).toBeGreaterThan(2);
+    expect(phonemizer).toHaveBeenCalledOnce();
+    expect(phonemizer).toHaveBeenCalledWith('Read this short aside and keep going', 'en-us');
+  });
+
+  it('phonemizes common smart quotes, apostrophes, and dash variants', async () => {
+    const tokens = await textToKittenTokenIds(
+      'She said, “it’s fine”—and that’s true; really. A well–known phrase.',
+    );
+
+    expect(tokens[0]).toBe(0);
+    expect(tokens.slice(-2)).toEqual([10, 0]);
+    expect(tokens.length).toBeGreaterThan(10);
+  });
+
   it('returns no tokens for whitespace without calling the phonemizer', async () => {
     const phonemizer = vi.fn();
 

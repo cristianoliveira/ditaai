@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { KITTEN_VOICES } from '../../../src/domain/voices/catalog';
 import { sourceUrl } from '../../../src/domain/voices/voice';
 import { launchExtensionContext, testHarnessUrl } from '../../helpers/extension';
+import { type FixtureServer, startFixtureServer } from '../../helpers/fixture-server';
 import { ServiceWorkerRequester } from '../../requesters/service-worker';
 
 interface CachePageGlobals {
@@ -17,6 +18,15 @@ interface CachePageGlobals {
  * installer, then disables the network before offscreen synthesis.
  */
 test.describe('Kitten live model smoke', () => {
+  let server: FixtureServer;
+
+  test.beforeAll(async () => {
+    server = await startFixtureServer();
+  });
+  test.afterAll(async () => {
+    await server.close();
+  });
+
   test.skip(process.env.DITA_LIVE_KITTEN_SMOKE !== '1', 'requires explicit live model download');
   test.setTimeout(240_000);
 
@@ -40,6 +50,17 @@ test.describe('Kitten live model smoke', () => {
       await expect(kittenCard.getByRole('button', { name: '✓ Selected' })).toBeVisible({
         timeout: 180_000,
       });
+
+      const article = await harness.context.newPage();
+      const installedVoiceLogs: string[] = [];
+      const fallbackLogs: string[] = [];
+      article.on('console', (message) => {
+        const line = message.text();
+        if (!line.includes('[installed-voice] speak ')) return;
+        if (line.includes('"engine":"installed"')) installedVoiceLogs.push(line);
+        if (line.includes('"engine":"fallback"')) fallbackLogs.push(line);
+      });
+      await article.goto(`${server.base}/kitten-multi-paragraph.html`);
 
       const storedVoiceId = await voices.evaluate(async () => {
         const result = await chrome.storage.local.get('selectedVoiceId');
@@ -78,6 +99,30 @@ test.describe('Kitten live model smoke', () => {
           'Hello there. This is an offline Kitten Jasper voice test.',
         ]),
       ).resolves.toEqual({ ok: true });
+
+      const bellaCard = voices.locator('.voice-card').filter({ hasText: 'Kitten Bella' });
+      await bellaCard.getByRole('button', { name: 'Use voice' }).click();
+      await expect(bellaCard.getByRole('button', { name: '✓ Selected' })).toBeVisible();
+      await extensionPage.evaluate(async (fixtureUrl) => {
+        const tabs = await chrome.tabs.query({});
+        const tab = tabs.find((candidate) => candidate.url === fixtureUrl);
+        if (!tab?.id) throw new Error('Kitten fixture tab was not found');
+        await chrome.tabs.sendMessage(tab.id, {
+          dest: 'contentScript',
+          method: 'toggleWidget',
+          args: [],
+        });
+      }, `${server.base}/kitten-multi-paragraph.html`);
+      const playButton = article.locator('.dita-btn-play');
+      await expect(playButton).toHaveAttribute('aria-label', 'Play page audio');
+      await article.bringToFront();
+      await playButton.click();
+      await expect(playButton).toHaveAttribute('aria-label', 'Pause page audio');
+      await expect.poll(() => installedVoiceLogs.length, { timeout: 90_000 }).toBe(2);
+      expect(fallbackLogs).toEqual([]);
+      await expect(playButton).toHaveAttribute('aria-label', 'Play page audio', {
+        timeout: 90_000,
+      });
       expect(harness.errors).toEqual([]);
     } finally {
       await harness.close();

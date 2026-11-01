@@ -10,8 +10,20 @@ const TOKEN_BY_SYMBOL = new Map([...SYMBOLS].map((symbol, index) => [symbol, ind
 const PUNCTUATION = /(\s*[;:,.!?¡¿—…"«»""()[\]{}]+\s*)+/g;
 const TOKEN_GROUPS = /[\p{L}\p{N}_]+|[^\p{L}\p{N}_\s]/gu;
 const TERMINAL_PUNCTUATION = /[.!?,;:]$/;
+const GROUPING_PUNCTUATION = /[()[\]{}]/gu;
+const UNICODE_DASHES = /[\u2010-\u2015\u2212]/gu;
 
 export type Phonemize = (text: string, language?: string) => Promise<string[]>;
+
+function normalizeText(text: string): string {
+  return text
+    .replace(GROUPING_PUNCTUATION, ' ')
+    .replace(/[“”]/gu, '"')
+    .replace(/[‘’]/gu, "'")
+    .replace(UNICODE_DASHES, '—')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
 
 function splitPunctuation(text: string): Array<{ punctuation: boolean; text: string }> {
   const sections: Array<{ punctuation: boolean; text: string }> = [];
@@ -31,7 +43,7 @@ export async function textToKittenTokenIds(
   text: string,
   phonemizer: Phonemize = phonemize,
 ): Promise<number[]> {
-  const cleanText = text.trim();
+  const cleanText = normalizeText(text);
   if (!cleanText) return [];
 
   const normalizedText = TERMINAL_PUNCTUATION.test(cleanText) ? cleanText : `${cleanText}.`;
