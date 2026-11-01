@@ -8,7 +8,9 @@
 import { ENGINE_ASSETS, listVoices } from '../../domain/voices/catalog';
 import type { VoiceInstaller } from '../../domain/voices/installer';
 import type { InstalledVoice, Voice } from '../../domain/voices/voice';
-import { sourceUrl, voiceKey } from '../../domain/voices/voice';
+import { sourceUrl } from '../../domain/voices/voice';
+import { downloadToCache } from './download-to-cache';
+import { KITTEN_MODEL_GRAPH_BYTES, isVerifiedKittenModel } from './kitten-model';
 
 const CACHE_NAME = 'dita-voices';
 
@@ -45,11 +47,25 @@ export class CacheStorageVoiceInstaller implements VoiceInstaller {
       }
     }
 
-    // Aliases share one model artifact, so don't fetch it again for each speaker.
-    const cachedVoice = await cache.match(url);
-    const sizeBytes = cachedVoice
-      ? (await cachedVoice.clone().arrayBuffer()).byteLength
-      : await fetchAndCache(cache, url);
+    // Aliases share one model artifact; only reuse a complete verified download.
+    let cachedVoice = await cache.match(url);
+    if (voice.engine === 'kitten' && cachedVoice && !isVerifiedKittenModel(cachedVoice)) {
+      await cache.delete(url);
+      cachedVoice = undefined;
+    }
+    let sizeBytes: number;
+    if (cachedVoice) {
+      sizeBytes = (await cachedVoice.arrayBuffer()).byteLength;
+    } else if (voice.engine === 'kitten') {
+      await downloadToCache(url, undefined, KITTEN_MODEL_GRAPH_BYTES);
+      cachedVoice = await cache.match(url);
+      if (!cachedVoice || !isVerifiedKittenModel(cachedVoice)) {
+        throw new Error(`Downloaded Kitten model is not verified: ${url}`);
+      }
+      sizeBytes = (await cachedVoice.arrayBuffer()).byteLength;
+    } else {
+      sizeBytes = await fetchAndCache(cache, url);
+    }
 
     return {
       voice,
@@ -72,7 +88,9 @@ export class CacheStorageVoiceInstaller implements VoiceInstaller {
 
   async isInstalled(voice: Voice): Promise<boolean> {
     const cache = await openCache();
-    if (!(await cache.match(sourceUrl(voice.source)))) return false;
+    const voiceResponse = await cache.match(sourceUrl(voice.source));
+    if (!voiceResponse) return false;
+    if (voice.engine === 'kitten' && !isVerifiedKittenModel(voiceResponse)) return false;
     for (const asset of ENGINE_ASSETS[voice.engine]?.assets ?? []) {
       if (!(await cache.match(sourceUrl(asset.source)))) return false;
     }

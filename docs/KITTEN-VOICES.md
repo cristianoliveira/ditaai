@@ -11,3 +11,7 @@ Bella (female), Jasper (male), Luna (female), Bruno (male), Rosie (female), Hugo
 - Both Hugging Face model records identify the model artifacts as Apache-2.0. This is model-level metadata, not a claim about the separate KittenTTS software package or its dependencies. The app downloads the pinned model at runtime; it does not bundle model weights.
 
 License metadata is provenance supplied by the model publishers, not independent legal advice or a legal review of every artifact and dependency. Recheck the pinned model card and applicable notices before changing the model revision or redistributing model files.
+
+## Release clearance still required
+
+Kitten inference also depends on `phonemizer` 1.2.1, whose package describes itself as an eSpeak NG phonemizer. Its npm metadata declares Apache-2.0, but that does not by itself clear the license and notice obligations for the bundled eSpeak NG runtime/data or the complete dependency bundle shipped in the extension. Treat this as an open release-clearance item; verify the exact packaged assets and notices before external distribution.

@@ -55,7 +55,27 @@ test.describe('Kitten live model smoke', () => {
       const requester = new ServiceWorkerRequester(extensionPage);
       await expect(
         requester.send('speakWithInstalledVoice', [
-          'Hello there. This is an offline Kitten voice test.',
+          'Hello there. This is an offline Kitten Bella voice test.',
+        ]),
+      ).resolves.toEqual({ ok: true });
+
+      const jasper = KITTEN_VOICES.find((voice) => voice.id === 'kitten-jasper');
+      if (!jasper) throw new Error('Kitten Jasper is missing from the catalog');
+      await voices.goto(`chrome-extension://${harness.extensionId}/voices.html`);
+      const jasperCard = voices.locator('.voice-card').filter({ hasText: jasper.name });
+      await jasperCard.getByRole('button', { name: 'Use voice' }).click();
+      await expect(jasperCard.getByRole('button', { name: '✓ Selected' })).toBeVisible();
+      await expect
+        .poll(() =>
+          voices.evaluate(async () => {
+            const result = await chrome.storage.local.get('selectedVoiceId');
+            return result.selectedVoiceId;
+          }),
+        )
+        .toBe('kitten-jasper');
+      await expect(
+        requester.send('speakWithInstalledVoice', [
+          'Hello there. This is an offline Kitten Jasper voice test.',
         ]),
       ).resolves.toEqual({ ok: true });
       expect(harness.errors).toEqual([]);

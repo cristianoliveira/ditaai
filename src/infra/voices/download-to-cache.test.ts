@@ -51,6 +51,25 @@ describe('downloadToCache', () => {
     expect(onProgress).toHaveBeenLastCalledWith(100);
   });
 
+  it('rejects a truncated streamed download without caching it', async () => {
+    const cache = stubCache();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('short', { headers: { 'content-length': '10' } })),
+    );
+
+    await expect(downloadToCache(url)).rejects.toThrow('Incomplete download');
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unexpected asset size without caching it', async () => {
+    const cache = stubCache();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('short')));
+
+    await expect(downloadToCache(url, undefined, 10)).rejects.toThrow('expected 10 bytes');
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
   it('rejects failed downloads without opening the cache', async () => {
     const open = vi.fn();
     vi.stubGlobal('caches', { open });

@@ -1,6 +1,7 @@
 import { unzipSync } from 'fflate';
-import { KITTEN_ENGINE_ASSETS, KITTEN_VOICES } from '../../domain/voices/catalog';
+import { KITTEN_ENGINE_ASSETS } from '../../domain/voices/catalog';
 import { sourceUrl } from '../../domain/voices/voice';
+import { isKittenModelCached, isVerifiedKittenModel, kittenModelUrl } from '../voices/kitten-model';
 
 const CACHE_NAME = 'dita-voices';
 
@@ -25,9 +26,7 @@ export interface KittenAssets {
 }
 
 function voiceSourceUrl(): string {
-  const voice = KITTEN_VOICES[0];
-  if (!voice) throw new Error('Kitten voice catalog is empty');
-  return sourceUrl(voice.source);
+  return kittenModelUrl();
 }
 
 function readNpy(bytes: Uint8Array): KittenVoiceEmbedding {
@@ -93,8 +92,9 @@ export async function loadKittenAssets(cache: Cache): Promise<KittenAssets> {
   }
 
   const graphResponse = await cache.match(voiceSourceUrl());
-  if (!graphResponse)
-    throw new Error('Kitten model not installed. Download it from the Dita voices page.');
+  if (!graphResponse || !isVerifiedKittenModel(graphResponse)) {
+    throw new Error('Kitten model is incomplete. Download it again from the Dita voices page.');
+  }
   const configBytes = buffers.get('kitten_config.json');
   const voiceBytes = buffers.get('voices.npz');
   if (!configBytes || !voiceBytes) throw new Error('Kitten runtime assets are incomplete');
@@ -111,7 +111,7 @@ export async function areKittenAssetsInstalled(cache: Cache): Promise<boolean> {
   for (const asset of KITTEN_ENGINE_ASSETS.assets) {
     if (!(await cache.match(sourceUrl(asset.source)))) return false;
   }
-  return (await cache.match(voiceSourceUrl())) !== undefined;
+  return isKittenModelCached(cache);
 }
 
 export async function openVoiceCache(): Promise<Cache> {

@@ -21,6 +21,7 @@ import { ChromeSynthesisQualityStorage } from '../../infra/chrome/synthesis-qual
 import { ChromeVoiceRotationStorage } from '../../infra/chrome/voice-rotation-storage';
 import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
+import { KITTEN_MODEL_GRAPH_BYTES, isKittenModelCached } from '../../infra/voices/kitten-model';
 import { logger } from '../../lib/logger';
 import { overallDownloadPercentage } from './download-progress';
 import { ShortcutsPanel } from './shortcuts-panel';
@@ -131,7 +132,9 @@ async function refresh(): Promise<void> {
   for (const voice of VOICES) {
     const url = sourceUrl(voice.source);
     const engineReady = engineStates.get(voice.engine) ?? false;
-    const installed = engineReady && (await isInCache(url));
+    const voiceCached =
+      voice.engine === 'kitten' ? await isKittenModelCached(_cache) : await isInCache(url);
+    const installed = engineReady && voiceCached;
     const current = state.get(voice.id);
     state.set(voice.id, {
       voiceId: voice.id,
@@ -260,22 +263,32 @@ async function downloadVoice(voiceId: string): Promise<void> {
     }
 
     const voiceUrl = sourceUrl(voice.source);
-    const downloadUrls = (await isInCache(voiceUrl))
-      ? missingEngineUrls
-      : [...missingEngineUrls, voiceUrl];
+    let voiceIsCached = await isInCache(voiceUrl);
+    if (voice.engine === 'kitten') {
+      const cache = await openCache();
+      voiceIsCached = await isKittenModelCached(cache);
+      if (!voiceIsCached && (await cache.match(voiceUrl))) await cache.delete(voiceUrl);
+    }
+    const downloadUrls = voiceIsCached ? missingEngineUrls : [...missingEngineUrls, voiceUrl];
     for (const [completedFiles, url] of downloadUrls.entries()) {
-      await downloadToCache(url, (filePercentage) => {
-        const progress = overallDownloadPercentage(
-          completedFiles,
-          filePercentage,
-          downloadUrls.length,
-        );
-        for (const affectedVoice of affectedVoices) {
-          const currentState = state.get(affectedVoice.id);
-          if (currentState) state.set(affectedVoice.id, { ...currentState, progress });
-        }
-        renderVoices();
-      });
+      const expectedByteLength =
+        voice.engine === 'kitten' && url === voiceUrl ? KITTEN_MODEL_GRAPH_BYTES : undefined;
+      await downloadToCache(
+        url,
+        (filePercentage) => {
+          const progress = overallDownloadPercentage(
+            completedFiles,
+            filePercentage,
+            downloadUrls.length,
+          );
+          for (const affectedVoice of affectedVoices) {
+            const currentState = state.get(affectedVoice.id);
+            if (currentState) state.set(affectedVoice.id, { ...currentState, progress });
+          }
+          renderVoices();
+        },
+        expectedByteLength,
+      );
     }
 
     for (const affectedVoice of affectedVoices) {
