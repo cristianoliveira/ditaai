@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   ENGINE_ASSETS,
+  KITTEN_ENGINE_ASSETS,
+  KITTEN_VOICES,
   SUPERTONIC_ENGINE_ASSETS,
   SUPERTONIC_VOICES,
   findVoice,
@@ -61,11 +63,15 @@ describe('catalog', () => {
 
   describe('listVoices', () => {
     it('lists all voices when no engine filter', () => {
-      expect(listVoices()).toHaveLength(10);
+      expect(listVoices()).toHaveLength(11);
     });
 
     it('filters by engine', () => {
       expect(listVoices('supertonic')).toHaveLength(10);
+    });
+
+    it('includes the Kitten voice for the Kitten engine', () => {
+      expect(listVoices('kitten')).toEqual(KITTEN_VOICES);
     });
 
     it('returns empty for unknown engine', () => {
@@ -73,7 +79,36 @@ describe('catalog', () => {
     });
   });
 
+  describe('KITTEN_VOICES', () => {
+    it('exposes one English female voice with a pinned model source', () => {
+      expect(KITTEN_VOICES).toHaveLength(1);
+      expect(KITTEN_VOICES[0]).toMatchObject({
+        id: 'kitten-bella',
+        name: 'Kitten Bella',
+        gender: 'female',
+        engine: 'kitten',
+        language: 'en',
+        source: {
+          repo: 'onnx-community/KittenTTS-Nano-v0.8-ONNX',
+          revision: expect.any(String),
+          path: 'onnx/model.onnx',
+        },
+      });
+    });
+
+    it('lists the config and voice archive as shared runtime assets', () => {
+      expect(KITTEN_ENGINE_ASSETS.assets.map((asset) => asset.name)).toEqual([
+        'kitten_config.json',
+        'voices.npz',
+      ]);
+    });
+  });
+
   describe('findVoice', () => {
+    it('finds Kitten Bella by id and engine', () => {
+      expect(findVoice('kitten-bella', 'kitten')).toEqual(KITTEN_VOICES[0]);
+    });
+
     it('finds M1 by id and engine', () => {
       const v = findVoice('M1', 'supertonic');
       if (!v) throw new Error('M1 not found');

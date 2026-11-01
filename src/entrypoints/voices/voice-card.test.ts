@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SUPERTONIC_VOICES } from '../../domain/voices/catalog';
+import { KITTEN_VOICES, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
 import { renderVoiceCard } from './voice-card';
 
 const voice = SUPERTONIC_VOICES[0];
@@ -39,6 +39,21 @@ describe('renderVoiceCard', () => {
     expect(card.classList.contains('selected')).toBe(true);
     expect(card.querySelector<HTMLButtonElement>('button')?.textContent).toBe('✓ Selected');
     expect(card.querySelector<HTMLButtonElement>('button')?.disabled).toBe(true);
+  });
+
+  it('labels the Kitten engine and model size', () => {
+    const kitten = KITTEN_VOICES[0];
+    if (!kitten) throw new Error('Expected a Kitten voice');
+    const card = renderVoiceCard(
+      kitten,
+      { voiceId: kitten.id, installed: false, downloading: false, progress: 0 },
+      false,
+      vi.fn(),
+      vi.fn(),
+    );
+
+    expect(card.querySelector('.meta')?.textContent).toBe('Kitten · en');
+    expect(card.querySelector('.size')?.textContent).toBe('~60 MB model');
   });
 
   it('only offers download for a voice that is not installed', () => {

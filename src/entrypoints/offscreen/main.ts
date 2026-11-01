@@ -1,5 +1,5 @@
 import type { SpeakOptions } from '../../domain/audio/text-reader';
-import { SUPERTONIC_VOICES } from '../../domain/voices/catalog';
+import { KITTEN_VOICES, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
 import { PageVoiceRotation } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import {
@@ -8,6 +8,8 @@ import {
   loadVoiceStyleBuffer,
   openCache,
 } from '../../infra/audio/cache-loader';
+import { areKittenAssetsInstalled, loadKittenAssets } from '../../infra/audio/kitten-cache';
+import { KittenOnnxReader } from '../../infra/audio/kitten-onnx-reader';
 import { isFatalOnnxError } from '../../infra/audio/onnx-errors';
 import { configureOnnxRuntime } from '../../infra/audio/onnx-runtime';
 import { SupertonicOnnxReader } from '../../infra/audio/supertonic-onnx-reader';
@@ -15,9 +17,11 @@ import { logger } from '../../lib/logger';
 
 configureOnnxRuntime((path) => chrome.runtime.getURL(path));
 
-let reader: SupertonicOnnxReader | null = null;
+type InstalledReader = SupertonicOnnxReader | KittenOnnxReader;
+
+let reader: InstalledReader | null = null;
 let readerVoiceId: string | null = null;
-let readerInitialization: Promise<SupertonicOnnxReader> | null = null;
+let readerInitialization: Promise<InstalledReader> | null = null;
 const pageVoiceRotations = new Map<string, PageVoiceRotation>();
 const PAGE_VISIT_VOICES_KEY = 'pageVisitVoices';
 
@@ -31,6 +35,11 @@ async function findInstalledVoiceId(
   pageVisitId: string,
 ): Promise<string | null> {
   const cache = await openCache();
+  const kittenVoice = KITTEN_VOICES.find((voice) => voice.id === selectedVoiceId);
+  if (kittenVoice) {
+    return (await areKittenAssetsInstalled(cache)) ? kittenVoice.id : null;
+  }
+
   const installedVoiceIds: string[] = [];
   for (const voice of SUPERTONIC_VOICES) {
     if (await cache.match(sourceUrl(voice.source))) installedVoiceIds.push(voice.id);
@@ -67,8 +76,11 @@ async function isAvailable(
   rotateVoices: boolean,
   pageVisitId: string,
 ): Promise<boolean> {
-  const modelAssetsInstalled = await areModelAssetsInstalled();
   const voiceId = await findInstalledVoiceId(selectedVoiceId, rotateVoices, pageVisitId);
+  const cache = await openCache();
+  const modelAssetsInstalled = KITTEN_VOICES.some((voice) => voice.id === voiceId)
+    ? await areKittenAssetsInstalled(cache)
+    : await areModelAssetsInstalled();
   log('availability:resolved', { modelAssetsInstalled, voiceId });
   return modelAssetsInstalled && voiceId !== null;
 }
@@ -77,9 +89,12 @@ async function getReader(
   selectedVoiceId: string | null,
   rotateVoices: boolean,
   pageVisitId: string,
-): Promise<SupertonicOnnxReader> {
+): Promise<InstalledReader> {
   const voiceId = await findInstalledVoiceId(selectedVoiceId, rotateVoices, pageVisitId);
-  if (!voiceId || !(await areModelAssetsInstalled())) {
+  if (!voiceId) throw new Error('No installed voice is ready');
+  const isKitten = KITTEN_VOICES.some((voice) => voice.id === voiceId);
+  const cache = await openCache();
+  if (isKitten ? !(await areKittenAssetsInstalled(cache)) : !(await areModelAssetsInstalled())) {
     throw new Error('No installed voice is ready');
   }
   if (reader && readerVoiceId === voiceId) {
@@ -96,7 +111,7 @@ async function getReader(
   reader = null;
   readerVoiceId = null;
   log('reader:initialize', { voiceId });
-  readerInitialization = createReader(voiceId).finally(() => {
+  readerInitialization = createReader(voiceId, isKitten).finally(() => {
     readerInitialization = null;
   });
   reader = await readerInitialization;
@@ -105,9 +120,18 @@ async function getReader(
   return reader;
 }
 
-async function createReader(voiceId: string): Promise<SupertonicOnnxReader> {
-  log('cache:load', { voiceId });
+async function createReader(voiceId: string, isKitten: boolean): Promise<InstalledReader> {
+  log('cache:load', { voiceId, engine: isKitten ? 'kitten' : 'supertonic' });
   const cache = await openCache();
+  if (isKitten) {
+    const assets = await loadKittenAssets(cache);
+    log('cache:loaded', {
+      modelBytes: assets.model.byteLength,
+      voiceCount: Object.keys(assets.voices).length,
+    });
+    return new KittenOnnxReader({ assets, voiceAlias: 'Bella' });
+  }
+
   const [modelAssets, voiceStyle] = await Promise.all([
     loadModelAssets(cache),
     loadVoiceStyleBuffer(cache, voiceId),

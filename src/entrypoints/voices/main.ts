@@ -9,7 +9,7 @@ import { AUDIO_BUFFER_OPTIONS, DEFAULT_AUDIO_BUFFER_SECONDS } from '../../domain
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, languageLabel } from '../../domain/audio/languages';
 import { DEFAULT_SYNTHESIS_QUALITY, SYNTHESIS_QUALITY_OPTIONS } from '../../domain/audio/quality';
 import { DEFAULT_SHORTCUTS } from '../../domain/shortcuts/shortcuts';
-import { SUPERTONIC_ENGINE_ASSETS, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
+import { ENGINE_ASSETS, SUPERTONIC_VOICES, listVoices } from '../../domain/voices/catalog';
 import { resolveSelectedVoiceId } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import { ChromeAudioBufferStorage } from '../../infra/chrome/audio-buffer-storage';
@@ -27,6 +27,7 @@ import { ShortcutsPanel } from './shortcuts-panel';
 import { type VoiceCardState, renderVoiceCard } from './voice-card';
 
 const CACHE_NAME = 'dita-voices';
+const VOICES = listVoices();
 
 // ── DOM refs ─────────────────────────────────────────────────────────
 
@@ -109,26 +110,25 @@ async function refresh(): Promise<void> {
   const _cache = await openCache();
 
   // Check engine assets
-  let engineReady = true;
-  for (const asset of SUPERTONIC_ENGINE_ASSETS.assets) {
-    const url = sourceUrl(asset.source);
-    if (!(await isInCache(url))) {
-      engineReady = false;
-      break;
+  const engineStates = new Map<string, boolean>();
+  for (const [engine, assets] of Object.entries(ENGINE_ASSETS)) {
+    let ready = true;
+    for (const asset of assets.assets) {
+      if (!(await isInCache(sourceUrl(asset.source)))) {
+        ready = false;
+        break;
+      }
     }
+    engineStates.set(engine, ready);
   }
-
-  if (engineReady) {
-    engineStatus.className = 'ready';
-    engineStatus.textContent = '✅ Engine ready — all model files installed.';
-  } else {
-    engineStatus.className = '';
-    engineStatus.textContent =
-      '⬇️ Engine models not installed. Download any voice to install automatically.';
-  }
+  const readyEngines = [...engineStates].filter(([, ready]) => ready).map(([engine]) => engine);
+  engineStatus.className = readyEngines.length > 0 ? 'ready' : '';
+  engineStatus.textContent = readyEngines.length
+    ? `✅ Ready: ${readyEngines.join(', ')}.`
+    : '⬇️ Engine models not installed. Download a voice to install automatically.';
 
   // Check voice states
-  for (const voice of SUPERTONIC_VOICES) {
+  for (const voice of VOICES) {
     const url = sourceUrl(voice.source);
     const installed = await isInCache(url);
     const current = state.get(voice.id);
@@ -160,7 +160,7 @@ async function refresh(): Promise<void> {
     defaultLanguage: DEFAULT_LANGUAGE,
     defaultAudioBufferSeconds: DEFAULT_AUDIO_BUFFER_SECONDS,
   });
-  const installedVoiceIds = SUPERTONIC_VOICES.filter((voice) => state.get(voice.id)?.installed).map(
+  const installedVoiceIds = VOICES.filter((voice) => state.get(voice.id)?.installed).map(
     (voice) => voice.id,
   );
   selectedVoiceId = resolveSelectedVoiceId(storedVoiceId, installedVoiceIds);
@@ -179,7 +179,7 @@ async function refresh(): Promise<void> {
 
 function updateStatusBar(): void {
   const installed = [...state.values()].filter((s) => s.installed).length;
-  const total = SUPERTONIC_VOICES.length;
+  const total = VOICES.length;
   const downloading = [...state.values()].filter((s) => s.downloading).length;
   const engineReady = engineStatus.classList.contains('ready');
 
@@ -200,7 +200,7 @@ function updateStatusBar(): void {
 function renderVoices(): void {
   voicesGrid.innerHTML = '';
 
-  for (const voice of SUPERTONIC_VOICES) {
+  for (const voice of VOICES) {
     const s = state.get(voice.id);
     if (!s) continue;
 
@@ -237,7 +237,7 @@ function selectVoice(voiceId: string): void {
 }
 
 async function downloadVoice(voiceId: string): Promise<void> {
-  const voice = SUPERTONIC_VOICES.find((v) => v.id === voiceId);
+  const voice = VOICES.find((v) => v.id === voiceId);
   if (!voice) return;
 
   // Mark as downloading
@@ -248,7 +248,7 @@ async function downloadVoice(voiceId: string): Promise<void> {
 
   try {
     const missingEngineUrls: string[] = [];
-    for (const asset of SUPERTONIC_ENGINE_ASSETS.assets) {
+    for (const asset of ENGINE_ASSETS[voice.engine]?.assets ?? []) {
       const assetUrl = sourceUrl(asset.source);
       if (!(await isInCache(assetUrl))) missingEngineUrls.push(assetUrl);
     }
@@ -282,7 +282,7 @@ async function downloadVoice(voiceId: string): Promise<void> {
 }
 
 async function downloadAll(): Promise<void> {
-  for (const voice of SUPERTONIC_VOICES) {
+  for (const voice of VOICES) {
     const s = state.get(voice.id);
     if (s && !s.installed) {
       await downloadVoice(voice.id);

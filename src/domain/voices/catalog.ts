@@ -59,14 +59,50 @@ export const SUPERTONIC_ENGINE_ASSETS: EngineAssets = {
   })),
 };
 
+const KITTEN_REPO = 'onnx-community/KittenTTS-Nano-v0.8-ONNX';
+const KITTEN_REVISION = '6078af30aab083436023d04ba845aedd9d1a9206';
+
+/** Single English voice enabled for the first Kitten release. */
+export const KITTEN_VOICES: Voice[] = [
+  {
+    id: 'kitten-bella',
+    name: 'Kitten Bella',
+    gender: 'female',
+    engine: 'kitten',
+    language: 'en',
+    source: {
+      type: 'huggingface',
+      repo: KITTEN_REPO,
+      revision: KITTEN_REVISION,
+      path: 'onnx/model.onnx',
+    },
+  },
+];
+
+/** Shared config + voice embeddings for the pinned Kitten Nano export. */
+export const KITTEN_ENGINE_ASSETS: EngineAssets = {
+  engine: 'kitten',
+  assets: ['kitten_config.json', 'voices.npz'].map((name) => ({
+    name,
+    source: {
+      type: 'huggingface',
+      repo: KITTEN_REPO,
+      revision: KITTEN_REVISION,
+      path: name,
+    },
+  })),
+};
+
 /** All known voice catalogs, keyed by engine. */
 export const VOICE_CATALOGS: Record<string, Voice[]> = {
   supertonic: SUPERTONIC_VOICES,
+  kitten: KITTEN_VOICES,
 };
 
 /** All known engine assets, keyed by engine. */
 export const ENGINE_ASSETS: Record<string, EngineAssets> = {
   supertonic: SUPERTONIC_ENGINE_ASSETS,
+  kitten: KITTEN_ENGINE_ASSETS,
 };
 
 export function listVoices(engine?: string): Voice[] {
