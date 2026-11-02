@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { KITTEN_VOICES, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
+import { KITTEN_VOICES, PHONON_VOICES, SUPERTONIC_VOICES } from '../../domain/voices/catalog';
 import { renderVoiceCard } from './voice-card';
 
 const voice = SUPERTONIC_VOICES[0];
@@ -54,6 +54,22 @@ describe('renderVoiceCard', () => {
 
     expect(card.querySelector('.meta')?.textContent).toBe('Kitten · en');
     expect(card.querySelector('.size')?.textContent).toBe('~60 MB model');
+  });
+
+  it('labels the Phonon model without implying a binary voice gender', () => {
+    const phonon = PHONON_VOICES[0];
+    if (!phonon) throw new Error('Expected the Phonon default voice');
+    const card = renderVoiceCard(
+      phonon,
+      { voiceId: phonon.id, installed: false, downloading: false, progress: 0 },
+      false,
+      vi.fn(),
+      vi.fn(),
+    );
+
+    expect(card.querySelector('.name')?.textContent).toBe(phonon.name);
+    expect(card.querySelector('.meta')?.textContent).toBe('Phonon · en');
+    expect(card.querySelector('.size')?.textContent).toBe('~62 MiB model');
   });
 
   it('only offers download for a voice that is not installed', () => {

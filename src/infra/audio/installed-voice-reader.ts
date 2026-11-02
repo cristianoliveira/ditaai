@@ -17,6 +17,7 @@ export class InstalledVoiceReader implements TextReader {
   /** Latched true after a fatal ONNX/WASM error: the runtime is unrecoverable
    * for this content-script lifetime, so stop probing it every segment. */
   private poisoned = false;
+  private operationId = 0;
 
   constructor(
     private readonly installedReader: AvailableTextReader,
@@ -60,13 +61,16 @@ export class InstalledVoiceReader implements TextReader {
   }
 
   async speak(text: string, options?: SpeakOptions): Promise<void> {
+    const operationId = ++this.operationId;
     this.clearBoundarySchedule();
     this.boundaryCallback = options?.onBoundary;
 
     if (!this.poisoned) {
       try {
         const prepared = this.preparedInstalledSpeech.delete(this.preparationKey(text, options));
-        if (prepared || (await this.installedReader.isAvailable())) {
+        const available = prepared || (await this.installedReader.isAvailable());
+        if (operationId !== this.operationId) return;
+        if (available) {
           this.activeReader = this.installedReader;
           logger.info(
             `[installed-voice] speak ${JSON.stringify({
@@ -81,10 +85,11 @@ export class InstalledVoiceReader implements TextReader {
           // Strip onBoundary — it can't cross chrome.runtime.sendMessage.
           // The installed reader will use the boundary listener above instead.
           await this.installedReader.speak(text, this.serializableOptions(options));
-          this.boundaryCallback = undefined;
+          if (operationId === this.operationId) this.boundaryCallback = undefined;
           return;
         }
       } catch (error) {
+        if (operationId !== this.operationId) return;
         // A fatal WASM trap corrupts the ONNX runtime for the whole offscreen
         // document. The service worker already attempted a document recreation
         // + retry before this throw surfaced, so a fatal error here means the
@@ -101,6 +106,7 @@ export class InstalledVoiceReader implements TextReader {
       }
     }
 
+    if (operationId !== this.operationId) return;
     this.boundaryCallback = undefined;
     this.activeReader = this.fallbackReader;
     logger.info(
@@ -170,6 +176,7 @@ export class InstalledVoiceReader implements TextReader {
   }
 
   stop(): void {
+    this.operationId++;
     this.clearBoundarySchedule();
     this.boundaryCallback = undefined;
     this.activeReader.stop();

@@ -128,6 +128,52 @@ describe('InstalledVoiceReader', () => {
     expect(fallback.speak).toHaveBeenCalledWith('hello', undefined);
   });
 
+  it('does not fall back to browser speech when stop aborts installed synthesis', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    let rejectSpeech!: (error: DOMException) => void;
+    vi.mocked(installed.speak).mockReturnValueOnce(
+      new Promise<void>((_resolve, reject) => {
+        rejectSpeech = reject;
+      }),
+    );
+    const fallback = reader();
+    const subject = new InstalledVoiceReader(installed, fallback);
+
+    const speaking = subject.speak('first paragraph');
+    await vi.waitFor(() => expect(installed.speak).toHaveBeenCalledOnce());
+    subject.stop();
+    rejectSpeech(new DOMException('cancelled', 'AbortError'));
+
+    await expect(speaking).resolves.toBeUndefined();
+    expect(fallback.speak).not.toHaveBeenCalled();
+  });
+
+  it('does not let an aborted segment fall back after a seek starts the next segment', async () => {
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
+    const installed = installedReader(true);
+    let rejectFirstSpeech!: (error: DOMException) => void;
+    vi.mocked(installed.speak).mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectFirstSpeech = reject;
+        }),
+    );
+    const fallback = reader();
+    const subject = new InstalledVoiceReader(installed, fallback);
+
+    const first = subject.speak('first paragraph');
+    await vi.waitFor(() => expect(installed.speak).toHaveBeenCalledOnce());
+    subject.stop();
+    const next = subject.speak('second paragraph');
+    await next;
+    rejectFirstSpeech(new DOMException('cancelled', 'AbortError'));
+
+    await expect(first).resolves.toBeUndefined();
+    expect(installed.speak).toHaveBeenCalledTimes(2);
+    expect(fallback.speak).not.toHaveBeenCalled();
+  });
+
   it('latches to fallback after a fatal installed-voice error so later segments skip the dead runtime', async () => {
     vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn() } } });
     const installed = installedReader(true);

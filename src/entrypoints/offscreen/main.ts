@@ -1,5 +1,10 @@
 import type { SpeakOptions } from '../../domain/audio/text-reader';
-import { KITTEN_VOICES, SUPERTONIC_VOICES, kittenVoiceAlias } from '../../domain/voices/catalog';
+import {
+  KITTEN_VOICES,
+  PHONON_VOICES,
+  SUPERTONIC_VOICES,
+  kittenVoiceAlias,
+} from '../../domain/voices/catalog';
 import { PageVoiceRotation } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
 import {
@@ -12,12 +17,15 @@ import { areKittenAssetsInstalled, loadKittenAssets } from '../../infra/audio/ki
 import { KittenOnnxReader } from '../../infra/audio/kitten-onnx-reader';
 import { isFatalOnnxError } from '../../infra/audio/onnx-errors';
 import { configureOnnxRuntime } from '../../infra/audio/onnx-runtime';
+import { PhononReader } from '../../infra/audio/phonon-reader';
+import { loadPhononTts } from '../../infra/audio/phonon-runtime';
 import { SupertonicOnnxReader } from '../../infra/audio/supertonic-onnx-reader';
+import { PHONON_CACHE_NAME, arePhononAssetsInstalled } from '../../infra/voices/phonon-model';
 import { logger } from '../../lib/logger';
 
 configureOnnxRuntime((path) => chrome.runtime.getURL(path));
 
-type InstalledReader = SupertonicOnnxReader | KittenOnnxReader;
+type InstalledReader = SupertonicOnnxReader | KittenOnnxReader | PhononReader;
 
 let reader: InstalledReader | null = null;
 let readerVoiceId: string | null = null;
@@ -41,6 +49,10 @@ async function findInstalledVoiceId(
   }
   if (await areKittenAssetsInstalled(cache)) {
     installedVoiceIds.push(...KITTEN_VOICES.map((voice) => voice.id));
+  }
+  const phononCache = await caches.open(PHONON_CACHE_NAME);
+  if (await arePhononAssetsInstalled(phononCache)) {
+    installedVoiceIds.push(...PHONON_VOICES.map((voice) => voice.id));
   }
   const persistedVoiceId = rotateVoices ? await loadPageVisitVoice(pageVisitId) : null;
   if (persistedVoiceId && installedVoiceIds.includes(persistedVoiceId)) return persistedVoiceId;
@@ -76,9 +88,11 @@ async function isAvailable(
 ): Promise<boolean> {
   const voiceId = await findInstalledVoiceId(selectedVoiceId, rotateVoices, pageVisitId);
   const cache = await openCache();
-  const modelAssetsInstalled = KITTEN_VOICES.some((voice) => voice.id === voiceId)
-    ? await areKittenAssetsInstalled(cache)
-    : await areModelAssetsInstalled();
+  const modelAssetsInstalled = PHONON_VOICES.some((voice) => voice.id === voiceId)
+    ? await arePhononAssetsInstalled(await caches.open(PHONON_CACHE_NAME))
+    : KITTEN_VOICES.some((voice) => voice.id === voiceId)
+      ? await areKittenAssetsInstalled(cache)
+      : await areModelAssetsInstalled();
   log('availability:resolved', { modelAssetsInstalled, voiceId });
   return modelAssetsInstalled && voiceId !== null;
 }
@@ -91,10 +105,14 @@ async function getReader(
   const voiceId = await findInstalledVoiceId(selectedVoiceId, rotateVoices, pageVisitId);
   if (!voiceId) throw new Error('No installed voice is ready');
   const isKitten = KITTEN_VOICES.some((voice) => voice.id === voiceId);
+  const isPhonon = PHONON_VOICES.some((voice) => voice.id === voiceId);
   const cache = await openCache();
-  if (isKitten ? !(await areKittenAssetsInstalled(cache)) : !(await areModelAssetsInstalled())) {
-    throw new Error('No installed voice is ready');
-  }
+  const assetsInstalled = isPhonon
+    ? await arePhononAssetsInstalled(await caches.open(PHONON_CACHE_NAME))
+    : isKitten
+      ? await areKittenAssetsInstalled(cache)
+      : await areModelAssetsInstalled();
+  if (!assetsInstalled) throw new Error('No installed voice is ready');
   if (reader && readerVoiceId === voiceId) {
     log('reader:reuse', { voiceId });
     return reader;
@@ -106,10 +124,11 @@ async function getReader(
   }
 
   reader?.stop();
+  if (reader instanceof PhononReader) reader.dispose();
   reader = null;
   readerVoiceId = null;
   log('reader:initialize', { voiceId });
-  readerInitialization = createReader(voiceId, isKitten).finally(() => {
+  readerInitialization = createReader(voiceId, isKitten, isPhonon).finally(() => {
     readerInitialization = null;
   });
   reader = await readerInitialization;
@@ -118,8 +137,14 @@ async function getReader(
   return reader;
 }
 
-async function createReader(voiceId: string, isKitten: boolean): Promise<InstalledReader> {
-  log('cache:load', { voiceId, engine: isKitten ? 'kitten' : 'supertonic' });
+async function createReader(
+  voiceId: string,
+  isKitten: boolean,
+  isPhonon: boolean,
+): Promise<InstalledReader> {
+  const engine = isPhonon ? 'phonon' : isKitten ? 'kitten' : 'supertonic';
+  log('cache:load', { voiceId, engine });
+  if (isPhonon) return new PhononReader(await loadPhononTts());
   const cache = await openCache();
   if (isKitten) {
     const assets = await loadKittenAssets(cache);
