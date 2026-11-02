@@ -2,14 +2,15 @@ import { verifiedDownloadHeaders } from './kitten-model';
 
 const CACHE_NAME = 'dita-voices';
 
-async function openCache(): Promise<Cache> {
-  return await caches.open(CACHE_NAME);
+async function openCache(cacheName = CACHE_NAME): Promise<Cache> {
+  return await caches.open(cacheName);
 }
 
 export async function downloadToCache(
   url: string,
   onProgress?: (percentage: number) => void,
   expectedByteLength?: number,
+  cacheName = CACHE_NAME,
 ): Promise<void> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Download failed: ${response.status} ${url}`);
@@ -18,7 +19,7 @@ export async function downloadToCache(
   if (!response.body || !contentLength) {
     const buffer = await response.arrayBuffer();
     assertCompleteDownload(url, buffer.byteLength, expectedByteLength);
-    const cache = await openCache();
+    const cache = await openCache(cacheName);
     await cache.put(
       url,
       new Response(buffer, {
@@ -62,7 +63,7 @@ export async function downloadToCache(
     headers: verifiedDownloadHeaders(response.headers.get('content-type'), expectedByteLength),
   });
 
-  const cache = await openCache();
+  const cache = await openCache(cacheName);
   await cache.put(url, cachedResponse);
   onProgress?.(100);
 }

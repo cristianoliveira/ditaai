@@ -24,7 +24,7 @@ export function verifiedDownloadHeaders(
   expectedByteLength?: number,
 ): Headers {
   const headers = new Headers({ 'content-type': contentType ?? 'application/octet-stream' });
-  if (expectedByteLength === KITTEN_MODEL_GRAPH_BYTES) {
+  if (expectedByteLength !== undefined) {
     headers.set(MODEL_SIZE_HEADER, String(expectedByteLength));
   }
   return headers;

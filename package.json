@@ -1,6 +1,6 @@
 {
   "name": "ditaai",
-  "version": "0.3.0-cef7558-1793533966",
+  "version": "0.3.0-8cd37b0-1793603292",
   "private": true,
   "description": "Turn web pages into private, local audio",
   "type": "module",
@@ -40,6 +40,7 @@
   "dependencies": {
     "fflate": "^0.8.3",
     "onnxruntime-web": "^1.27.0",
-    "phonemizer": "^1.2.1"
+    "phonemizer": "^1.2.1",
+    "phonon-tts": "0.6.0"
   }
 }

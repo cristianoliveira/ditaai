@@ -15,8 +15,9 @@ experience. A user opens DitaAi, presses play, and listens instead of reading.
   back to generic application containers when a page does not use semantic
   HTML. The user can select a narrower reading scope when automatic extraction
   is wrong.
-- **Private by default.** Narration runs locally with an installed Supertonic
-  voice or the browser's speech engine. Page text is not sent to a DitaAi server.
+- **Private by default.** Narration runs locally with an installed Supertonic,
+  Kitten, or Phonon voice, or the browser's speech engine. Page text is not sent
+  to a DitaAi server.
 - **Keep place visible.** Paragraph and word highlighting connect narration to
   its source on the page.
 - **Accessible controls.** Every playback action has a clear assistive label.

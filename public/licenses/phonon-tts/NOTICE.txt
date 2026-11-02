@@ -1,0 +1,8 @@
+Phonon 31m English model
+
+Repository: https://huggingface.co/gradium/phonon-31m-en
+Revision: 8c64b55ec301728e2d1695bfea87a08a267d0c2d
+Model license: Apache-2.0
+Runtime: phonon-tts 0.6.0 (MIT OR Apache-2.0)
+
+The Phonon 31m English model and the phonon-tts runtime are distributed separately. See the upstream repository and runtime license files for complete terms.

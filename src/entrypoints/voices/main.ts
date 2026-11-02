@@ -22,6 +22,11 @@ import { ChromeVoiceRotationStorage } from '../../infra/chrome/voice-rotation-st
 import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-storage';
 import { downloadToCache } from '../../infra/voices/download-to-cache';
 import { KITTEN_MODEL_GRAPH_BYTES, isKittenModelCached } from '../../infra/voices/kitten-model';
+import {
+  PHONON_CACHE_NAME,
+  isVerifiedPhononAsset,
+  phononAssetByteLength,
+} from '../../infra/voices/phonon-model';
 import { logger } from '../../lib/logger';
 import { overallDownloadPercentage } from './download-progress';
 import { ShortcutsPanel } from './shortcuts-panel';
@@ -43,13 +48,18 @@ const audioBufferSelect = document.getElementById('audio-buffer-seconds') as HTM
 
 // ── Cache helpers ────────────────────────────────────────────────────
 
-async function openCache(): Promise<Cache> {
-  return await caches.open(CACHE_NAME);
+function cacheNameFor(engine: string): string {
+  return engine === 'phonon' ? PHONON_CACHE_NAME : CACHE_NAME;
 }
 
-async function isInCache(url: string): Promise<boolean> {
-  const cache = await openCache();
-  return (await cache.match(url)) !== undefined;
+async function openCache(cacheName = CACHE_NAME): Promise<Cache> {
+  return await caches.open(cacheName);
+}
+
+async function isInCache(url: string, engine = 'supertonic'): Promise<boolean> {
+  const cache = await openCache(cacheNameFor(engine));
+  const response = await cache.match(url);
+  return response !== undefined && (engine !== 'phonon' || isVerifiedPhononAsset(url, response));
 }
 
 // ── State ────────────────────────────────────────────────────────────
@@ -115,7 +125,7 @@ async function refresh(): Promise<void> {
   for (const [engine, assets] of Object.entries(ENGINE_ASSETS)) {
     let ready = true;
     for (const asset of assets.assets) {
-      if (!(await isInCache(sourceUrl(asset.source)))) {
+      if (!(await isInCache(sourceUrl(asset.source), engine))) {
         ready = false;
         break;
       }
@@ -133,7 +143,9 @@ async function refresh(): Promise<void> {
     const url = sourceUrl(voice.source);
     const engineReady = engineStates.get(voice.engine) ?? false;
     const voiceCached =
-      voice.engine === 'kitten' ? await isKittenModelCached(_cache) : await isInCache(url);
+      voice.engine === 'kitten'
+        ? await isKittenModelCached(_cache)
+        : await isInCache(url, voice.engine);
     const installed = engineReady && voiceCached;
     const current = state.get(voice.id);
     state.set(voice.id, {
@@ -259,20 +271,35 @@ async function downloadVoice(voiceId: string): Promise<void> {
     const missingEngineUrls: string[] = [];
     for (const asset of ENGINE_ASSETS[voice.engine]?.assets ?? []) {
       const assetUrl = sourceUrl(asset.source);
-      if (!(await isInCache(assetUrl))) missingEngineUrls.push(assetUrl);
+      if (!(await isInCache(assetUrl, voice.engine))) {
+        const cache = await openCache(cacheNameFor(voice.engine));
+        const cached = await cache.match(assetUrl);
+        if (cached) await cache.delete(assetUrl);
+        missingEngineUrls.push(assetUrl);
+      }
     }
 
     const voiceUrl = sourceUrl(voice.source);
-    let voiceIsCached = await isInCache(voiceUrl);
+    let voiceIsCached = await isInCache(voiceUrl, voice.engine);
+    const cache = await openCache(cacheNameFor(voice.engine));
     if (voice.engine === 'kitten') {
-      const cache = await openCache();
       voiceIsCached = await isKittenModelCached(cache);
-      if (!voiceIsCached && (await cache.match(voiceUrl))) await cache.delete(voiceUrl);
     }
+    if (!voiceIsCached && (await cache.match(voiceUrl))) await cache.delete(voiceUrl);
     const downloadUrls = voiceIsCached ? missingEngineUrls : [...missingEngineUrls, voiceUrl];
     for (const [completedFiles, url] of downloadUrls.entries()) {
       const expectedByteLength =
-        voice.engine === 'kitten' && url === voiceUrl ? KITTEN_MODEL_GRAPH_BYTES : undefined;
+        voice.engine === 'kitten' && url === voiceUrl
+          ? KITTEN_MODEL_GRAPH_BYTES
+          : voice.engine === 'phonon'
+            ? phononAssetByteLength(
+                url === voiceUrl
+                  ? voice.source
+                  : (ENGINE_ASSETS[voice.engine]?.assets.find(
+                      (asset) => sourceUrl(asset.source) === url,
+                    )?.source ?? voice.source),
+              )
+            : undefined;
       await downloadToCache(
         url,
         (filePercentage) => {
@@ -288,6 +315,7 @@ async function downloadVoice(voiceId: string): Promise<void> {
           renderVoices();
         },
         expectedByteLength,
+        cacheNameFor(voice.engine),
       );
     }
 

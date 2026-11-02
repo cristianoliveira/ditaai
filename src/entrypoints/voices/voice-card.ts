@@ -19,15 +19,23 @@ export function renderVoiceCard(
 
   const name = document.createElement('div');
   name.className = 'name';
-  name.textContent = `${voice.gender === 'male' ? '♂' : '♀'} ${voice.name}`;
+  const genderIcon = voice.gender === 'male' ? '♂' : voice.gender === 'female' ? '♀' : '';
+  name.textContent = `${genderIcon ? `${genderIcon} ` : ''}${voice.name}`;
 
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.textContent = `${voice.engine === 'kitten' ? 'Kitten' : 'Supertonic'} · ${voice.language}`;
+  const engineName =
+    voice.engine === 'kitten' ? 'Kitten' : voice.engine === 'phonon' ? 'Phonon' : 'Supertonic';
+  meta.textContent = `${engineName} · ${voice.language}`;
 
   const size = document.createElement('div');
   size.className = 'size';
-  size.textContent = voice.engine === 'kitten' ? '~60 MB model' : '~300 KB';
+  size.textContent =
+    voice.engine === 'kitten'
+      ? '~60 MB model'
+      : voice.engine === 'phonon'
+        ? '~62 MiB model'
+        : '~300 KB';
 
   card.append(name, meta, size);
 
