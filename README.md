@@ -12,8 +12,8 @@ private, and fully tested.
 
 Open DitaAi and press play to hear the page's meaningful content. Pause, resume,
 change speed, move by paragraph, or start from a chosen paragraph while DitaAi
-highlights your place. Supertonic, Kitten, and Phonon neural voices can run
-locally through WebAssembly; browser speech is the built-in fallback.
+highlights your place. Supertonic, Kitten, Phonon, and Kokoro neural voices can
+run locally; browser speech is the built-in fallback.
 
 See [product direction](docs/PRODUCT.md) for promises and boundaries.
 
@@ -39,14 +39,25 @@ English speakers from
 [KittenTTS-Nano-v0.8-ONNX](https://huggingface.co/onnx-community/KittenTTS-Nano-v0.8-ONNX),
 and Phonon 31m English from
 [gradium/phonon-31m-en](https://huggingface.co/gradium/phonon-31m-en) (Apache-2.0).
+It also includes four Kokoro English presets: Heart and Michael (American),
+Emma and George (British). Kokoro's first install downloads a ~88 MiB quantized model plus a
+510 KiB selected voice embedding and small tokenizer/config files; each added
+preset needs another 510 KiB. After installation, Kokoro model assets are read
+from extension Cache Storage and inference runs locally, including offline.
 
 Open the widget → settings → Voices to download and select a voice. Phonon is a
 ~62 MiB model download (~65 MB decimal); after installation, its worker,
-WebAssembly runtime, and model assets run locally. See [voice installation and offline use](docs/PHONON-VOICES.md).
+WebAssembly runtime, and model assets run locally. See [Phonon installation and
+offline use](docs/PHONON-VOICES.md) and [Kokoro installation and offline
+use](docs/KOKORO-VOICES.md).
+
+**Kokoro release status:** its runtime includes `phonemizer`/eSpeak NG. License
+obligations for the exact bundled runtime and data are not cleared; do not treat
+this integration as cleared for external distribution.
 
 - **In the extension:** open the floating widget → settings (gear) → Voices
   page, then download a voice. Assets are stored in Cache Storage and read by
-  the offscreen document at playback time. Phonon assets use a separate cache.
+  the offscreen document at playback time. Phonon and Kokoro use separate caches.
 - **For Supertonic packaging:** `just install-voices [M1 F3 ...]` downloads
   voice files to `voices/supertonic/` for offline use or packaging.
 
@@ -97,7 +108,7 @@ so Playwright can use the bundled Chrome for Testing.
 ```
 src/
   domain/        # business logic (no framework deps)
-  infra/         # Chrome API + audio adapters (speechSynthesis, Supertonic ONNX, cache)
+  infra/         # Chrome API + audio adapters (speechSynthesis, ONNX, Kokoro, cache)
   content/       # page-level UI: widget, highlighter, picker
   lib/           # zero-dependency shared code
   entrypoints/   # WXT entry points (background, content, offscreen, voices)

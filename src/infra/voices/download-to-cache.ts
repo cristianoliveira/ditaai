@@ -1,6 +1,8 @@
 import { verifiedDownloadHeaders } from './kitten-model';
 
 const CACHE_NAME = 'dita-voices';
+const MAX_UNVERIFIED_ASSET_BYTES = 256 * 1024 * 1024;
+const INITIAL_BUFFER_BYTES = 64 * 1024;
 
 async function openCache(cacheName = CACHE_NAME): Promise<Cache> {
   return await caches.open(cacheName);
@@ -16,8 +18,22 @@ export async function downloadToCache(
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Download failed: ${response.status} ${url}`);
 
-  const contentLength = Number(response.headers.get('content-length') ?? '0');
-  if (!response.body || !contentLength) {
+  const header = response.headers.get('content-length');
+  const parsedLength = header === null ? undefined : Number(header);
+  const contentLength =
+    parsedLength !== undefined && Number.isSafeInteger(parsedLength) && parsedLength >= 0
+      ? parsedLength
+      : undefined;
+
+  const maxBytes = expectedByteLength ?? MAX_UNVERIFIED_ASSET_BYTES;
+  if (contentLength !== undefined && contentLength > maxBytes) {
+    await response.body?.cancel();
+    throw new Error(
+      `Download exceeds expected size: ${url} (expected at most ${maxBytes} bytes, got ${contentLength})`,
+    );
+  }
+
+  if (!response.body) {
     const buffer = await response.arrayBuffer();
     assertCompleteDownload(url, buffer.byteLength, expectedByteLength);
     await assertExpectedSha256(url, buffer, expectedSha256);
@@ -36,8 +52,9 @@ export async function downloadToCache(
     return;
   }
 
+  const initialBufferBytes = Math.min(maxBytes, expectedByteLength ?? INITIAL_BUFFER_BYTES);
+  let buffer = new Uint8Array(initialBufferBytes);
   const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
   let received = 0;
 
   while (true) {
@@ -45,27 +62,35 @@ export async function downloadToCache(
     if (done) break;
     if (!value) continue;
 
-    chunks.push(value);
-    received += value.length;
-    onProgress?.(Math.round((received / contentLength) * 100));
+    if (maxBytes !== undefined && received + value.length > maxBytes) {
+      await reader.cancel();
+      throw new Error(
+        `Download exceeds expected size: ${url} (expected at most ${maxBytes} bytes)`,
+      );
+    }
+
+    const requiredBytes = received + value.length;
+    if (requiredBytes > buffer.byteLength) {
+      const capacity = Math.min(maxBytes, Math.max(requiredBytes, buffer.byteLength * 2));
+      const expanded = new Uint8Array(capacity);
+      expanded.set(buffer.subarray(0, received));
+      buffer = expanded;
+    }
+    buffer.set(value, received);
+    received = requiredBytes;
+    if (contentLength) onProgress?.(Math.round((received / contentLength) * 100));
   }
 
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  assertCompleteDownload(url, totalLength, expectedByteLength);
-  if (totalLength !== contentLength) {
+  assertCompleteDownload(url, received, expectedByteLength);
+  if (contentLength !== undefined && received !== contentLength) {
     throw new Error(
-      `Incomplete download: ${url} (expected ${contentLength} bytes, got ${totalLength})`,
+      `Incomplete download: ${url} (expected ${contentLength} bytes, got ${received})`,
     );
   }
-  const buffer = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    buffer.set(chunk, offset);
-    offset += chunk.length;
-  }
 
-  await assertExpectedSha256(url, buffer, expectedSha256);
-  const cachedResponse = new Response(buffer, {
+  const bytes = buffer.subarray(0, received);
+  await assertExpectedSha256(url, bytes, expectedSha256);
+  const cachedResponse = new Response(bytes, {
     status: 200,
     headers: verifiedDownloadHeaders(
       response.headers.get('content-type'),

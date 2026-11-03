@@ -79,6 +79,58 @@ describe('downloadToCache', () => {
     expect(cache.put).not.toHaveBeenCalled();
   });
 
+  it('cancels an oversized response reported by Content-Length before caching it', async () => {
+    const cache = stubCache();
+    const cancel = vi.fn();
+    const body = new ReadableStream({ cancel });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(body, { headers: { 'content-length': '11' } })),
+    );
+
+    await expect(downloadToCache(url, undefined, 10)).rejects.toThrow(
+      'Download exceeds expected size',
+    );
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('caps unknown-size downloads instead of allocating from an untrusted length header', async () => {
+    const cache = stubCache();
+    const cancel = vi.fn();
+    const body = new ReadableStream({ cancel });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(body, { headers: { 'content-length': String(257 * 1024 * 1024) } }),
+        ),
+    );
+
+    await expect(downloadToCache(url)).rejects.toThrow('expected at most 268435456 bytes');
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('cancels an oversized stream without Content-Length before caching it', async () => {
+    const cache = stubCache();
+    const cancel = vi.fn();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(11));
+      },
+      cancel,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+
+    await expect(downloadToCache(url, undefined, 10)).rejects.toThrow(
+      'Download exceeds expected size',
+    );
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
   it('rejects a truncated streamed download without caching it', async () => {
     const cache = stubCache();
     vi.stubGlobal(

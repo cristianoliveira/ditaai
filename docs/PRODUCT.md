@@ -16,8 +16,8 @@ experience. A user opens DitaAi, presses play, and listens instead of reading.
   HTML. The user can select a narrower reading scope when automatic extraction
   is wrong.
 - **Private by default.** Narration runs locally with an installed Supertonic,
-  Kitten, or Phonon voice, or the browser's speech engine. Page text is not sent
-  to a DitaAi server.
+  Kitten, Phonon, or Kokoro voice, or the browser's speech engine. Kokoro currently
+  offers four English presets. Page text is not sent to a DitaAi server.
 - **Keep place visible.** Paragraph and word highlighting connect narration to
   its source on the page.
 - **Accessible controls.** Every playback action has a clear assistive label.
@@ -29,6 +29,9 @@ experience. A user opens DitaAi, presses play, and listens instead of reading.
 - Browser-protected pages where Chrome blocks content scripts cannot be read.
 - Cloud TTS, accounts, and a standalone local TTS server are not active product
   paths.
+- Kokoro support is English-only. Its feature documentation records the open
+  eSpeak NG license review; support does not imply external-distribution
+  clearance.
 
 Product decisions should strengthen this listening flow before adding provider
 or infrastructure options.

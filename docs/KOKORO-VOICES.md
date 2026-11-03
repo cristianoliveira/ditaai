@@ -28,6 +28,6 @@ Kokoro synthesis buffers a segment before playback. Word highlighting uses estim
 ## Provenance and license status
 
 - Model and voice artifacts: [pinned Hugging Face revision](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/tree/1939ad2a8e416c0acfeecc08a694d14ef25f2231); publisher metadata identifies the artifacts as Apache-2.0.
-- Runtime: [`kokoro-js` 1.2.1](https://www.npmjs.com/package/kokoro-js), Transformers.js 3.8.1, ONNX Runtime Web 1.27.x, and `phonemizer` 1.2.1. Third-party notices ship under [`public/licenses/kokoro/`](../public/licenses/kokoro/).
+- Runtime: [`kokoro-js` 1.2.1](https://www.npmjs.com/package/kokoro-js), Transformers.js 3.8.1, ONNX Runtime Web 1.27.0, and `phonemizer` 1.2.1. Third-party notices ship under [`public/licenses/kokoro/`](../public/licenses/kokoro/).
 
 License metadata is provenance, not legal advice or independent clearance. **Release clearance remains open:** `phonemizer` uses eSpeak NG, and its package license does not establish the obligations for bundled eSpeak NG code/data or the complete dependency bundle. Confirm the exact shipped assets and notices before external distribution. Do not treat this integration as license-cleared.
