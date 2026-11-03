@@ -111,6 +111,51 @@ export const KITTEN_ENGINE_ASSETS: EngineAssets = {
   })),
 };
 
+const KOKORO_REPO = 'onnx-community/Kokoro-82M-v1.0-ONNX';
+const KOKORO_REVISION = '1939ad2a8e416c0acfeecc08a694d14ef25f2231';
+
+const KOKORO_SPEAKERS = [
+  { alias: 'af_heart', name: 'Heart', gender: 'female' },
+  { alias: 'am_michael', name: 'Michael', gender: 'male' },
+  { alias: 'bf_emma', name: 'Emma', gender: 'female' },
+  { alias: 'bm_george', name: 'George', gender: 'male' },
+] as const;
+
+function kokoroSource(path: string): Voice['source'] {
+  return {
+    type: 'huggingface',
+    repo: KOKORO_REPO,
+    revision: KOKORO_REVISION,
+    path,
+  };
+}
+
+/** English Kokoro presets; Portuguese phonemization is not supported. */
+export const KOKORO_VOICES: Voice[] = KOKORO_SPEAKERS.map(({ alias, name, gender }) => ({
+  id: `kokoro-${alias.replace('_', '-')}`,
+  name: `Kokoro ${name}`,
+  gender,
+  engine: 'kokoro',
+  language: 'en',
+  source: kokoroSource(`voices/${alias}.bin`),
+}));
+
+export function kokoroVoiceAlias(voiceId: string): string | undefined {
+  return KOKORO_SPEAKERS.find(({ alias }) => `kokoro-${alias.replace('_', '-')}` === voiceId)
+    ?.alias;
+}
+
+/** Shared q8 model + tokenizer for the pinned Kokoro ONNX export. */
+export const KOKORO_ENGINE_ASSETS: EngineAssets = {
+  engine: 'kokoro',
+  assets: [
+    'config.json',
+    'tokenizer.json',
+    'tokenizer_config.json',
+    'onnx/model_quantized.onnx',
+  ].map((name) => ({ name, source: kokoroSource(name) })),
+};
+
 /** All known voice catalogs, keyed by engine. */
 const PHONON_REPO = 'gradium/phonon-31m-en';
 const PHONON_REVISION = '8c64b55ec301728e2d1695bfea87a08a267d0c2d';
@@ -150,6 +195,7 @@ export const PHONON_ENGINE_ASSETS: EngineAssets = {
 export const VOICE_CATALOGS: Record<string, Voice[]> = {
   supertonic: SUPERTONIC_VOICES,
   kitten: KITTEN_VOICES,
+  kokoro: KOKORO_VOICES,
   phonon: PHONON_VOICES,
 };
 
@@ -157,6 +203,7 @@ export const VOICE_CATALOGS: Record<string, Voice[]> = {
 export const ENGINE_ASSETS: Record<string, EngineAssets> = {
   supertonic: SUPERTONIC_ENGINE_ASSETS,
   kitten: KITTEN_ENGINE_ASSETS,
+  kokoro: KOKORO_ENGINE_ASSETS,
   phonon: PHONON_ENGINE_ASSETS,
 };
 

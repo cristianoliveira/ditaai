@@ -11,6 +11,7 @@ export async function downloadToCache(
   onProgress?: (percentage: number) => void,
   expectedByteLength?: number,
   cacheName = CACHE_NAME,
+  expectedSha256?: string,
 ): Promise<void> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Download failed: ${response.status} ${url}`);
@@ -19,11 +20,16 @@ export async function downloadToCache(
   if (!response.body || !contentLength) {
     const buffer = await response.arrayBuffer();
     assertCompleteDownload(url, buffer.byteLength, expectedByteLength);
+    await assertExpectedSha256(url, buffer, expectedSha256);
     const cache = await openCache(cacheName);
     await cache.put(
       url,
       new Response(buffer, {
-        headers: verifiedDownloadHeaders(response.headers.get('content-type'), expectedByteLength),
+        headers: verifiedDownloadHeaders(
+          response.headers.get('content-type'),
+          expectedByteLength,
+          expectedSha256,
+        ),
       }),
     );
     onProgress?.(100);
@@ -58,14 +64,34 @@ export async function downloadToCache(
     offset += chunk.length;
   }
 
+  await assertExpectedSha256(url, buffer, expectedSha256);
   const cachedResponse = new Response(buffer, {
     status: 200,
-    headers: verifiedDownloadHeaders(response.headers.get('content-type'), expectedByteLength),
+    headers: verifiedDownloadHeaders(
+      response.headers.get('content-type'),
+      expectedByteLength,
+      expectedSha256,
+    ),
   });
 
   const cache = await openCache(cacheName);
   await cache.put(url, cachedResponse);
   onProgress?.(100);
+}
+
+async function assertExpectedSha256(
+  url: string,
+  bytes: BufferSource,
+  expectedSha256?: string,
+): Promise<void> {
+  if (!expectedSha256) return;
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const actualSha256 = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+  if (actualSha256 !== expectedSha256) {
+    throw new Error(`Integrity check failed for ${url}`);
+  }
 }
 
 function assertCompleteDownload(

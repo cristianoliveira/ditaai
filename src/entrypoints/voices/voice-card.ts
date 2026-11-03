@@ -25,7 +25,13 @@ export function renderVoiceCard(
   const meta = document.createElement('div');
   meta.className = 'meta';
   const engineName =
-    voice.engine === 'kitten' ? 'Kitten' : voice.engine === 'phonon' ? 'Phonon' : 'Supertonic';
+    voice.engine === 'kitten'
+      ? 'Kitten'
+      : voice.engine === 'kokoro'
+        ? 'Kokoro'
+        : voice.engine === 'phonon'
+          ? 'Phonon'
+          : 'Supertonic';
   meta.textContent = `${engineName} · ${voice.language}`;
 
   const size = document.createElement('div');
@@ -33,9 +39,11 @@ export function renderVoiceCard(
   size.textContent =
     voice.engine === 'kitten'
       ? '~60 MB model'
-      : voice.engine === 'phonon'
-        ? '~62 MiB model'
-        : '~300 KB';
+      : voice.engine === 'kokoro'
+        ? '~88 MiB model + 510 KiB voice'
+        : voice.engine === 'phonon'
+          ? '~62 MiB model'
+          : '~300 KB';
 
   card.append(name, meta, size);
 

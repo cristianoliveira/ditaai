@@ -3,6 +3,8 @@ import {
   ENGINE_ASSETS,
   KITTEN_ENGINE_ASSETS,
   KITTEN_VOICES,
+  KOKORO_ENGINE_ASSETS,
+  KOKORO_VOICES,
   PHONON_ENGINE_ASSETS,
   PHONON_VOICES,
   SUPERTONIC_ENGINE_ASSETS,
@@ -66,7 +68,7 @@ describe('catalog', () => {
 
   describe('listVoices', () => {
     it('lists all voices when no engine filter', () => {
-      expect(listVoices()).toHaveLength(19);
+      expect(listVoices()).toHaveLength(23);
     });
 
     it('filters by engine', () => {
@@ -75,6 +77,10 @@ describe('catalog', () => {
 
     it('includes the Kitten voice for the Kitten engine', () => {
       expect(listVoices('kitten')).toEqual(KITTEN_VOICES);
+    });
+
+    it('includes Kokoro voices for the Kokoro engine', () => {
+      expect(listVoices('kokoro')).toEqual(KOKORO_VOICES);
     });
 
     it('includes Phonon voices for the Phonon engine', () => {
@@ -130,6 +136,37 @@ describe('catalog', () => {
         'kitten_config.json',
         'voices.npz',
       ]);
+    });
+  });
+
+  describe('KOKORO_VOICES', () => {
+    it('exposes four pinned English presets across American and British voices', () => {
+      expect(KOKORO_VOICES.map(({ id, gender, source }) => [id, gender, source.path])).toEqual([
+        ['kokoro-af-heart', 'female', 'voices/af_heart.bin'],
+        ['kokoro-am-michael', 'male', 'voices/am_michael.bin'],
+        ['kokoro-bf-emma', 'female', 'voices/bf_emma.bin'],
+        ['kokoro-bm-george', 'male', 'voices/bm_george.bin'],
+      ]);
+      expect(KOKORO_VOICES.every((voice) => voice.language === 'en')).toBe(true);
+      expect(
+        KOKORO_VOICES.every(
+          (voice) => voice.source.revision === '1939ad2a8e416c0acfeecc08a694d14ef25f2231',
+        ),
+      ).toBe(true);
+    });
+
+    it('lists the shared q8 model and tokenizer assets from the same revision', () => {
+      expect(KOKORO_ENGINE_ASSETS.assets.map((asset) => asset.name)).toEqual([
+        'config.json',
+        'tokenizer.json',
+        'tokenizer_config.json',
+        'onnx/model_quantized.onnx',
+      ]);
+      expect(
+        KOKORO_ENGINE_ASSETS.assets.every(
+          (asset) => asset.source.revision === KOKORO_VOICES[0]?.source.revision,
+        ),
+      ).toBe(true);
     });
   });
 

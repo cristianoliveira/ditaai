@@ -22,10 +22,12 @@ export async function isKittenModelCached(cache: Cache): Promise<boolean> {
 export function verifiedDownloadHeaders(
   contentType: string | null,
   expectedByteLength?: number,
+  expectedSha256?: string,
 ): Headers {
   const headers = new Headers({ 'content-type': contentType ?? 'application/octet-stream' });
   if (expectedByteLength !== undefined) {
     headers.set(MODEL_SIZE_HEADER, String(expectedByteLength));
   }
+  if (expectedSha256) headers.set('x-dita-verified-sha256', expectedSha256);
   return headers;
 }

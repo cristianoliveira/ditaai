@@ -23,6 +23,11 @@ import { ChromeVoiceSelectionStorage } from '../../infra/chrome/voice-selection-
 import { downloadToCache } from '../../infra/voices/download-to-cache';
 import { KITTEN_MODEL_GRAPH_BYTES, isKittenModelCached } from '../../infra/voices/kitten-model';
 import {
+  KOKORO_CACHE_NAME,
+  isVerifiedKokoroAsset,
+  kokoroAssetIntegrity,
+} from '../../infra/voices/kokoro-model';
+import {
   PHONON_CACHE_NAME,
   isVerifiedPhononAsset,
   phononAssetByteLength,
@@ -49,7 +54,9 @@ const audioBufferSelect = document.getElementById('audio-buffer-seconds') as HTM
 // ── Cache helpers ────────────────────────────────────────────────────
 
 function cacheNameFor(engine: string): string {
-  return engine === 'phonon' ? PHONON_CACHE_NAME : CACHE_NAME;
+  if (engine === 'phonon') return PHONON_CACHE_NAME;
+  if (engine === 'kokoro') return KOKORO_CACHE_NAME;
+  return CACHE_NAME;
 }
 
 async function openCache(cacheName = CACHE_NAME): Promise<Cache> {
@@ -59,7 +66,10 @@ async function openCache(cacheName = CACHE_NAME): Promise<Cache> {
 async function isInCache(url: string, engine = 'supertonic'): Promise<boolean> {
   const cache = await openCache(cacheNameFor(engine));
   const response = await cache.match(url);
-  return response !== undefined && (engine !== 'phonon' || isVerifiedPhononAsset(url, response));
+  if (!response) return false;
+  if (engine === 'phonon') return isVerifiedPhononAsset(url, response);
+  if (engine === 'kokoro') return isVerifiedKokoroAsset(url, response);
+  return true;
 }
 
 // ── State ────────────────────────────────────────────────────────────
@@ -291,15 +301,33 @@ async function downloadVoice(voiceId: string): Promise<void> {
       const expectedByteLength =
         voice.engine === 'kitten' && url === voiceUrl
           ? KITTEN_MODEL_GRAPH_BYTES
-          : voice.engine === 'phonon'
-            ? phononAssetByteLength(
+          : voice.engine === 'kokoro'
+            ? kokoroAssetIntegrity(
                 url === voiceUrl
                   ? voice.source
                   : (ENGINE_ASSETS[voice.engine]?.assets.find(
                       (asset) => sourceUrl(asset.source) === url,
                     )?.source ?? voice.source),
-              )
-            : undefined;
+              )?.bytes
+            : voice.engine === 'phonon'
+              ? phononAssetByteLength(
+                  url === voiceUrl
+                    ? voice.source
+                    : (ENGINE_ASSETS[voice.engine]?.assets.find(
+                        (asset) => sourceUrl(asset.source) === url,
+                      )?.source ?? voice.source),
+                )
+              : undefined;
+      const expectedSha256 =
+        voice.engine === 'kokoro'
+          ? kokoroAssetIntegrity(
+              url === voiceUrl
+                ? voice.source
+                : (ENGINE_ASSETS[voice.engine]?.assets.find(
+                    (asset) => sourceUrl(asset.source) === url,
+                  )?.source ?? voice.source),
+            )?.sha256
+          : undefined;
       await downloadToCache(
         url,
         (filePercentage) => {
@@ -316,6 +344,7 @@ async function downloadVoice(voiceId: string): Promise<void> {
         },
         expectedByteLength,
         cacheNameFor(voice.engine),
+        expectedSha256,
       );
     }
 

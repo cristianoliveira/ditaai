@@ -1,9 +1,11 @@
 import type { SpeakOptions } from '../../domain/audio/text-reader';
 import {
   KITTEN_VOICES,
+  KOKORO_VOICES,
   PHONON_VOICES,
   SUPERTONIC_VOICES,
   kittenVoiceAlias,
+  kokoroVoiceAlias,
 } from '../../domain/voices/catalog';
 import { PageVoiceRotation } from '../../domain/voices/selection';
 import { sourceUrl } from '../../domain/voices/voice';
@@ -15,17 +17,24 @@ import {
 } from '../../infra/audio/cache-loader';
 import { areKittenAssetsInstalled, loadKittenAssets } from '../../infra/audio/kitten-cache';
 import { KittenOnnxReader } from '../../infra/audio/kitten-onnx-reader';
+import { KokoroReader } from '../../infra/audio/kokoro-reader';
+import { type KokoroVoiceAlias, loadKokoroTts } from '../../infra/audio/kokoro-runtime';
 import { isFatalOnnxError } from '../../infra/audio/onnx-errors';
 import { configureOnnxRuntime } from '../../infra/audio/onnx-runtime';
 import { PhononReader } from '../../infra/audio/phonon-reader';
 import { loadPhononTts } from '../../infra/audio/phonon-runtime';
 import { SupertonicOnnxReader } from '../../infra/audio/supertonic-onnx-reader';
+import {
+  KOKORO_CACHE_NAME,
+  areKokoroAssetsInstalled,
+  isVerifiedKokoroAsset,
+} from '../../infra/voices/kokoro-model';
 import { PHONON_CACHE_NAME, arePhononAssetsInstalled } from '../../infra/voices/phonon-model';
 import { logger } from '../../lib/logger';
 
 configureOnnxRuntime((path) => chrome.runtime.getURL(path));
 
-type InstalledReader = SupertonicOnnxReader | KittenOnnxReader | PhononReader;
+type InstalledReader = SupertonicOnnxReader | KittenOnnxReader | KokoroReader | PhononReader;
 
 let reader: InstalledReader | null = null;
 let readerVoiceId: string | null = null;
@@ -49,6 +58,14 @@ async function findInstalledVoiceId(
   }
   if (await areKittenAssetsInstalled(cache)) {
     installedVoiceIds.push(...KITTEN_VOICES.map((voice) => voice.id));
+  }
+  const kokoroCache = await caches.open(KOKORO_CACHE_NAME);
+  if (await areKokoroAssetsInstalled(kokoroCache)) {
+    for (const voice of KOKORO_VOICES) {
+      const url = sourceUrl(voice.source);
+      const response = await kokoroCache.match(url);
+      if (response && isVerifiedKokoroAsset(url, response)) installedVoiceIds.push(voice.id);
+    }
   }
   const phononCache = await caches.open(PHONON_CACHE_NAME);
   if (await arePhononAssetsInstalled(phononCache)) {
@@ -92,7 +109,9 @@ async function isAvailable(
     ? await arePhononAssetsInstalled(await caches.open(PHONON_CACHE_NAME))
     : KITTEN_VOICES.some((voice) => voice.id === voiceId)
       ? await areKittenAssetsInstalled(cache)
-      : await areModelAssetsInstalled();
+      : KOKORO_VOICES.some((voice) => voice.id === voiceId)
+        ? await areKokoroAssetsInstalled(await caches.open(KOKORO_CACHE_NAME))
+        : await areModelAssetsInstalled();
   log('availability:resolved', { modelAssetsInstalled, voiceId });
   return modelAssetsInstalled && voiceId !== null;
 }
@@ -105,13 +124,16 @@ async function getReader(
   const voiceId = await findInstalledVoiceId(selectedVoiceId, rotateVoices, pageVisitId);
   if (!voiceId) throw new Error('No installed voice is ready');
   const isKitten = KITTEN_VOICES.some((voice) => voice.id === voiceId);
+  const isKokoro = KOKORO_VOICES.some((voice) => voice.id === voiceId);
   const isPhonon = PHONON_VOICES.some((voice) => voice.id === voiceId);
   const cache = await openCache();
   const assetsInstalled = isPhonon
     ? await arePhononAssetsInstalled(await caches.open(PHONON_CACHE_NAME))
     : isKitten
       ? await areKittenAssetsInstalled(cache)
-      : await areModelAssetsInstalled();
+      : isKokoro
+        ? await areKokoroAssetsInstalled(await caches.open(KOKORO_CACHE_NAME))
+        : await areModelAssetsInstalled();
   if (!assetsInstalled) throw new Error('No installed voice is ready');
   if (reader && readerVoiceId === voiceId) {
     log('reader:reuse', { voiceId });
@@ -128,7 +150,7 @@ async function getReader(
   reader = null;
   readerVoiceId = null;
   log('reader:initialize', { voiceId });
-  readerInitialization = createReader(voiceId, isKitten, isPhonon).finally(() => {
+  readerInitialization = createReader(voiceId, isKitten, isKokoro, isPhonon).finally(() => {
     readerInitialization = null;
   });
   reader = await readerInitialization;
@@ -140,11 +162,17 @@ async function getReader(
 async function createReader(
   voiceId: string,
   isKitten: boolean,
+  isKokoro: boolean,
   isPhonon: boolean,
 ): Promise<InstalledReader> {
-  const engine = isPhonon ? 'phonon' : isKitten ? 'kitten' : 'supertonic';
+  const engine = isPhonon ? 'phonon' : isKitten ? 'kitten' : isKokoro ? 'kokoro' : 'supertonic';
   log('cache:load', { voiceId, engine });
   if (isPhonon) return new PhononReader(await loadPhononTts());
+  if (isKokoro) {
+    const voiceAlias = kokoroVoiceAlias(voiceId) as KokoroVoiceAlias | undefined;
+    if (!voiceAlias) throw new Error(`Unknown Kokoro voice: ${voiceId}`);
+    return new KokoroReader(await loadKokoroTts(voiceId), voiceAlias);
+  }
   const cache = await openCache();
   if (isKitten) {
     const assets = await loadKittenAssets(cache);

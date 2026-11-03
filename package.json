@@ -1,6 +1,6 @@
 {
   "name": "ditaai",
-  "version": "0.3.0-8cd37b0-1793603292",
+  "version": "0.3.0-358bf6c-1793693416",
   "private": true,
   "description": "Turn web pages into private, local audio",
   "type": "module",
@@ -38,7 +38,9 @@
     "wxt": "0.21.3"
   },
   "dependencies": {
+    "@huggingface/transformers": "3.8.1",
     "fflate": "^0.8.3",
+    "kokoro-js": "1.2.1",
     "onnxruntime-web": "^1.27.0",
     "phonemizer": "^1.2.1",
     "phonon-tts": "0.6.0"

@@ -1,7 +1,7 @@
 /** Voice types shared across TTS engines. */
 
 export type VoiceGender = 'male' | 'female' | 'neutral';
-export type VoiceEngine = 'supertonic' | 'kitten' | 'phonon' | 'speechsynthesis';
+export type VoiceEngine = 'supertonic' | 'kitten' | 'kokoro' | 'phonon' | 'speechsynthesis';
 
 /** Where a voice file lives on the network. */
 export interface VoiceSource {

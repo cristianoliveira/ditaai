@@ -51,6 +51,34 @@ describe('downloadToCache', () => {
     expect(onProgress).toHaveBeenLastCalledWith(100);
   });
 
+  it('verifies a pinned SHA-256 before caching downloaded model assets', async () => {
+    const cache = stubCache();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('voice data')));
+
+    await downloadToCache(
+      url,
+      undefined,
+      10,
+      'kokoro-tts-v1',
+      'e5fba3b4bc9e4a355ecb98a9367c85de18d8631632fad36b400311d87199034e',
+    );
+
+    const cached = cache.put.mock.calls[0]?.[1];
+    expect(cached?.headers.get('x-dita-verified-sha256')).toBe(
+      'e5fba3b4bc9e4a355ecb98a9367c85de18d8631632fad36b400311d87199034e',
+    );
+  });
+
+  it('rejects a corrupt asset without caching it', async () => {
+    const cache = stubCache();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('voice data')));
+
+    await expect(
+      downloadToCache(url, undefined, 10, 'kokoro-tts-v1', '0'.repeat(64)),
+    ).rejects.toThrow(`Integrity check failed for ${url}`);
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
   it('rejects a truncated streamed download without caching it', async () => {
     const cache = stubCache();
     vi.stubGlobal(
